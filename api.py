@@ -3,12 +3,15 @@ import json
 import shutil
 import uuid
 import time
+import traceback
 from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, HttpUrl
 from groq import Groq
 from dotenv import load_dotenv
@@ -35,6 +38,46 @@ PC_CONTROL_ENABLED = os.environ.get("PC_CONTROL_ENABLED", "false").lower() == "t
 
 app = FastAPI()
 
+# Custom middleware that ALWAYS adds CORS headers, even on 500 errors
+class ForceCORSMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        origin = request.headers.get("origin", "")
+        # Handle OPTIONS preflight
+        if request.method == "OPTIONS":
+            return JSONResponse(
+                content="OK",
+                status_code=200,
+                headers={
+                    "access-control-allow-origin": origin or "*",
+                    "access-control-allow-credentials": "true",
+                    "access-control-allow-methods": "*",
+                    "access-control-allow-headers": "*",
+                    "access-control-max-age": "600",
+                },
+            )
+        try:
+            response = await call_next(request)
+        except HTTPException as e:
+            response = JSONResponse(
+                content={"detail": e.detail},
+                status_code=e.status_code,
+            )
+        except Exception as e:
+            traceback.print_exc()
+            response = JSONResponse(
+                content={"detail": "Internal server error"},
+                status_code=500,
+            )
+        # Ensure CORS headers on every response
+        response.headers["access-control-allow-origin"] = origin or "*"
+        response.headers["access-control-allow-credentials"] = "true"
+        response.headers["access-control-allow-methods"] = "*"
+        response.headers["access-control-allow-headers"] = "*"
+        response.headers["access-control-max-age"] = "600"
+        return response
+
+app.add_middleware(ForceCORSMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -44,7 +87,10 @@ app.add_middleware(
 )
 
 
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    print("ERROR: GROQ_API_KEY not set! Chat will fail with 500.")
+client = Groq(api_key=GROQ_API_KEY)
 
 
 def get_guest_id(x_guest_id: str = Header(default="anonymous")):
