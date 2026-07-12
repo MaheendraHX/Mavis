@@ -38,11 +38,18 @@ PC_CONTROL_ENABLED = os.environ.get("PC_CONTROL_ENABLED", "false").lower() == "t
 
 app = FastAPI()
 
-# Custom middleware that ALWAYS adds CORS headers, even on 500 errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {type(exc).__name__}: {str(exc)}"},
+    )
+
+# CORS headers — always added to every response via middleware
 class ForceCORSMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         origin = request.headers.get("origin", "")
-        # Handle OPTIONS preflight
         if request.method == "OPTIONS":
             return JSONResponse(
                 content="OK",
@@ -55,20 +62,7 @@ class ForceCORSMiddleware(BaseHTTPMiddleware):
                     "access-control-max-age": "600",
                 },
             )
-        try:
-            response = await call_next(request)
-        except HTTPException as e:
-            response = JSONResponse(
-                content={"detail": e.detail},
-                status_code=e.status_code,
-            )
-        except Exception as e:
-            traceback.print_exc()
-            response = JSONResponse(
-                content={"detail": "Internal server error"},
-                status_code=500,
-            )
-        # Ensure CORS headers on every response
+        response = await call_next(request)
         response.headers["access-control-allow-origin"] = origin or "*"
         response.headers["access-control-allow-credentials"] = "true"
         response.headers["access-control-allow-methods"] = "*"
