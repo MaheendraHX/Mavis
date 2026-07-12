@@ -35,9 +35,13 @@ PC_CONTROL_ENABLED = os.environ.get("PC_CONTROL_ENABLED", "false").lower() == "t
 
 app = FastAPI()
 
-_allowed_origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
-if not _allowed_origins:
-    _allowed_origins = ["http://localhost:5173"]
+_allowed_origins_input = os.environ.get("ALLOWED_ORIGINS", "*").strip()
+if _allowed_origins_input == "*" or not _allowed_origins_input:
+    _allowed_origins = ["*"]
+else:
+    _allowed_origins = [o.strip() for o in _allowed_origins_input.split(",") if o.strip()]
+    if not _allowed_origins:
+        _allowed_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,
