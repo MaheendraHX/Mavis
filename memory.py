@@ -18,6 +18,12 @@ def init_db():
         )
     """)
 
+    # Add guest_id column if it doesn't exist (for existing databases)
+    try:
+        cursor.execute("ALTER TABLE conversations ADD COLUMN guest_id TEXT DEFAULT 'anonymous'")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,

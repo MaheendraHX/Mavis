@@ -478,8 +478,11 @@ async def chat_with_image(
 @app.get("/conversations")
 async def list_conversations(x_guest_id: str = Header(default="anonymous")):
     guest_id = x_guest_id or "anonymous"
-    convs = memory.get_all_conversations_for_guest(guest_id)
-    return {"conversations": convs}
+    try:
+        convs = memory.get_all_conversations_for_guest(guest_id)
+        return {"conversations": convs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 
 @app.get("/conversations/{conv_id}/messages")
