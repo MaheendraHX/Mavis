@@ -338,6 +338,33 @@ export default function Landing({ onEnter }) {
         </div>
       </section>
 
+      {/* Demo Notice Banner */}
+      <section style={{ padding: '0 2rem' }}>
+        <div style={{
+          maxWidth: 900,
+          margin: '0 auto',
+          padding: '1.5rem 2rem',
+          borderRadius: '14px',
+          background: 'rgba(232,159,113,0.06)',
+          border: `1px solid rgba(232,159,113,0.18)`,
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '1rem',
+        }}>
+          <span style={{ fontSize: '1.3rem', marginTop: '0.1rem', flexShrink: 0 }}>Demo</span>
+          <div>
+            <p style={{ fontSize: '0.92rem', fontWeight: 600, color: palette.text, margin: '0 0 0.4rem', lineHeight: 1.5 }}>
+              This is a public demo of Mavis.
+            </p>
+            <p style={{ fontSize: '0.84rem', color: palette.textMuted, margin: 0, lineHeight: 1.65 }}>
+              You can chat, search the web, and attach files — all without signing up. 
+              The full version includes voice interaction, PC control, persistent memory, 
+              and unlimited conversations. Those features are reserved for private access.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section id="features" style={{ padding: '6rem 2rem', maxWidth: 1200, margin: '0 auto' }}>
         <div className="reveal" style={{ textAlign: 'center', marginBottom: '4rem' }}>
           <span style={{ fontSize: '0.72rem', letterSpacing: '0.22em', textTransform: 'uppercase', color: palette.secondary, fontWeight: 700 }}>
