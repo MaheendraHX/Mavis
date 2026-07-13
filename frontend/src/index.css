@@ -11,8 +11,8 @@ html {
 }
 
 body {
-  background: #382B27;
-  color: #D2DEA0;
+  background: #faf9f7;
+  color: #2d2d2d;
   font-family: 'Inter', sans-serif;
   overflow-x: hidden;
 }
@@ -26,26 +26,19 @@ h1, h2, h3, .playfair {
 }
 
 ::-webkit-scrollbar-track {
-  background: #382B27;
+  background: #f0eee9;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(83,100,177,0.35);
+  background: #d4a574;
   border-radius: 2px;
 }
 
 .glass {
-  background: rgba(56,43,39,0.6);
+  background: rgba(255,255,255,0.7);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(210,222,160,0.08);
-}
-
-.glass-accent {
-  background: rgba(35,96,136,0.08);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(35,96,136,0.15);
+  border: 1px solid rgba(0,0,0,0.06);
 }
 
 .reveal {
@@ -57,26 +50,4 @@ h1, h2, h3, .playfair {
 .reveal.visible {
   opacity: 1;
   transform: translateY(0);
-}
-
-.reveal-left {
-  opacity: 0;
-  transform: translateX(-40px);
-  transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1), transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.reveal-left.visible {
-  opacity: 1;
-  transform: translateX(0);
-}
-
-.reveal-right {
-  opacity: 0;
-  transform: translateX(40px);
-  transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1), transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.reveal-right.visible {
-  opacity: 1;
-  transform: translateX(0);
 }

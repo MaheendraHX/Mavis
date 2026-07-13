@@ -5,13 +5,14 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 gsap.registerPlugin(ScrollTrigger)
 
 const palette = {
-  espresso: '#382B27',
-  steel: '#236088',
-  indigo: '#5364B1',
-  olive: '#88AE4D',
-  sage: '#D2DEA0',
-  espressoLight: '#4a3d39',
-  espressoDark: '#1f1815',
+  bg: '#faf9f7',
+  surface: '#ffffff',
+  text: '#2d2d2d',
+  textMuted: '#6b6b6b',
+  primary: '#d4a574',
+  secondary: '#e89f71',
+  accent: '#a8d5ba',
+  border: 'rgba(0,0,0,0.08)',
 }
 
 export default function Landing({ onEnter }) {
