@@ -83,8 +83,7 @@ export default function Chat({ onNavigate }) {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
-  const [pendingImage, setPendingImage] = useState(null)
-  const [webSearchOn, setWebSearchOn] = useState(true)
+  const [webSearchOn, setWebSearchOn] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -149,12 +148,8 @@ export default function Chat({ onNavigate }) {
 
       const data = await res.json()
       const attachmentText = data.type === 'image'
-        ? `[Image: ${data.filename}]`
-        : `[File: ${data.filename}]\n\n${data.content}`
-
-      if (data.type === 'image') {
-        setPendingImage({ base64: data.base64, filename: data.filename, mime: data.mime })
-      }
+        ? `[Attached image: ${data.filename}]`
+        : `[Attached file: ${data.filename}]\n\n${data.content}`
 
       setInput(prev => `${prev.trim() ? `${prev}\n\n` : ''}${attachmentText}`)
       inputRef.current?.focus()
@@ -185,7 +180,7 @@ export default function Chat({ onNavigate }) {
         title: text.slice(0, 40) + (text.length > 40 ? '...' : ''),
         messages: newMessages,
         createdAt: new Date().toISOString(),
-      }
+      }  
       setConversations(prev => [newConv, ...prev])
     } else {
       setConversations(prev => prev.map(c => c.id === convId ? { ...c, messages: newMessages } : c))
@@ -195,37 +190,15 @@ export default function Chat({ onNavigate }) {
     abortRef.current = controller
 
     try {
-      const img = pendingImage
-      setPendingImage(null)
-      const isImage = !!img
-      const endpoint = isImage ? `${API_BASE}/chat-with-image` : `${API_BASE}/chat`
-
-      let body, headers
-      if (isImage) {
-        const fd = new FormData()
-        fd.append('message', text)
-        fd.append('user_type', 'guest')
-        fd.append('session_id', convId)
-        fd.append('incognito', 'false')
-        fd.append('base64_image', img.base64)
-        fd.append('mime', img.mime)
-        body = fd
-        headers = { 'X-Guest-ID': guestId }
-      } else {
-        body = JSON.stringify({
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Guest-ID': guestId },
+        body: JSON.stringify({
           message: text,
           user_type: 'guest',
           session_id: convId,
           incognito: false,
-          web_search: webSearchOn,
-        })
-        headers = { 'Content-Type': 'application/json', 'X-Guest-ID': guestId }
-      }
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body,
+        }),
         signal: controller.signal,
       })
 
@@ -236,7 +209,7 @@ export default function Chat({ onNavigate }) {
       const newConvId = data.conv_id || convId
       const finalMessages = [
         ...newMessages,
-        { role: 'assistant', content: assistantContent, sources: data.sources || [], timestamp: new Date().toISOString() },
+        { role: 'assistant', content: assistantContent, timestamp: new Date().toISOString() },
       ]
 
       setMessages(finalMessages)
@@ -451,8 +424,8 @@ export default function Chat({ onNavigate }) {
                 gap: '0.4rem',
                 padding: '0.4rem 0.75rem',
                 borderRadius: '999px',
-                background: webSearchOn ? '#fdf2f0' : palette.surfaceWarm,
-                border: webSearchOn ? '1px solid rgba(232,159,113,0.9)' : `1px solid ${palette.border}`,
+                background: webSearchOn ? '#e8f5ed' : palette.surfaceWarm,
+                border: webSearchOn ? '1px solid rgba(168,213,186,0.9)' : `1px solid ${palette.border}`,
                 color: webSearchOn ? palette.text : palette.textMuted,
                 fontSize: '0.72rem',
                 fontWeight: 500,
@@ -568,7 +541,7 @@ export default function Chat({ onNavigate }) {
                 border: 'none',
                 color: uploading ? palette.primary : palette.textMuted,
                 cursor: uploading ? 'default' : 'pointer',
-                fontSize: '1.15rem',
+                fontSize: '0.78rem',
                 fontWeight: 600,
                 padding: '0.3rem',
                 transition: 'color 0.2s',
@@ -576,7 +549,7 @@ export default function Chat({ onNavigate }) {
               onMouseEnter={e => { if (!uploading) e.currentTarget.style.color = palette.primary }}
               onMouseLeave={e => { if (!uploading) e.currentTarget.style.color = palette.textMuted }}
             >
-              {uploading ? '...' : '📎'}
+              {uploading ? '...' : '??'}
             </button>
             <input
               ref={fileInputRef}
