@@ -8,17 +8,33 @@ export default function App() {
   const [screen, setScreen] = useState('boot')
 
   return (
-    <div style={{ width: '100vw', minHeight: '100vh', background: '#050506' }}>
+    <div style={{ width: '100vw', minHeight: '100vh', background: '#382B27' }}>
       {screen === 'boot' && <Boot onComplete={() => setScreen('landing')} />}
-      {screen === 'landing' && <Landing onEnter={() => setScreen('signin')} />}
-      {screen === 'signin' && (
-        <SignIn
-          onSuccess={() => {
-            setScreen('chat')
+      {screen === 'landing' && (
+        <Landing
+          onEnter={(target) => {
+            if (target === 'chat') setScreen('chat')
+            else setScreen('signin')
           }}
         />
       )}
-      {screen === 'chat' && <Chat userType="guest" />}
+      {screen === 'signin' && (
+        <SignIn
+          onEnter={(target) => {
+            if (target === 'landing') setScreen('landing')
+            else setScreen('chat')
+          }}
+        />
+      )}
+      {screen === 'chat' && (
+        <Chat
+          userType="guest"
+          onNavigate={(target) => {
+            if (target === 'home') setScreen('landing')
+            else if (target === 'signin') setScreen('signin')
+          }}
+        />
+      )}
     </div>
   )
 }

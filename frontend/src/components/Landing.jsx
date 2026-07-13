@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
@@ -15,8 +14,7 @@ const palette = {
   espressoDark: '#1f1815',
 }
 
-export default function Landing() {
-  const navigate = useNavigate()
+export default function Landing({ onEnter }) {
   const heroRef = useRef(null)
   const orbRef = useRef(null)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -56,7 +54,7 @@ export default function Landing() {
     return () => ScrollTrigger.getAll().forEach(t => t.kill())
   }, [])
 
-  const goToChat = () => navigate('/chat')
+  const goToChat = () => onEnter?.('chat')
 
   const features = [
     {

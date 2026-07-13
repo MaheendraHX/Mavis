@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://aria-backend-b6qb.onrender.com'
 
@@ -64,8 +63,7 @@ function ARIAMessage({ msg }) {
   )
 }
 
-export default function Chat() {
-  const navigate = useNavigate()
+export default function Chat({ onNavigate, userType }) {
   const [conversations, setConversations] = useState(() => {
     try {
       const saved = localStorage.getItem('mavis_conversations')
@@ -450,7 +448,7 @@ export default function Chat() {
             </button>
 
             <button
-              onClick={() => navigate('/')}
+              onClick={() => onNavigate?.('home')}
               style={{
                 background: 'none',
                 border: 'none',
