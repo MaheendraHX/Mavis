@@ -147,53 +147,26 @@ export default function Chat({ onNavigate, userType }) {
     try {
       const res = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Guest-ID': guestId },
         body: JSON.stringify({
-          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
-          guest_id: guestId,
-          web_search: webSearchOn,
+          message: text,
+          user_type: 'guest',
+          session_id: convId,
+          incognito: false,
         }),
         signal: controller.signal,
       })
 
-      if (!res.ok) {
-        const errText = await res.text()
-        throw new Error(errText || `Server error: ${res.status}`)
-      }
+      if (!res.ok) throw new Error(`Server error: ${res.status}`)
 
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let assistantContent = ''
-      const assistantMsg = { role: 'assistant', content: '', timestamp: new Date().toISOString() }
-      setMessages(prev => [...prev, assistantMsg])
+      const data = await res.json()
+      const assistantContent = data.response || 'No response'
+      const newConvId = data.conv_id || convId
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6)
-            if (data === '[DONE]') continue
-            try {
-              const parsed = JSON.parse(data)
-              if (parsed.content) {
-                assistantContent += parsed.content
-                setMessages(prev => {
-                  const updated = [...prev]
-                  updated[updated.length - 1] = { ...updated[updated.length - 1], content: assistantContent }
-                  return updated
-                })
-              }
-            } catch {}
-          }
-        }
-      }
-
-      // Final update to conversations
       const finalMessages = [...newMessages, { role: 'assistant', content: assistantContent, timestamp: new Date().toISOString() }]
-      setConversations(prev => prev.map(c => c.id === convId ? { ...c, messages: finalMessages } : c))
+      setMessages(finalMessages)
+      setConversations(prev => prev.map(c => c.id === newConvId ? { ...c, messages: finalMessages, title: data.title || c.title } : c))
+      if (newConvId !== convId) setActiveConvId(newConvId)
 
     } catch (err) {
       if (err.name === 'AbortError') return
