@@ -153,7 +153,7 @@ export default function Chat({ onNavigate }) {
         : `[File: ${data.filename}]\n\n${data.content}`
 
       if (data.type === 'image') {
-        setPendingImage({ base64: data.content, filename: data.filename, mime_type: data.mime_type })
+        setPendingImage({ base64: data.base64, filename: data.filename, mime: data.mime })
       }
 
       setInput(prev => `${prev.trim() ? `${prev}\n\n` : ''}${attachmentText}`)
@@ -208,7 +208,7 @@ export default function Chat({ onNavigate }) {
         fd.append('session_id', convId)
         fd.append('incognito', 'false')
         fd.append('base64_image', img.base64)
-        fd.append('mime', img.mime_type)
+        fd.append('mime', img.mime)
         body = fd
         headers = { 'X-Guest-ID': guestId }
       } else {

@@ -8,3 +8,4 @@ pypdf==5.1.0
 python-docx==1.1.2
 python-multipart==0.0.20
 trafilatura==1.12.2
+duckduckgo_search>=5.0
