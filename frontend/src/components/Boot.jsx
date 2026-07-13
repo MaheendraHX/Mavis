@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 
 const palette = {
-  espresso: '#382B27',
-  steel: '#236088',
-  indigo: '#5364B1',
-  olive: '#88AE4D',
-  sage: '#D2DEA0',
+  bg: '#faf9f7',
+  text: '#2d2d2d',
+  textMuted: '#6b6b6b',
+  primary: '#d4a574',
+  secondary: '#e89f71',
+  accent: '#a8d5ba',
+  border: 'rgba(0,0,0,0.08)',
 }
 
 export default function Boot({ onComplete }) {
@@ -49,27 +51,59 @@ export default function Boot({ onComplete }) {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      background: palette.espresso,
+      background: palette.bg,
       gap: '2rem',
       fontFamily: 'Inter, system-ui, sans-serif',
     }}>
       <div style={{
-        width: 80, height: 80, borderRadius: '50%',
-        background: 'radial-gradient(circle at 40% 35%, rgba(210,222,160,0.25), transparent 40%), radial-gradient(circle at 55% 50%, rgba(35,96,136,0.35), transparent 45%), radial-gradient(circle at 50% 50%, rgba(136,174,77,0.15), transparent 60%)',
-        boxShadow: '0 0 50px rgba(35,96,136,0.15)',
-        border: '1px solid rgba(210,222,160,0.08)',
+        width: 80,
+        height: 80,
+        borderRadius: '50%',
+        background: `
+          radial-gradient(circle at 38% 34%, rgba(255,255,255,0.9), transparent 34%),
+          radial-gradient(circle at 58% 50%, rgba(232,159,113,0.38), transparent 46%),
+          radial-gradient(circle at 48% 55%, rgba(168,213,186,0.34), transparent 62%)
+        `,
+        boxShadow: '0 16px 44px rgba(232,159,113,0.18)',
+        border: `1px solid ${palette.border}`,
         animation: 'bootPulse 2s ease-in-out infinite',
       }} />
-      <h1 style={{ fontSize: '2.2rem', fontWeight: 700, letterSpacing: '0.35em', color: palette.sage, fontFamily: 'Georgia, serif', margin: 0, minHeight: '2.8rem' }}>
-        {text}<span style={{ animation: 'blink 0.8s step-end infinite', color: palette.olive }}>|</span>
+      <h1 style={{
+        fontSize: '2.2rem',
+        fontWeight: 700,
+        letterSpacing: '0.35em',
+        color: palette.text,
+        fontFamily: 'Georgia, serif',
+        margin: 0,
+        minHeight: '2.8rem',
+      }}>
+        {text}<span style={{ animation: 'blink 0.8s step-end infinite', color: palette.secondary }}>|</span>
       </h1>
-      <p style={{ fontSize: '0.8rem', letterSpacing: '0.12em', color: 'rgba(210,222,160,0.4)', margin: 0, textTransform: 'uppercase' }}>
+      <p style={{
+        fontSize: '0.8rem',
+        letterSpacing: '0.12em',
+        color: palette.textMuted,
+        margin: 0,
+        textTransform: 'uppercase',
+      }}>
         Multimodal Adaptive Virtual Intelligence System
       </p>
-      <div style={{ width: 200, height: 2, background: 'rgba(210,222,160,0.08)', borderRadius: 1, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: progress + '%', background: 'linear-gradient(90deg, ' + palette.steel + ', ' + palette.olive + ')', borderRadius: 1, transition: 'width 0.1s linear' }} />
+      <div style={{
+        width: 200,
+        height: 3,
+        background: 'rgba(0,0,0,0.06)',
+        borderRadius: 999,
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          height: '100%',
+          width: progress + '%',
+          background: `linear-gradient(90deg, ${palette.primary}, ${palette.secondary})`,
+          borderRadius: 999,
+          transition: 'width 0.1s linear',
+        }} />
       </div>
-      <style>{'@keyframes bootPulse{0%,100%{transform:scale(1);opacity:0.9}50%{transform:scale(1.06);opacity:1}}@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}'}</style>
+      <style>{'@keyframes bootPulse{0%,100%{transform:scale(1);opacity:0.92}50%{transform:scale(1.06);opacity:1}}@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}'}</style>
     </div>
   )
 }

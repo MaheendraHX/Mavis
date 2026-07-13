@@ -198,6 +198,7 @@ export default function Chat({ onNavigate }) {
           user_type: 'guest',
           session_id: convId,
           incognito: false,
+          web_search: webSearchOn,
         }),
         signal: controller.signal,
       })
@@ -424,8 +425,8 @@ export default function Chat({ onNavigate }) {
                 gap: '0.4rem',
                 padding: '0.4rem 0.75rem',
                 borderRadius: '999px',
-                background: webSearchOn ? '#e8f5ed' : palette.surfaceWarm,
-                border: webSearchOn ? '1px solid rgba(168,213,186,0.9)' : `1px solid ${palette.border}`,
+                background: webSearchOn ? '#fdf2f0' : palette.surfaceWarm,
+                border: webSearchOn ? '1px solid rgba(232,159,113,0.9)' : `1px solid ${palette.border}`,
                 color: webSearchOn ? palette.text : palette.textMuted,
                 fontSize: '0.72rem',
                 fontWeight: 500,
@@ -549,7 +550,7 @@ export default function Chat({ onNavigate }) {
               onMouseEnter={e => { if (!uploading) e.currentTarget.style.color = palette.primary }}
               onMouseLeave={e => { if (!uploading) e.currentTarget.style.color = palette.textMuted }}
             >
-              {uploading ? '...' : 'Attach'}
+              {uploading ? '...' : '📎'}
             </button>
             <input
               ref={fileInputRef}

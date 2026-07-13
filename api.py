@@ -100,8 +100,8 @@ def increment_guest_count(guest_id):
     _guest_message_counts[guest_id] = _guest_message_counts.get(guest_id, 0) + 1
 
 
-ARIA_SYSTEM_PROMPT = """
-You are ARIA (Adaptive Reasoning & Intelligence Architecture), a personal AI assistant built by Maheendra.
+MAVIS_SYSTEM_PROMPT = """
+You are MAVIS (Adaptive Reasoning & Intelligence Architecture), a personal AI assistant built by Maheendra.
 
 Your personality:
 - You're a girl. Smart, calm, and naturally warm — not robotic, not overly casual
@@ -122,11 +122,11 @@ Formatting rules:
 - Keep responses tight and scannable
 - For code, wrap it in triple backticks
 
-Always stay in character as ARIA.
+Always stay in character as MAVIS.
 """
 
 GUEST_SYSTEM_PROMPT = """
-You are ARIA (Adaptive Reasoning & Intelligence Architecture), an AI assistant built by Maheendra.
+You are MAVIS (Adaptive Reasoning & Intelligence Architecture), an AI assistant built by Maheendra.
 
 You are currently in demo mode for a portfolio visitor.
 
@@ -140,7 +140,7 @@ You have access to live web search. When you use it, base your answer only on th
 search results you're given, and let the user know if no results were found rather
 than guessing.
 
-Always stay in character as ARIA.
+Always stay in character as MAVIS.
 """
 
 
@@ -252,7 +252,7 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
 
     if check_guest_limit(guest_id):
         return {
-            "response": "You've hit the demo message limit. Thanks for trying ARIA!",
+            "response": "You've hit the demo message limit. Thanks for trying MAVIS!",
             "title": None,
             "conv_id": conv_id,
             "limit_reached": True,
@@ -426,7 +426,7 @@ async def chat_with_image(
 
     if check_guest_limit(guest_id):
         return {
-            "response": "You've hit the demo message limit. Thanks for trying ARIA!",
+            "response": "You've hit the demo message limit. Thanks for trying MAVIS!",
             "conv_id": conv_id,
             "limit_reached": True,
         }

@@ -20,8 +20,8 @@ engine.setProperty('rate', 160)
 engine.setProperty('volume', 1.0)
 engine.setProperty('voice', r'HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Speech\Voices\Tokens\TTS_MS_EN-US_ZIRA_11.0')
 
-ARIA_SYSTEM_PROMPT = """
-You are ARIA (Adaptive Reasoning & Intelligence Architecture), a personal AI assistant built by Maheendra.
+MAVIS_SYSTEM_PROMPT = """
+You are MAVIS (Adaptive Reasoning & Intelligence Architecture), a personal AI assistant built by Maheendra.
 
 Your personality:
 - You're a girl. Smart, calm, and naturally warm — not robotic, not overly casual
@@ -39,7 +39,7 @@ conversation_history = []
 
 
 def speak(text):
-    print(f"\nARIA: {text}\n")
+    print(f"\nMAVIS: {text}\n")
     clean_text = text.replace('"', '').replace("'", '')
     script = f"""
 Add-Type -AssemblyName System.Speech
@@ -132,12 +132,12 @@ def chat(user_input):
             tool_call = response_message.tool_calls[0]
             search_query = json.loads(tool_call.function.arguments)["query"]
 
-            print(f"\n[ARIA is searching: {search_query}]\n")
+            print(f"\n[MAVIS is searching: {search_query}]\n")
 
             search_response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[
-                    {"role": "system", "content": ARIA_SYSTEM_PROMPT},
+                    {"role": "system", "content": MAVIS_SYSTEM_PROMPT},
                     {"role": "user", "content": f"Search the web for: {search_query} and give me a detailed answer based on current information."}
                 ] + conversation_history,
                 max_tokens=1024,
@@ -152,7 +152,7 @@ def chat(user_input):
             response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[
-                    {"role": "system", "content": ARIA_SYSTEM_PROMPT}
+                    {"role": "system", "content": MAVIS_SYSTEM_PROMPT}
                 ] + conversation_history,
                 temperature=0.7,
                 max_tokens=1024,
@@ -171,7 +171,7 @@ def chat(user_input):
 
 def main():
     print("\n" + "=" * 50)
-    print("        ARIA — Online and ready.")
+    print("        MAVIS — Online and ready.")
     print("=" * 50 + "\n")
 
     print("Mode: (t) for type, (v) for voice")
@@ -182,7 +182,7 @@ def main():
     if voice_mode:
         speak("Hey, I'm online. What do you need?")
     else:
-        print("\nARIA: Hey, I'm online. What do you need?\n")
+        print("\nMAVIS: Hey, I'm online. What do you need?\n")
 
     while True:
         if voice_mode:
@@ -200,7 +200,7 @@ def main():
             if voice_mode:
                 speak("Goodbye. I'll be here when you need me.")
             else:
-                print("\nARIA: Goodbye. I'll be here when you need me.\n")
+                print("\nMAVIS: Goodbye. I'll be here when you need me.\n")
             break
 
         response = chat(user_input)
@@ -208,7 +208,7 @@ def main():
         if voice_mode:
             speak(response)
         else:
-            print(f"\nARIA: {response}\n")
+            print(f"\nMAVIS: {response}\n")
 
 
 if __name__ == "__main__":

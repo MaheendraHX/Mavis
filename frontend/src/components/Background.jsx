@@ -30,10 +30,22 @@ export default function Background() {
       offCtx.fillStyle = '#faf9f7'
       offCtx.fillRect(0, 0, w, h)
 
+      const cornerGlow = offCtx.createRadialGradient(w * 0.08, h * 0.1, 0, w * 0.08, h * 0.1, Math.max(w, h) * 0.42)
+      cornerGlow.addColorStop(0, 'rgba(212,165,116,0.09)')
+      cornerGlow.addColorStop(1, 'rgba(212,165,116,0)')
+      offCtx.fillStyle = cornerGlow
+      offCtx.fillRect(0, 0, w, h)
+
+      const coralGlow = offCtx.createRadialGradient(w * 0.9, h * 0.9, 0, w * 0.9, h * 0.9, Math.max(w, h) * 0.38)
+      coralGlow.addColorStop(0, 'rgba(232,159,113,0.08)')
+      coralGlow.addColorStop(1, 'rgba(232,159,113,0)')
+      offCtx.fillStyle = coralGlow
+      offCtx.fillRect(0, 0, w, h)
+
       const waves = [
-        { color: '212,165,116', y: 0.3, amp: 0.06, freq: 0.4, speed: 0.08, opacity: 0.04, spread: 0.2 },
-        { color: '168,213,186', y: 0.5, amp: 0.05, freq: 0.5, speed: 0.1, opacity: 0.03, spread: 0.18 },
-        { color: '232,159,113', y: 0.7, amp: 0.04, freq: 0.35, speed: 0.06, opacity: 0.03, spread: 0.15 },
+        { color: '212,165,116', y: 0.28, amp: 0.05, freq: 0.4, speed: 0.08, opacity: 0.045, spread: 0.2 },
+        { color: '168,213,186', y: 0.5, amp: 0.045, freq: 0.5, speed: 0.1, opacity: 0.035, spread: 0.18 },
+        { color: '232,159,113', y: 0.72, amp: 0.04, freq: 0.35, speed: 0.06, opacity: 0.04, spread: 0.15 },
       ]
 
       waves.forEach(wave => {
