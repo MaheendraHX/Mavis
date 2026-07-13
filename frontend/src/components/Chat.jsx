@@ -58,6 +58,30 @@ function ARIAMessage({ msg }) {
       }}>
         {msg.content}
       </div>
+      {msg.sources && msg.sources.length > 0 && (
+        <div style={{
+          maxWidth: '72%',
+          marginTop: '0.35rem',
+          padding: '0.45rem 0.75rem',
+          borderRadius: '10px',
+          background: 'rgba(44,140,153,0.08)',
+          border: `1px solid ${palette.border}`,
+          fontSize: '0.72rem',
+          color: palette.textMuted,
+          lineHeight: 1.5,
+        }}>
+          <span style={{ fontWeight: 600, color: palette.accent }}>Sources:</span>{' '}
+          {msg.sources.map((s, i) => (
+            <span key={i}>
+              {i > 0 && ' · '}
+              <a href={s.url} target="_blank" rel="noopener noreferrer"
+                 style={{ color: palette.accent, textDecoration: 'none' }}>
+                {s.title || s.url}
+              </a>
+            </span>
+          ))}
+        </div>
+      )}
       <span style={{
         fontSize: '0.65rem',
         color: palette.textMuted,
@@ -224,6 +248,7 @@ export default function Chat({ onNavigate }) {
             user_type: 'guest',
             session_id: convId,
             incognito: false,
+            web_search: webSearchOn,
           }),
           signal: controller.signal,
         })
@@ -236,7 +261,7 @@ export default function Chat({ onNavigate }) {
       const newConvId = data.conv_id || convId
       const finalMessages = [
         ...newMessages,
-        { role: 'assistant', content: assistantContent, timestamp: new Date().toISOString() },
+        { role: 'assistant', content: assistantContent, timestamp: new Date().toISOString(), sources: data.sources || [] },
       ]
 
       setMessages(finalMessages)
@@ -260,7 +285,7 @@ export default function Chat({ onNavigate }) {
       setLoading(false)
       abortRef.current = null
     }
-  }, [input, loading, messages, activeConvId, guestId])
+  }, [input, loading, messages, activeConvId, guestId, pendingImage, webSearchOn])
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
