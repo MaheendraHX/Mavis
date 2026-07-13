@@ -274,71 +274,34 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
     title = None
 
     try:
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "system", "content": system_prompt}] + history,
-            temperature=0.7,
-            max_tokens=1024,
-            **(dict(tools=[{
-                "type": "function",
-                "function": {
-                    "name": "web_search",
-                    "description": "Search the web for current information",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "query": {"type": "string", "description": "The search query"}
-                        },
-                        "required": ["query"]
-                    }
-                }
-            }], tool_choice="auto") if request.web_search else {})
-        )
-
-        response_message = response.choices[0].message
-        sources = []
-
-        if response_message.tool_calls:
-            tool_call = response_message.tool_calls[0]
-            search_query = json.loads(tool_call.function.arguments)["query"]
-
-            results = web_search(search_query)
-            sources = [{"title": r["title"], "url": r["url"]} for r in results]
-
-            if results:
+        if request.web_search:
+            search_results = web_search(request.message, max_results=5)
+            sources = [{"title": r["title"], "url": r["url"]} for r in search_results]
+            if search_results:
                 results_text = "\n\n".join(
                     f"Title: {r['title']}\nURL: {r['url']}\nSnippet: {r['snippet']}"
-                    for r in results
+                    for r in search_results
                 )
-                tool_content = f"Live web search results for '{search_query}':\n\n{results_text}"
+                search_prompt = system_prompt + "\n\n[Live web results for the user's query: \"" + request.message + "\"]\n" + results_text + "\n[/End of web results]"
             else:
-                tool_content = f"No live search results were found for '{search_query}'. Let the user know search is temporarily unavailable."
-
-            follow_up_messages = (
-                [{"role": "system", "content": system_prompt}]
-                + history
-                + [
-                    {
-                        "role": "assistant",
-                        "content": response_message.content,
-                        "tool_calls": [tool_call],
-                    },
-                    {
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": tool_content,
-                    },
-                ]
-            )
-
-            search_response = client.chat.completions.create(
+                sources = []
+                search_prompt = system_prompt
+            response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=follow_up_messages,
+                messages=[{"role": "system", "content": search_prompt}] + history,
+                temperature=0.7,
                 max_tokens=1024,
             )
-            assistant_message = search_response.choices[0].message.content
+            assistant_message = response.choices[0].message.content
         else:
-            assistant_message = response_message.content
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "system", "content": system_prompt}] + history,
+                temperature=0.7,
+                max_tokens=1024,
+            )
+            assistant_message = response.choices[0].message.content
+            sources = []
 
         if first_turn:
             try:
@@ -365,9 +328,8 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
             if not request.incognito:
                 memory.update_conversation_title(conv_id, title)
 
-    except Exception as e:
-        sources = []
-        if "tool_use_failed" in str(e):
+    except Exception:
+        try:
             response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "system", "content": system_prompt}] + history,
@@ -375,8 +337,9 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
                 max_tokens=1024,
             )
             assistant_message = response.choices[0].message.content
-        else:
+        except Exception:
             assistant_message = "Something went wrong on my end. Try again?"
+        sources = []
 
         if first_turn and title is None:
             try:
