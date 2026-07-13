@@ -336,10 +336,46 @@ export default function Landing({ onEnter }) {
             <div style={{ position: 'absolute', inset: '30%', borderRadius: '50%', border: '1px solid rgba(168,213,186,0.35)' }} />
           </div>
         </div>
-      </section>
 
-      {/* Demo Notice Banner */}
-      <section style={{ padding: '0 2rem' }}>
+        {/* Scroll Down Indicator */}
+        <div
+          className="scroll-indicator-wrap"
+          onClick={() => document.getElementById('demo-notice')?.scrollIntoView({ behavior: 'smooth' })}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '0.5rem',
+            cursor: 'pointer',
+            marginTop: '3rem',
+            opacity: 0.5,
+            transition: 'opacity 0.3s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+          onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
+        >
+          <span style={{ fontSize: '0.68rem', letterSpacing: '0.22em', textTransform: 'uppercase', color: palette.textMuted, fontWeight: 500 }}>
+            Scroll to explore
+          </span>
+          <div className="scroll-mouse" style={{
+            width: 26,
+            height: 42,
+            borderRadius: 13,
+            border: `1.5px solid ${palette.primary}`,
+            display: 'flex',
+            justifyContent: 'center',
+            paddingTop: 8,
+          }}>
+            <div className="scroll-dot" style={{
+              width: 3,
+              height: 8,
+              borderRadius: 2,
+              background: palette.primary,
+            }} />
+          </div>
+        </div>
+      </section>
+      <section id="demo-notice" style={{ padding: '0 2rem' }}>
         <div style={{
           maxWidth: 900,
           margin: '0 auto',
