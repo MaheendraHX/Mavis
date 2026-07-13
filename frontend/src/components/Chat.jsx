@@ -3,13 +3,19 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 const API_BASE = import.meta.env.VITE_API_URL || 'https://aria-backend-b6qb.onrender.com'
 
 const palette = {
-  espresso: '#382B27',
-  steel: '#236088',
-  indigo: '#5364B1',
-  olive: '#88AE4D',
-  sage: '#D2DEA0',
-  espressoLight: '#4a3d39',
-  espressoDark: '#1f1815',
+  bg: '#faf9f7',
+  bgSoft: '#f4eee7',
+  surface: '#ffffff',
+  surfaceWarm: '#fffaf4',
+  text: '#2d2d2d',
+  textMuted: '#6b6b6b',
+  primary: '#d4a574',
+  secondary: '#e89f71',
+  accent: '#a8d5ba',
+  border: 'rgba(0,0,0,0.08)',
+  borderStrong: 'rgba(212,165,116,0.28)',
+  shadow: 'rgba(62,42,28,0.08)',
+  danger: '#c85850',
 }
 
 function getOrCreateGuestId() {
@@ -40,9 +46,10 @@ function ARIAMessage({ msg }) {
         maxWidth: '72%',
         padding: '0.85rem 1.2rem',
         borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-        background: isUser ? palette.steel : 'rgba(74,61,57,0.5)',
-        border: isUser ? 'none' : '1px solid rgba(210,222,160,0.06)',
-        color: isUser ? '#fff' : palette.sage,
+        background: isUser ? palette.secondary : palette.surface,
+        border: isUser ? 'none' : `1px solid ${palette.border}`,
+        color: isUser ? '#fff' : palette.text,
+        boxShadow: `0 10px 28px ${palette.shadow}`,
         fontSize: '0.92rem',
         lineHeight: 1.65,
         whiteSpace: 'pre-wrap',
@@ -53,7 +60,7 @@ function ARIAMessage({ msg }) {
       </div>
       <span style={{
         fontSize: '0.65rem',
-        color: 'rgba(210,222,160,0.3)',
+        color: palette.textMuted,
         marginTop: '0.3rem',
         padding: '0 0.3rem',
       }}>
@@ -63,7 +70,7 @@ function ARIAMessage({ msg }) {
   )
 }
 
-export default function Chat({ onNavigate, userType }) {
+export default function Chat({ onNavigate }) {
   const [conversations, setConversations] = useState(() => {
     try {
       const saved = localStorage.getItem('mavis_conversations')
@@ -74,24 +81,24 @@ export default function Chat({ onNavigate, userType }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
   const [webSearchOn, setWebSearchOn] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+  const fileInputRef = useRef(null)
   const abortRef = useRef(null)
   const guestId = useRef(getOrCreateGuestId()).current
 
-  // Save conversations to localStorage
   useEffect(() => {
     localStorage.setItem('mavis_conversations', JSON.stringify(conversations))
   }, [conversations])
 
-  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Focus input on mount
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
@@ -100,6 +107,7 @@ export default function Chat({ onNavigate, userType }) {
     setActiveConvId(null)
     setMessages([])
     setInput('')
+    setUploadError('')
     inputRef.current?.focus()
   }, [])
 
@@ -108,17 +116,49 @@ export default function Chat({ onNavigate, userType }) {
     if (conv) {
       setActiveConvId(convId)
       setMessages(conv.messages || [])
+      setUploadError('')
     }
   }, [conversations])
 
   const deleteConversation = useCallback((convId, e) => {
     e.stopPropagation()
-    const updated = conversations.filter(c => c.id !== convId)
-    setConversations(updated)
-    if (activeConvId === convId) {
-      startNewChat()
+    setConversations(prev => prev.filter(c => c.id !== convId))
+    if (activeConvId === convId) startNewChat()
+  }, [activeConvId, startNewChat])
+
+  const handleFileUpload = useCallback(async (file) => {
+    if (!file || uploading) return
+
+    setUploading(true)
+    setUploadError('')
+
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const res = await fetch(`${API_BASE}/upload-file`, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null)
+        throw new Error(errorData?.detail || `Upload failed: ${res.status}`)
+      }
+
+      const data = await res.json()
+      const attachmentText = data.type === 'image'
+        ? `[Attached image: ${data.filename}]`
+        : `[Attached file: ${data.filename}]\n\n${data.content}`
+
+      setInput(prev => `${prev.trim() ? `${prev}\n\n` : ''}${attachmentText}`)
+      inputRef.current?.focus()
+    } catch (err) {
+      setUploadError(err.message || 'Upload failed. Try again.')
+    } finally {
+      setUploading(false)
     }
-  }, [conversations, activeConvId, startNewChat])
+  }, [uploading])
 
   const sendMessage = useCallback(async () => {
     const text = input.trim()
@@ -128,14 +168,19 @@ export default function Chat({ onNavigate, userType }) {
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
     setInput('')
+    setUploadError('')
     setLoading(true)
 
-    // Create or update conversation
     let convId = activeConvId
     if (!convId) {
       convId = 'conv_' + Date.now()
       setActiveConvId(convId)
-      const newConv = { id: convId, title: text.slice(0, 40) + (text.length > 40 ? '...' : ''), messages: newMessages, createdAt: new Date().toISOString() }
+      const newConv = {
+        id: convId,
+        title: text.slice(0, 40) + (text.length > 40 ? '...' : ''),
+        messages: newMessages,
+        createdAt: new Date().toISOString(),
+      }
       setConversations(prev => [newConv, ...prev])
     } else {
       setConversations(prev => prev.map(c => c.id === convId ? { ...c, messages: newMessages } : c))
@@ -162,21 +207,33 @@ export default function Chat({ onNavigate, userType }) {
       const data = await res.json()
       const assistantContent = data.response || 'No response'
       const newConvId = data.conv_id || convId
+      const finalMessages = [
+        ...newMessages,
+        { role: 'assistant', content: assistantContent, timestamp: new Date().toISOString() },
+      ]
 
-      const finalMessages = [...newMessages, { role: 'assistant', content: assistantContent, timestamp: new Date().toISOString() }]
       setMessages(finalMessages)
-      setConversations(prev => prev.map(c => c.id === newConvId ? { ...c, messages: finalMessages, title: data.title || c.title } : c))
+      setConversations(prev => prev.map(c => c.id === convId ? {
+        ...c,
+        id: newConvId,
+        messages: finalMessages,
+        title: data.title || c.title,
+      } : c))
       if (newConvId !== convId) setActiveConvId(newConvId)
-
     } catch (err) {
-      if (err.name === 'AbortError') return
-      const errorMsg = { role: 'assistant', content: `⚠️ ${err.message || 'Something went wrong. Please try again.'}`, timestamp: new Date().toISOString() }
-      setMessages(prev => [...prev, errorMsg])
+      if (err.name !== 'AbortError') {
+        const errorMsg = {
+          role: 'assistant',
+          content: `Warning: ${err.message || 'Something went wrong. Please try again.'}`,
+          timestamp: new Date().toISOString(),
+        }
+        setMessages(prev => [...prev, errorMsg])
+      }
     } finally {
       setLoading(false)
       abortRef.current = null
     }
-  }, [input, loading, messages, activeConvId, guestId, webSearchOn])
+  }, [input, loading, messages, activeConvId, guestId])
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -196,26 +253,24 @@ export default function Chat({ onNavigate, userType }) {
     <div style={{
       display: 'flex',
       height: '100vh',
-      background: palette.espresso,
-      color: palette.sage,
+      background: palette.bg,
+      color: palette.text,
       fontFamily: 'Inter, system-ui, sans-serif',
       overflow: 'hidden',
     }}>
-      {/* ── SIDEBAR ── */}
       <div style={{
         width: sidebarOpen ? 280 : 0,
         minWidth: sidebarOpen ? 280 : 0,
         transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-        background: 'rgba(31,24,21,0.85)',
-        borderRight: sidebarOpen ? '1px solid rgba(210,222,160,0.06)' : 'none',
+        background: palette.surface,
+        borderRight: sidebarOpen ? `1px solid ${palette.border}` : 'none',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
       }}>
-        {/* Sidebar header */}
         <div style={{
           padding: '1.25rem 1rem',
-          borderBottom: '1px solid rgba(210,222,160,0.06)',
+          borderBottom: `1px solid ${palette.border}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -224,36 +279,32 @@ export default function Chat({ onNavigate, userType }) {
             fontSize: '1rem',
             fontWeight: 700,
             letterSpacing: '0.2em',
-            color: palette.sage,
+            color: palette.text,
             fontFamily: 'Georgia, serif',
           }}>
             MAVIS
           </span>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'rgba(210,222,160,0.4)',
-              cursor: 'pointer',
-              fontSize: '1.1rem',
-              padding: '0.25rem',
-            }}
-          >
-            ✕
+          <button onClick={() => setSidebarOpen(false)} style={{
+            background: 'none',
+            border: 'none',
+            color: palette.textMuted,
+            cursor: 'pointer',
+            fontSize: '1.1rem',
+            padding: '0.25rem',
+          }}>
+            x
           </button>
         </div>
 
-        {/* New chat button */}
         <button
           onClick={startNewChat}
           style={{
             margin: '0.75rem',
             padding: '0.65rem 1rem',
             borderRadius: '12px',
-            background: 'rgba(74,61,57,0.4)',
-            border: '1px solid rgba(210,222,160,0.08)',
-            color: palette.sage,
+            background: palette.surfaceWarm,
+            border: `1px solid ${palette.borderStrong}`,
+            color: palette.text,
             fontSize: '0.82rem',
             fontWeight: 500,
             cursor: 'pointer',
@@ -262,13 +313,12 @@ export default function Chat({ onNavigate, userType }) {
             textAlign: 'left',
             letterSpacing: '0.02em',
           }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(136,174,77,0.1)'; e.currentTarget.style.borderColor = 'rgba(136,174,77,0.25)' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(74,61,57,0.4)'; e.currentTarget.style.borderColor = 'rgba(210,222,160,0.08)' }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#fff4e8'; e.currentTarget.style.borderColor = palette.primary }}
+          onMouseLeave={e => { e.currentTarget.style.background = palette.surfaceWarm; e.currentTarget.style.borderColor = palette.borderStrong }}
         >
           + New Conversation
         </button>
 
-        {/* Conversation list */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '0 0.5rem' }}>
           {conversations.map(conv => (
             <div
@@ -283,19 +333,11 @@ export default function Chat({ onNavigate, userType }) {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 transition: 'all 0.2s',
-                background: activeConvId === conv.id ? 'rgba(35,96,136,0.15)' : 'transparent',
-                border: activeConvId === conv.id ? '1px solid rgba(35,96,136,0.2)' : '1px solid transparent',
+                background: activeConvId === conv.id ? '#fff0df' : 'transparent',
+                border: activeConvId === conv.id ? `1px solid ${palette.borderStrong}` : '1px solid transparent',
               }}
-              onMouseEnter={e => {
-                if (activeConvId !== conv.id) {
-                  e.currentTarget.style.background = 'rgba(210,222,160,0.03)'
-                }
-              }}
-              onMouseLeave={e => {
-                if (activeConvId !== conv.id) {
-                  e.currentTarget.style.background = 'transparent'
-                }
-              }}
+              onMouseEnter={e => { if (activeConvId !== conv.id) e.currentTarget.style.background = palette.bgSoft }}
+              onMouseLeave={e => { if (activeConvId !== conv.id) e.currentTarget.style.background = 'transparent' }}
             >
               <div style={{
                 flex: 1,
@@ -303,7 +345,7 @@ export default function Chat({ onNavigate, userType }) {
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
                 fontSize: '0.8rem',
-                color: activeConvId === conv.id ? palette.sage : 'rgba(210,222,160,0.55)',
+                color: activeConvId === conv.id ? palette.text : palette.textMuted,
                 fontWeight: activeConvId === conv.id ? 500 : 400,
               }}>
                 {conv.title || 'New Conversation'}
@@ -313,7 +355,7 @@ export default function Chat({ onNavigate, userType }) {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: 'rgba(210,222,160,0.25)',
+                  color: palette.textMuted,
                   cursor: 'pointer',
                   fontSize: '0.75rem',
                   padding: '0.2rem 0.3rem',
@@ -322,80 +364,57 @@ export default function Chat({ onNavigate, userType }) {
                 }}
                 className="delete-btn"
               >
-                🗑
+                Delete
               </button>
             </div>
           ))}
           {conversations.length === 0 && (
-            <div style={{
-              textAlign: 'center',
-              padding: '2rem 1rem',
-              color: 'rgba(210,222,160,0.3)',
-              fontSize: '0.78rem',
-            }}>
+            <div style={{ textAlign: 'center', padding: '2rem 1rem', color: palette.textMuted, fontSize: '0.78rem' }}>
               No conversations yet
             </div>
           )}
         </div>
 
-        {/* Sidebar footer */}
         <div style={{
           padding: '0.75rem 1rem',
-          borderTop: '1px solid rgba(210,222,160,0.06)',
+          borderTop: `1px solid ${palette.border}`,
           fontSize: '0.7rem',
-          color: 'rgba(210,222,160,0.25)',
+          color: palette.textMuted,
           textAlign: 'center',
         }}>
           Mavis Demo
         </div>
       </div>
 
-      {/* ── MAIN CHAT AREA ── */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        minWidth: 0,
-        position: 'relative',
-      }}>
-        {/* Top bar */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
         <div style={{
           padding: '0.85rem 1.25rem',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          borderBottom: '1px solid rgba(210,222,160,0.05)',
-          background: 'rgba(56,43,39,0.5)',
+          borderBottom: `1px solid ${palette.border}`,
+          background: 'rgba(255,255,255,0.78)',
           backdropFilter: 'blur(12px)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             {!sidebarOpen && (
-              <button
-                onClick={() => setSidebarOpen(true)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: 'rgba(210,222,160,0.5)',
-                  cursor: 'pointer',
-                  fontSize: '1.2rem',
-                  padding: '0.25rem',
-                }}
-              >
-                ☰
+              <button onClick={() => setSidebarOpen(true)} style={{
+                background: 'none',
+                border: 'none',
+                color: palette.textMuted,
+                cursor: 'pointer',
+                fontSize: '1.2rem',
+                padding: '0.25rem',
+              }}>
+                Menu
               </button>
             )}
-            <span style={{
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              color: palette.sage,
-              letterSpacing: '0.03em',
-            }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: palette.text, letterSpacing: '0.03em' }}>
               {activeConv?.title || 'Mavis'}
             </span>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            {/* Web search toggle */}
             <button
               onClick={() => setWebSearchOn(!webSearchOn)}
               title="Toggle web search"
@@ -405,9 +424,9 @@ export default function Chat({ onNavigate, userType }) {
                 gap: '0.4rem',
                 padding: '0.4rem 0.75rem',
                 borderRadius: '999px',
-                background: webSearchOn ? 'rgba(35,96,136,0.2)' : 'rgba(74,61,57,0.4)',
-                border: webSearchOn ? '1px solid rgba(35,96,136,0.35)' : '1px solid rgba(210,222,160,0.08)',
-                color: webSearchOn ? palette.sage : 'rgba(210,222,160,0.5)',
+                background: webSearchOn ? '#e8f5ed' : palette.surfaceWarm,
+                border: webSearchOn ? '1px solid rgba(168,213,186,0.9)' : `1px solid ${palette.border}`,
+                color: webSearchOn ? palette.text : palette.textMuted,
                 fontSize: '0.72rem',
                 fontWeight: 500,
                 cursor: 'pointer',
@@ -416,36 +435,26 @@ export default function Chat({ onNavigate, userType }) {
                 letterSpacing: '0.03em',
               }}
             >
-              <span style={{ fontSize: '0.85rem' }}>{webSearchOn ? '🌐' : '🌐'}</span>
               Web
             </button>
 
-            <button
-              onClick={() => onNavigate?.('home')}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'rgba(210,222,160,0.4)',
-                cursor: 'pointer',
-                fontSize: '0.78rem',
-                fontWeight: 500,
-                letterSpacing: '0.03em',
-                fontFamily: 'Inter, system-ui, sans-serif',
-              }}
-            >
-              ← Home
+            <button onClick={() => onNavigate?.('home')} style={{
+              background: 'none',
+              border: 'none',
+              color: palette.textMuted,
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              fontWeight: 500,
+              letterSpacing: '0.03em',
+              fontFamily: 'Inter, system-ui, sans-serif',
+            }}>
+              Home
             </button>
           </div>
         </div>
 
-        {/* Messages area */}
-        <div style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: '1.5rem 1.25rem',
-        }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 1.25rem' }}>
           {messages.length === 0 ? (
-            /* Empty state */
             <div style={{
               display: 'flex',
               flexDirection: 'column',
@@ -454,31 +463,32 @@ export default function Chat({ onNavigate, userType }) {
               height: '100%',
               gap: '1rem',
             }}>
-              {/* Mavis orb icon */}
               <div style={{
                 width: 72,
                 height: 72,
                 borderRadius: '50%',
                 background: `
-                  radial-gradient(circle at 40% 35%, rgba(210,222,160,0.2), transparent 40%),
-                  radial-gradient(circle at 55% 50%, rgba(35,96,136,0.3), transparent 45%),
-                  radial-gradient(circle at 50% 50%, rgba(136,174,77,0.12), transparent 60%)
+                  radial-gradient(circle at 40% 35%, rgba(255,255,255,0.85), transparent 38%),
+                  radial-gradient(circle at 55% 50%, rgba(232,159,113,0.32), transparent 45%),
+                  radial-gradient(circle at 50% 50%, rgba(212,165,116,0.28), transparent 62%)
                 `,
-                boxShadow: '0 0 40px rgba(35,96,136,0.12)',
-                border: '1px solid rgba(210,222,160,0.08)',
+                boxShadow: `0 12px 36px ${palette.shadow}`,
+                border: `1px solid ${palette.borderStrong}`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '1.6rem',
+                fontSize: '1.2rem',
+                fontWeight: 700,
+                color: palette.text,
                 marginBottom: '0.5rem',
                 animation: 'pulse 3s ease-in-out infinite',
               }}>
-                ◈
+                M
               </div>
               <h2 style={{
                 fontSize: '1.5rem',
                 fontWeight: 600,
-                color: palette.sage,
+                color: palette.text,
                 margin: 0,
                 fontFamily: 'Playfair Display, Georgia, serif',
                 letterSpacing: '-0.01em',
@@ -487,13 +497,13 @@ export default function Chat({ onNavigate, userType }) {
               </h2>
               <p style={{
                 fontSize: '0.9rem',
-                color: 'rgba(210,222,160,0.45)',
+                color: palette.textMuted,
                 margin: 0,
                 textAlign: 'center',
                 maxWidth: 360,
                 lineHeight: 1.5,
               }}>
-                Ask me anything — research, code, creative writing, or just a conversation.
+                Ask me anything - research, code, creative writing, or just a conversation.
               </p>
             </div>
           ) : (
@@ -502,30 +512,55 @@ export default function Chat({ onNavigate, userType }) {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input area */}
         <div style={{
           padding: '1rem 1.25rem 1.25rem',
-          borderTop: '1px solid rgba(210,222,160,0.05)',
-          background: 'rgba(56,43,39,0.5)',
+          borderTop: `1px solid ${palette.border}`,
+          background: 'rgba(255,255,255,0.78)',
           backdropFilter: 'blur(12px)',
         }}>
           <div style={{
             display: 'flex',
             alignItems: 'flex-end',
-            gap: '0.6rem',
-            background: 'rgba(74,61,57,0.5)',
+            gap: '0.5rem',
+            background: palette.surface,
             borderRadius: '16px',
-            border: '1px solid rgba(210,222,160,0.08)',
+            border: `1px solid ${palette.border}`,
             padding: '0.5rem 0.5rem 0.5rem 1rem',
             transition: 'border-color 0.2s',
+            boxShadow: `0 12px 36px ${palette.shadow}`,
           }}
-            onFocusCapture={e => {
-              e.currentTarget.style.borderColor = 'rgba(136,174,77,0.3)'
-            }}
-            onBlurCapture={e => {
-              e.currentTarget.style.borderColor = 'rgba(210,222,160,0.08)'
-            }}
+            onFocusCapture={e => { e.currentTarget.style.borderColor = palette.primary }}
+            onBlurCapture={e => { e.currentTarget.style.borderColor = palette.border }}
           >
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              title="Attach file"
+              disabled={uploading}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: uploading ? palette.primary : palette.textMuted,
+                cursor: uploading ? 'default' : 'pointer',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                padding: '0.3rem',
+                transition: 'color 0.2s',
+              }}
+              onMouseEnter={e => { if (!uploading) e.currentTarget.style.color = palette.primary }}
+              onMouseLeave={e => { if (!uploading) e.currentTarget.style.color = palette.textMuted }}
+            >
+              {uploading ? '...' : 'Attach'}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) handleFileUpload(file)
+                e.target.value = ''
+              }}
+            />
             <textarea
               ref={inputRef}
               value={input}
@@ -538,7 +573,7 @@ export default function Chat({ onNavigate, userType }) {
                 background: 'transparent',
                 border: 'none',
                 outline: 'none',
-                color: palette.sage,
+                color: palette.text,
                 fontSize: '0.9rem',
                 fontFamily: 'Inter, system-ui, sans-serif',
                 resize: 'none',
@@ -552,50 +587,47 @@ export default function Chat({ onNavigate, userType }) {
               }}
             />
             {loading ? (
-              <button
-                onClick={stopGeneration}
-                style={{
-                  padding: '0.5rem 0.9rem',
-                  borderRadius: '12px',
-                  background: 'rgba(210,222,160,0.1)',
-                  border: '1px solid rgba(210,222,160,0.15)',
-                  color: palette.sage,
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  fontFamily: 'Inter, system-ui, sans-serif',
-                  whiteSpace: 'nowrap',
-                  transition: 'all 0.2s',
-                }}
-              >
-                ■ Stop
+              <button onClick={stopGeneration} style={{
+                padding: '0.5rem 0.9rem',
+                borderRadius: '12px',
+                background: palette.bgSoft,
+                border: `1px solid ${palette.borderStrong}`,
+                color: palette.text,
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'Inter, system-ui, sans-serif',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.2s',
+              }}>
+                Stop
               </button>
             ) : (
-              <button
-                onClick={sendMessage}
-                disabled={!input.trim()}
-                style={{
-                  padding: '0.5rem 0.9rem',
-                  borderRadius: '12px',
-                  background: input.trim() ? palette.steel : 'rgba(74,61,57,0.4)',
-                  border: 'none',
-                  color: input.trim() ? '#fff' : 'rgba(210,222,160,0.25)',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  cursor: input.trim() ? 'pointer' : 'default',
-                  fontFamily: 'Inter, system-ui, sans-serif',
-                  whiteSpace: 'nowrap',
-                  transition: 'all 0.2s',
-                }}
-              >
-                ↑
+              <button onClick={sendMessage} disabled={!input.trim()} style={{
+                padding: '0.5rem 0.9rem',
+                borderRadius: '12px',
+                background: input.trim() ? palette.secondary : palette.bgSoft,
+                border: 'none',
+                color: input.trim() ? '#fff' : palette.textMuted,
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                cursor: input.trim() ? 'pointer' : 'default',
+                fontFamily: 'Inter, system-ui, sans-serif',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.2s',
+              }}>
+                Send
               </button>
             )}
           </div>
+          {uploadError && (
+            <div style={{ color: palette.danger, fontSize: '0.75rem', marginTop: '0.5rem' }}>
+              {uploadError}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Animations */}
       <style>{`
         @keyframes msgIn {
           from { opacity: 0; transform: translateY(12px); }
