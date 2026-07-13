@@ -197,27 +197,35 @@ export default function Chat({ onNavigate }) {
     try {
       const img = pendingImage
       setPendingImage(null)
-      const endpoint = img ? `${API_BASE}/chat-with-image` : `${API_BASE}/chat`
-      const body = img ? {
-        message: text,
-        image_base64: img.base64,
-        filename: img.filename,
-        mime_type: img.mime_type,
-        user_type: 'guest',
-        session_id: convId,
-        incognito: false,
-        web_search: webSearchOn,
-      } : {
-        message: text,
-        user_type: 'guest',
-        session_id: convId,
-        incognito: false,
-        web_search: webSearchOn,
+      const isImage = !!img
+      const endpoint = isImage ? `${API_BASE}/chat-with-image` : `${API_BASE}/chat`
+
+      let body, headers
+      if (isImage) {
+        const fd = new FormData()
+        fd.append('message', text)
+        fd.append('user_type', 'guest')
+        fd.append('session_id', convId)
+        fd.append('incognito', 'false')
+        fd.append('base64_image', img.base64)
+        fd.append('mime', img.mime_type)
+        body = fd
+        headers = { 'X-Guest-ID': guestId }
+      } else {
+        body = JSON.stringify({
+          message: text,
+          user_type: 'guest',
+          session_id: convId,
+          incognito: false,
+          web_search: webSearchOn,
+        })
+        headers = { 'Content-Type': 'application/json', 'X-Guest-ID': guestId }
       }
+
       const res = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Guest-ID': guestId },
-        body: JSON.stringify(body),
+        headers,
+        body,
         signal: controller.signal,
       })
 
