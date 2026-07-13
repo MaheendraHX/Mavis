@@ -19,7 +19,27 @@ const palette = {
 
 export default function Landing({ onEnter }) {
   const heroRef = useRef(null)
+  const scrollRef = useRef(null)
   const orbRef = useRef(null)
+
+  useEffect(() => {
+    if (!scrollRef.current) return
+    const el = scrollRef.current
+    let hidden = false
+    const onScroll = () => {
+      if (window.scrollY > 120 && !hidden) {
+        hidden = true
+        el.style.opacity = '0'
+        el.style.pointerEvents = 'none'
+      } else if (window.scrollY <= 120 && hidden) {
+        hidden = false
+        el.style.opacity = '0.5'
+        el.style.pointerEvents = 'auto'
+      }
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
   const [menuOpen, setMenuOpen] = useState(false)
 
   useEffect(() => {
@@ -337,31 +357,25 @@ export default function Landing({ onEnter }) {
           </div>
         </div>
 
-        {/* Scroll Down Indicator */}
+        {/* Scroll Down Indicator — absolutely centered at bottom of hero */}
         <div
-          ref={el => {
-            if (!el) return
-            const hide = () => { el.style.opacity = '0'; el.style.pointerEvents = 'none' }
-            const show = () => { el.style.opacity = '0.5'; el.style.pointerEvents = 'auto' }
-            let hidden = false
-            const onScroll = () => {
-              if (window.scrollY > 120 && !hidden) { hidden = true; hide() }
-              else if (window.scrollY <= 120 && hidden) { hidden = false; show() }
-            }
-            window.addEventListener('scroll', onScroll, { passive: true })
-          }}
+          ref={scrollRef}
           onClick={() => document.getElementById('demo-notice')?.scrollIntoView({ behavior: 'smooth' })}
           className="scroll-indicator-wrap"
           style={{
+            position: 'absolute',
+            bottom: '2.5rem',
+            left: '50%',
+            transform: 'translateX(-50%)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             gap: '0.5rem',
             cursor: 'pointer',
-            marginTop: '3rem',
             opacity: 0.5,
             transition: 'opacity 0.4s',
             animation: 'fadeInUp 1s ease-out 1.5s both',
+            zIndex: 3,
           }}
           onMouseEnter={e => e.currentTarget.style.opacity = '1'}
           onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
