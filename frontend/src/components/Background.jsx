@@ -29,14 +29,14 @@ export default function Background() {
       offscreen.height = h
 
       // Base
-      offCtx.fillStyle = '#0d1a0f'
+      offCtx.fillStyle = '#080708'
       offCtx.fillRect(0, 0, w, h)
 
       // Simplified aurora — fewer waves, bigger steps
       const waves = [
-        { color: '45,120,50', y: 0.25, amp: 0.08, freq: 0.5, speed: 0.1, opacity: 0.1, spread: 0.25 },
-        { color: '212,136,58', y: 0.45, amp: 0.06, freq: 0.7, speed: 0.15, opacity: 0.06, spread: 0.2 },
-        { color: '30,90,35', y: 0.65, amp: 0.07, freq: 0.4, speed: 0.08, opacity: 0.08, spread: 0.22 },
+        { color: '37,99,235', y: 0.25, amp: 0.08, freq: 0.5, speed: 0.1, opacity: 0.1, spread: 0.25 },
+        { color: '168,85,247', y: 0.45, amp: 0.06, freq: 0.7, speed: 0.15, opacity: 0.06, spread: 0.2 },
+        { color: '139,92,246', y: 0.65, amp: 0.07, freq: 0.4, speed: 0.08, opacity: 0.08, spread: 0.22 },
       ]
 
       waves.forEach(wave => {
@@ -58,14 +58,14 @@ export default function Background() {
 
       // Corner glows — simple radial, drawn once
       const topLeft = offCtx.createRadialGradient(0, 0, 0, 0, 0, w * 0.4)
-      topLeft.addColorStop(0, 'rgba(45,120,50,0.07)')
-      topLeft.addColorStop(1, 'rgba(45,120,50,0)')
+topLeft.addColorStop(0, 'rgba(44,140,153,0.07)')
+        topLeft.addColorStop(1, 'rgba(44,140,153,0)')
       offCtx.fillStyle = topLeft
       offCtx.fillRect(0, 0, w, h)
 
       const bottomRight = offCtx.createRadialGradient(w, h, 0, w, h, w * 0.4)
-      bottomRight.addColorStop(0, 'rgba(212,136,58,0.05)')
-      bottomRight.addColorStop(1, 'rgba(212,136,58,0)')
+      bottomRight.addColorStop(0, 'rgba(9,12,155,0.05)')
+      bottomRight.addColorStop(1, 'rgba(9,12,155,0)')
       offCtx.fillStyle = bottomRight
       offCtx.fillRect(0, 0, w, h)
 

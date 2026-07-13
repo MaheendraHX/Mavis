@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 export default function Boot({ onComplete }) {
-  const [phase, setPhase] = useState('aria-in')
+  const [phase, setPhase] = useState('mavis-in')
 
   useEffect(() => {
     const t1 = setTimeout(() => setPhase('subtitle-in'), 1500)
@@ -33,20 +33,20 @@ export default function Boot({ onComplete }) {
           fontSize: 'clamp(3rem, 10vw, 8rem)',
           fontWeight: '200',
           letterSpacing: '0.5em',
-          color: '#C0C0C0',
+          color: '#090c9b',
           fontFamily: 'Georgia, serif',
-          opacity: phase === 'aria-in' ? 0 : 1,
-          transform: phase === 'aria-in' ? 'translateY(20px)' : 'translateY(0)',
+          opacity: phase === 'mavis-in' ? 0 : 1,
+          transform: phase === 'mavis-in' ? 'translateY(20px)' : 'translateY(0)',
           transition: 'opacity 1.2s ease, transform 1.2s ease',
         }}
       >
-        A.R.I.A
+        MAVIS
       </h1>
       <p
         style={{
           fontSize: 'clamp(0.6rem, 1.5vw, 0.85rem)',
           letterSpacing: '0.3em',
-          color: '#666',
+          color: '#090c9b',
           marginTop: '1rem',
           fontFamily: 'Georgia, serif',
           textTransform: 'uppercase',
@@ -54,7 +54,7 @@ export default function Boot({ onComplete }) {
           transition: 'opacity 1s ease',
         }}
       >
-        Adaptive Reasoning & Intelligence Architecture
+        Multimodal Adaptive Virtual Intelligence System
       </p>
     </div>
   )

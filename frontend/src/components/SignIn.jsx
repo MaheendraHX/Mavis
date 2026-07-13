@@ -68,11 +68,11 @@ export default function SignIn({ onSuccess }) {
         width: '100vw',
         minHeight: '100vh',
         background:
-          'radial-gradient(circle at top, rgba(212,168,83,0.08), transparent 24%), radial-gradient(circle at 20% 80%, rgba(255,255,255,0.04), transparent 18%), #050506',
+          'radial-gradient(circle at top, rgba(9,12,155,0.08), transparent 24%), radial-gradient(circle at 20% 80%, rgba(255,255,255,0.04), transparent 18%), #080708',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#f5efdf',
+        color: '#d5dcf9',
         overflow: 'hidden',
         position: 'relative',
         padding: '1.25rem',
@@ -87,7 +87,7 @@ export default function SignIn({ onSuccess }) {
           height: 520,
           borderRadius: '50%',
           background:
-            'radial-gradient(circle, rgba(212,168,83,0.12), rgba(212,168,83,0.05) 35%, transparent 70%)',
+            'radial-gradient(circle, rgba(9,12,155,0.12), rgba(9,12,155,0.05) 35%, transparent 70%)',
           filter: 'blur(40px)',
           opacity: 0.65,
           pointerEvents: 'none',
@@ -101,7 +101,7 @@ export default function SignIn({ onSuccess }) {
           width: 'min(460px, 92vw)',
           padding: '2rem 1.65rem 1.5rem',
           borderRadius: '28px',
-          background: 'rgba(11, 12, 14, 0.62)',
+          background: 'rgba(8,7,8,0.62)',
           border: '1px solid rgba(255,255,255,0.07)',
           boxShadow: '0 18px 60px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05)',
           backdropFilter: 'blur(24px) saturate(125%)',
@@ -120,9 +120,9 @@ export default function SignIn({ onSuccess }) {
             height: 68,
             borderRadius: '50%',
             background:
-              'radial-gradient(circle at 35% 35%, rgba(245,239,223,0.96), rgba(212,168,83,0.36) 32%, rgba(212,168,83,0.12) 62%, transparent 72%)',
-            border: '1px solid rgba(212,168,83,0.2)',
-            boxShadow: '0 0 28px rgba(212,168,83,0.12)',
+              'radial-gradient(circle at 35% 35%, rgba(245,239,223,0.96), rgba(9,12,155,0.36) 32%, rgba(9,12,155,0.12) 62%, transparent 72%)',
+            border: '1px solid rgba(9,12,155,0.2)',
+            boxShadow: '0 0 28px rgba(9,12,155,0.12)',
           }}
         />
 
@@ -132,18 +132,18 @@ export default function SignIn({ onSuccess }) {
               fontSize: '1.3rem',
               fontWeight: 400,
               letterSpacing: '0.34em',
-              color: '#f5efdf',
+              color: '#d5dcf9',
               fontFamily: 'Georgia, serif',
               margin: 0,
             }}
           >
-            A.R.I.A
+            MAVIS
           </h2>
           <p
             style={{
               fontSize: '0.63rem',
               letterSpacing: '0.28em',
-              color: 'rgba(212,168,83,0.66)',
+              color: 'rgba(9,12,155,0.66)',
               marginTop: '0.7rem',
               textTransform: 'uppercase',
             }}
@@ -159,7 +159,7 @@ export default function SignIn({ onSuccess }) {
               maxWidth: 320,
             }}
           >
-Try ARIA, the AI assistant demo.
+Try Mavis, the AI assistant demo.
           </p>
         </div>
 
@@ -168,9 +168,9 @@ Try ARIA, the AI assistant demo.
             onClick={goToChat}
             style={{
               ...pillStyle,
-              background: 'rgba(212,168,83,0.1)',
-              border: '1px solid rgba(212,168,83,0.22)',
-              color: '#f5efdf',
+              background: 'rgba(9,12,155,0.1)',
+              border: '1px solid rgba(9,12,155,0.22)',
+              color: '#d5dcf9',
             }}
           >
             Enter Demo
