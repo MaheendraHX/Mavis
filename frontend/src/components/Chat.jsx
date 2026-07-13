@@ -83,6 +83,7 @@ export default function Chat({ onNavigate }) {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [pendingImage, setPendingImage] = useState(null)
   const [webSearchOn, setWebSearchOn] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const messagesEndRef = useRef(null)
@@ -147,11 +148,16 @@ export default function Chat({ onNavigate }) {
       }
 
       const data = await res.json()
-      const attachmentText = data.type === 'image'
-        ? `[Attached image: ${data.filename}]`
-        : `[Attached file: ${data.filename}]\n\n${data.content}`
 
-      setInput(prev => `${prev.trim() ? `${prev}\n\n` : ''}${attachmentText}`)
+      if (data.type === 'image') {
+        setPendingImage({ base64: data.base64, mime: data.mime, filename: data.filename })
+        setInput(prev => `${prev.trim() ? `${prev}\n\n` : ''}[Image attached: ${data.filename}]`)
+      } else if (data.type === 'text') {
+        setInput(prev => `${prev.trim() ? `${prev}\n\n` : ''}[File: ${data.filename}]\n\n${data.content}`)
+      } else {
+        setUploadError(data.content || 'Could not read file.')
+      }
+
       inputRef.current?.focus()
     } catch (err) {
       setUploadError(err.message || 'Upload failed. Try again.')
@@ -188,19 +194,40 @@ export default function Chat({ onNavigate }) {
 
     const controller = new AbortController()
     abortRef.current = controller
+    const currentImage = pendingImage
+    setPendingImage(null)
 
     try {
-      const res = await fetch(`${API_BASE}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Guest-ID': guestId },
-        body: JSON.stringify({
-          message: text,
-          user_type: 'guest',
-          session_id: convId,
-          incognito: false,
-        }),
-        signal: controller.signal,
-      })
+      let res
+
+      if (currentImage) {
+        const formData = new FormData()
+        formData.append('message', text)
+        formData.append('user_type', 'guest')
+        formData.append('session_id', convId)
+        formData.append('incognito', 'false')
+        formData.append('base64_image', currentImage.base64)
+        formData.append('mime', currentImage.mime)
+
+        res = await fetch(`${API_BASE}/chat-with-image`, {
+          method: 'POST',
+          headers: { 'X-Guest-ID': guestId },
+          body: formData,
+          signal: controller.signal,
+        })
+      } else {
+        res = await fetch(`${API_BASE}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Guest-ID': guestId },
+          body: JSON.stringify({
+            message: text,
+            user_type: 'guest',
+            session_id: convId,
+            incognito: false,
+          }),
+          signal: controller.signal,
+        })
+      }
 
       if (!res.ok) throw new Error(`Server error: ${res.status}`)
 

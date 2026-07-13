@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 
 import memory
 from url_reader import extract_urls, fetch_page_text, is_safe_url
-from memory import read_uploaded_file, get_file_type
+from file_reader import process_file, get_file_type
 from web_search import web_search
 
 
@@ -230,13 +230,19 @@ async def upload_file(file: UploadFile = File(...)):
                 "filename": file.filename,
                 "type": "image",
                 "base64": result['content'],
-                "mime": result['mime']
+                "mime": result['metadata'].get('mime_type', 'image/png')
             }
-        else:
+        elif result['type'] == 'text':
             return {
                 "filename": file.filename,
                 "type": "text",
                 "content": result['content']
+            }
+        else:
+            return {
+                "filename": file.filename,
+                "type": "error",
+                "content": result.get('content', 'Could not read file')
             }
 
     except Exception as e:
