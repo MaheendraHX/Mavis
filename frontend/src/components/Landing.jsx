@@ -339,8 +339,19 @@ export default function Landing({ onEnter }) {
 
         {/* Scroll Down Indicator */}
         <div
-          className="scroll-indicator-wrap"
+          ref={el => {
+            if (!el) return
+            const hide = () => { el.style.opacity = '0'; el.style.pointerEvents = 'none' }
+            const show = () => { el.style.opacity = '0.5'; el.style.pointerEvents = 'auto' }
+            let hidden = false
+            const onScroll = () => {
+              if (window.scrollY > 120 && !hidden) { hidden = true; hide() }
+              else if (window.scrollY <= 120 && hidden) { hidden = false; show() }
+            }
+            window.addEventListener('scroll', onScroll, { passive: true })
+          }}
           onClick={() => document.getElementById('demo-notice')?.scrollIntoView({ behavior: 'smooth' })}
+          className="scroll-indicator-wrap"
           style={{
             display: 'flex',
             flexDirection: 'column',
@@ -349,7 +360,8 @@ export default function Landing({ onEnter }) {
             cursor: 'pointer',
             marginTop: '3rem',
             opacity: 0.5,
-            transition: 'opacity 0.3s',
+            transition: 'opacity 0.4s',
+            animation: 'fadeInUp 1s ease-out 1.5s both',
           }}
           onMouseEnter={e => e.currentTarget.style.opacity = '1'}
           onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
