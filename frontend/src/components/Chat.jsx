@@ -238,7 +238,7 @@ function Composer({ value, onChange, onSend, loading, inputRef, focused, setFocu
               onSend()
             }
           }}
-          placeholder={selectedFile ? `Ask something about ${selectedFile.name}...` : 'Ask Mavis anything...'}
+          placeholder={selectedFile ? `Ask something about ${selectedFile.name}...` : 'Ask Mavis anything......'}
           rows={1}
           style={{
             flex: 1,
@@ -324,7 +324,7 @@ function HomePrompt({ input, setInput, sendMessage, loading, inputRef, focused, 
         fontWeight: '300',
         marginBottom: '2.5rem',
       }}>
-        How can I help today?
+        How can Mavis help you today?
       </p>
 
       <div style={{ width: '100%', maxWidth: '620px' }}>
