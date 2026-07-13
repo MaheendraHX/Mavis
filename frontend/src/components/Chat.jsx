@@ -1,913 +1,641 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-const GUEST_LIMIT = 10
+const API_BASE = import.meta.env.VITE_API_URL || 'https://aria-backend-b6qb.onrender.com'
 
-function getGuestId() {
-  let id = localStorage.getItem('aria_guest_id')
+const palette = {
+  espresso: '#382B27',
+  steel: '#236088',
+  indigo: '#5364B1',
+  olive: '#88AE4D',
+  sage: '#D2DEA0',
+  espressoLight: '#4a3d39',
+  espressoDark: '#1f1815',
+}
+
+function getOrCreateGuestId() {
+  let id = localStorage.getItem('mavis_guest_id')
   if (!id) {
-    id = 'guest_' + Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
-    localStorage.setItem('aria_guest_id', id)
+    id = 'guest_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
+    localStorage.setItem('mavis_guest_id', id)
   }
   return id
 }
 
-function useTypewriter(text, active, speed = 12) {
-  const [displayed, setDisplayed] = useState('')
-  const [done, setDone] = useState(false)
-
-  useEffect(() => {
-    if (!active) {
-      setDisplayed(text)
-      setDone(true)
-      return
-    }
-
-    setDisplayed('')
-    setDone(false)
-
-    let i = 0
-    let timeoutId
-
-    const tick = () => {
-      if (i < text.length) {
-        setDisplayed(text.slice(0, i + 1))
-        i++
-        timeoutId = setTimeout(tick, text[i - 1] === '\n' ? 40 : speed)
-      } else {
-        setDone(true)
-      }
-    }
-
-    tick()
-
-    return () => clearTimeout(timeoutId)
-  }, [text, active, speed])
-
-  return { displayed, done }
+function formatTime(iso) {
+  const d = new Date(iso)
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-function ARIAMessage({ content, isLatest, sources }) {
-  const { displayed, done } = useTypewriter(content, isLatest)
-  const text = isLatest ? displayed : content
-
-  const renderLine = (line, j) => {
-    if (line.trim() === '') return <div key={j} style={{ height: '0.5rem' }} />
-    if (/^[◆\-—•]\s/.test(line.trim())) {
-      return (
-        <div key={j} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', margin: '5px 0' }}>
-          <span style={{ color: 'rgba(9,12,155,0.4)', flexShrink: 0, fontSize: '8px', marginTop: '5px' }}>◆</span>
-          <span>{line.replace(/^[◆\-—•]\s*/, '')}</span>
-        </div>
-      )
-    }
-    if (line.includes('**')) {
-      const parts = line.split('**')
-      return (
-        <p key={j} style={{ margin: '4px 0' }}>
-          {parts.map((p, k) =>
-            k % 2 === 1 ? (
-              <strong key={k} style={{ color: '#d5dcf9', fontWeight: '500' }}>{p}</strong>
-            ) : p
-          )}
-        </p>
-      )
-    }
-    return <p key={j} style={{ margin: '4px 0' }}>{line}</p>
-  }
-
-  const renderContent = (text) => {
-    const parts = text.split(/(```[\s\S]*?```)/g)
-    return parts.map((part, i) => {
-      if (part.startsWith('```')) {
-        const code = part.replace(/```(\w+)?/g, '').trim()
-        return (
-          <div key={i} style={{
-            background: 'rgba(8,7,8,0.8)',
-            border: '1px solid rgba(213,220,249,0.06)',
-            borderLeft: '2px solid rgba(9,12,155,0.3)',
-            padding: '1rem 1.2rem',
-            margin: '0.8rem 0',
-            borderRadius: '8px',
-          }}>
-            <pre style={{
-              margin: 0, fontSize: '12px', color: 'rgba(213,220,249,0.6)',
-              fontFamily: 'monospace', lineHeight: '1.7', whiteSpace: 'pre-wrap',
-            }}>{code}</pre>
-          </div>
-        )
-      }
-      return <div key={i}>{part.split('\n').map((line, j) => renderLine(line, j))}</div>
-    })
-  }
-
-return (
-    <div>
-      {renderContent(text)}
-      {sources && sources.length > 0 && (
-        <div style={{ marginTop: '1rem', paddingTop: '0.6rem', borderTop: '1px solid rgba(9,12,155,0.12)' }}>
-          <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.15em', color: 'rgba(9,12,155,0.5)', marginBottom: '0.4rem' }}>Sources</div>
-          {sources.map((s, i) => (
-            <a
-              key={i}
-              href={s.url}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                display: 'block',
-                fontSize: '0.75rem',
-                color: 'rgba(9,12,155,0.7)',
-                textDecoration: 'none',
-                padding: '3px 0',
-                transition: 'color 0.2s',
-              }}
-              onMouseEnter={e => e.currentTarget.style.color = '#090c9b'}
-              onMouseLeave={e => e.currentTarget.style.color = 'rgba(9,12,155,0.7)'}
-            >
-              ↗ {s.title}
-            </a>
-          ))}
-        </div>
-      )}
-      {isLatest && !done && (
-        <span style={{
-          display: 'inline-block', width: '2px', height: '14px',
-          background: 'rgba(9,12,155,0.6)', marginLeft: '2px',
-          verticalAlign: 'middle', animation: 'blink 0.8s step-end infinite',
-        }} />
-      )}
-    </div>
-  )
-}
-
-const SUGGESTIONS = [
-  'Help me write something',
-  'Explain this topic simply',
-  'Search and summarize this',
-  'Plan this step by step',
-]
-
-function FilePreview({ file, onRemove }) {
-  const isImage = file.type.startsWith('image/')
+function ARIAMessage({ msg }) {
+  const isUser = msg.role === 'user'
   return (
     <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      padding: '6px 10px',
-      background: 'rgba(9,12,155,0.08)',
-      border: '1px solid rgba(9,12,155,0.2)',
-      borderRadius: '8px',
-      marginBottom: '8px',
-    }}>
-      <span style={{ fontSize: '14px' }}>{isImage ? '🖼' : '📄'}</span>
-      <span style={{ fontSize: '0.75rem', color: 'rgba(213,220,249,0.7)', fontFamily: 'Inter, sans-serif', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {file.name}
-      </span>
-      <button
-        onClick={onRemove}
-        style={{ background: 'none', border: 'none', color: 'rgba(213,220,249,0.4)', cursor: 'pointer', fontSize: '12px', padding: '0 2px' }}
-        onMouseEnter={e => e.currentTarget.style.color = 'rgba(220,80,90,0.7)'}
-        onMouseLeave={e => e.currentTarget.style.color = 'rgba(213,220,249,0.4)'}
-      >✕</button>
-    </div>
-  )
-}
-
-function Composer({ value, onChange, onSend, loading, inputRef, focused, setFocused, large, home = false, onFileSelect, selectedFile, onRemoveFile }) {
-  const fileInputRef = useRef()
-
-  return (
-    <div>
-      {selectedFile && (
-        <FilePreview file={selectedFile} onRemove={onRemoveFile} />
-      )}
-      <div
-        style={{
-          display: 'flex',
-          gap: '10px',
-          alignItems: 'center',
-          background: focused ? 'rgba(213,220,249,0.04)' : 'rgba(213,220,249,0.025)',
-          border: focused ? '1px solid rgba(9,12,155,0.25)' : '1px solid rgba(213,220,249,0.06)',
-          borderRadius: large ? '20px' : '14px',
-          padding: large ? '16px 18px' : '10px 14px',
-          transition: 'all 0.3s ease',
-          boxShadow: focused ? '0 0 35px rgba(9,12,155,0.06)' : 'none',
-        }}
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".pdf,.docx,.txt,.md,.png,.jpg,.jpeg,.webp"
-          onChange={e => onFileSelect(e.target.files[0])}
-          style={{ display: 'none' }}
-        />
-        <button
-          onClick={() => fileInputRef.current.click()}
-          title="Attach a file"
-          style={{
-            background: 'none',
-            border: 'none',
-            color: selectedFile ? '#090c9b' : 'rgba(213,220,249,0.25)',
-            cursor: 'pointer',
-            fontSize: '20px',
-            padding: '0',
-            flexShrink: 0,
-            
-            transition: 'color 0.3s ease',
-          }}
-          onMouseEnter={e => { if (!selectedFile) e.currentTarget.style.color = 'rgba(213,220,249,0.6)' }}
-          onMouseLeave={e => { if (!selectedFile) e.currentTarget.style.color = 'rgba(213,220,249,0.25)' }}
-        >
-          ⌂
-        </button>
-
-        <textarea
-          ref={inputRef}
-          value={value}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          onChange={e => {
-            onChange(e.target.value)
-            e.target.style.height = 'auto'
-            e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px'
-          }}
-          onKeyDown={e => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault()
-              onSend()
-            }
-          }}
-          placeholder={selectedFile ? `Ask something about ${selectedFile.name}...` : 'Ask Mavis anything......'}
-          rows={1}
-          style={{
-            flex: 1,
-            background: 'transparent',
-            border: 'none',
-            color: '#d5dcf9',
-            fontSize: large ? '1rem' : '0.9rem',
-            outline: 'none',
-            fontFamily: 'Inter, sans-serif',
-            fontWeight: '300',
-            letterSpacing: '0.01em',
-            resize: 'none',
-            lineHeight: '1.5',
-            padding: home ? '0' : '2px 0',
-            overflowY: 'auto',
-            textAlign: 'left',
-          }}
-        />
-        <button
-          onClick={onSend}
-          disabled={loading || (!value.trim() && !selectedFile)}
-          style={{
-            width: large ? '38px' : '32px',
-            height: large ? '38px' : '32px',
-            borderRadius: '10px',
-            background: (value.trim() || selectedFile) && !loading ? 'rgba(9,12,155,0.2)' : 'transparent',
-            border: `1px solid ${(value.trim() || selectedFile) && !loading ? 'rgba(9,12,155,0.4)' : 'rgba(213,220,249,0.08)'}`,
-            color: (value.trim() || selectedFile) && !loading ? '#090c9b' : 'rgba(213,220,249,0.2)',
-            cursor: loading || (!value.trim() && !selectedFile) ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '15px',
-            flexShrink: 0,
-            alignSelf: 'flex-end',
-            transition: 'all 0.3s ease',
-          }}
-          onMouseEnter={e => {
-            if (!loading && (value.trim() || selectedFile)) {
-              e.currentTarget.style.background = 'rgba(9,12,155,0.3)'
-              e.currentTarget.style.borderColor = '#090c9b'
-            }
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = (value.trim() || selectedFile) && !loading ? 'rgba(9,12,155,0.2)' : 'transparent'
-            e.currentTarget.style.borderColor = (value.trim() || selectedFile) && !loading ? 'rgba(9,12,155,0.4)' : 'rgba(213,220,249,0.08)'
-          }}
-        >
-          ↑
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function HomePrompt({ input, setInput, sendMessage, loading, inputRef, focused, setFocused, selectedFile, onFileSelect, onRemoveFile }) {
-  return (
-    <div style={{
-      flex: 1,
       display: 'flex',
       flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '0 2rem',
-      position: 'relative',
-      zIndex: 1,
+      alignItems: isUser ? 'flex-end' : 'flex-start',
+      marginBottom: '1.25rem',
+      animation: 'msgIn 0.35s ease-out',
     }}>
-      <h1 style={{
-        fontSize: 'clamp(2.5rem, 6vw, 4rem)',
-        fontWeight: '400',
-        letterSpacing: '0.2em',
-        color: '#d5dcf9',
-        fontFamily: 'Playfair Display, serif',
-        marginBottom: '0.8rem',
-        textShadow: '0 0 60px rgba(9,12,155,0.15)',
-}}>
-       Hey stranger!
-      </h1>
-      <p style={{
-        fontSize: '1rem',
-        color: 'rgba(213,220,249,0.35)',
-        fontFamily: 'Inter, sans-serif',
-        fontWeight: '300',
-        marginBottom: '2.5rem',
+      <div style={{
+        maxWidth: '72%',
+        padding: '0.85rem 1.2rem',
+        borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+        background: isUser ? palette.steel : 'rgba(74,61,57,0.5)',
+        border: isUser ? 'none' : '1px solid rgba(210,222,160,0.06)',
+        color: isUser ? '#fff' : palette.sage,
+        fontSize: '0.92rem',
+        lineHeight: 1.65,
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        fontFamily: 'Inter, system-ui, sans-serif',
       }}>
-        How can i help you today?
-      </p>
-
-      <div style={{ width: '100%', maxWidth: '620px' }}>
-        <Composer
-          value={input}
-          onChange={setInput}
-          onSend={sendMessage}
-          loading={loading}
-          inputRef={inputRef}
-          focused={focused}
-          setFocused={setFocused}
-          large
-          home
-          onFileSelect={onFileSelect}
-          selectedFile={selectedFile}
-          onRemoveFile={onRemoveFile}
-        />
-
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', justifyContent: 'center', marginTop: '1.5rem' }}>
-          {SUGGESTIONS.map((s, i) => (
-            <button
-              key={i}
-              onClick={() => setInput(s)}
-              style={{
-                padding: '0.6rem 1.1rem',
-                borderRadius: '20px',
-                background: 'rgba(213,220,249,0.03)',
-                border: '1px solid rgba(213,220,249,0.08)',
-                color: 'rgba(213,220,249,0.45)',
-                fontSize: '0.8rem',
-                fontFamily: 'Inter, sans-serif',
-                cursor: 'pointer',
-                transition: 'all 0.3s ease',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(9,12,155,0.3)'; e.currentTarget.style.color = '#d5dcf9' }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(213,220,249,0.08)'; e.currentTarget.style.color = 'rgba(213,220,249,0.45)' }}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
+        {msg.content}
       </div>
+      <span style={{
+        fontSize: '0.65rem',
+        color: 'rgba(210,222,160,0.3)',
+        marginTop: '0.3rem',
+        padding: '0 0.3rem',
+      }}>
+        {formatTime(msg.timestamp)}
+      </span>
     </div>
   )
 }
 
-function ChatShell({ messages, loading, bottomRef, input, setInput, sendMessage, inputRef, focused, setFocused, selectedFile, onFileSelect, onRemoveFile }) {
-  return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
-      <div style={{ flex: 1, overflowY: 'auto', padding: '2rem 0' }}>
-        <div style={{ maxWidth: '720px', margin: '0 auto', padding: '0 2rem', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          {messages.map((msg, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', gap: '12px', alignItems: 'flex-start', animation: 'fadeUp 0.4s ease forwards' }}>
-              {msg.role === 'aria' && (
-                <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'radial-gradient(circle at 35% 35%, rgba(9,12,155,0.35), rgba(9,12,155,0.1))', border: '1px solid rgba(9,12,155,0.2)', flexShrink: 0, marginTop: '2px', boxShadow: '0 0 10px rgba(9,12,155,0.1)' }} />
-              )}
-              <div style={{
-                maxWidth: msg.role === 'user' ? '70%' : '85%',
-                fontSize: '0.93rem',
-                lineHeight: '1.85',
-                fontFamily: 'Inter, sans-serif',
-                fontWeight: '300',
-                letterSpacing: '0.01em',
-                ...(msg.role === 'user' ? {
-                  background: 'rgba(9,12,155,0.1)',
-                  border: '1px solid rgba(9,12,155,0.15)',
-                  color: '#d5dcf9',
-                  padding: '0.8rem 1.2rem',
-                  borderRadius: '16px 16px 2px 16px',
-                } : { color: 'rgba(213,220,249,0.75)' })
-              }}>
-                {msg.role === 'aria'
-                  ? <ARIAMessage content={msg.content} isLatest={i === messages.length - 1} sources={msg.sources} />
-                  : msg.content}
-              </div>
-            </div>
-          ))}
-
-          {loading && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', animation: 'fadeUp 0.3s ease forwards' }}>
-              <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'radial-gradient(circle at 35% 35%, rgba(9,12,155,0.35), rgba(9,12,155,0.1))', border: '1px solid rgba(9,12,155,0.2)', flexShrink: 0, boxShadow: '0 0 15px rgba(9,12,155,0.15)', animation: 'orbGlow 1s ease infinite' }} />
-              <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-                {[0, 1, 2].map(i => (
-                  <div key={i} style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'rgba(9,12,155,0.4)', animation: `dotPulse 1.4s ease ${i * 0.2}s infinite` }} />
-                ))}
-              </div>
-            </div>
-          )}
-          <div ref={bottomRef} />
-        </div>
-      </div>
-
-      <div style={{ padding: '1rem 2rem 1.5rem', flexShrink: 0 }}>
-        <div style={{ maxWidth: '720px', margin: '0 auto' }}>
-          <Composer
-            value={input}
-            onChange={setInput}
-            onSend={sendMessage}
-            loading={loading}
-            inputRef={inputRef}
-            focused={focused}
-            setFocused={setFocused}
-            onFileSelect={onFileSelect}
-            selectedFile={selectedFile}
-            onRemoveFile={onRemoveFile}
-          />
-          <p style={{ fontSize: '0.55rem', letterSpacing: '0.15em', color: 'rgba(213,220,249,0.1)', textTransform: 'uppercase', marginTop: '0.6rem', textAlign: 'center', fontFamily: 'Inter, sans-serif' }}>
-            Enter to send · Shift+Enter for new line · 📎 Attach files
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export default function Chat({ userType }) {
-  const [conversations, setConversations] = useState([])
-  const [activeId, setActiveId] = useState(null)
-  const [loadingConvs, setLoadingConvs] = useState(true)
+export default function Chat() {
+  const navigate = useNavigate()
+  const [conversations, setConversations] = useState(() => {
+    try {
+      const saved = localStorage.getItem('mavis_conversations')
+      return saved ? JSON.parse(saved) : []
+    } catch { return [] }
+  })
+  const [activeConvId, setActiveConvId] = useState(null)
+  const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [guestCount, setGuestCount] = useState(0)
-  const [limitReached, setLimitReached] = useState(false)
+  const [webSearchOn, setWebSearchOn] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [focused, setFocused] = useState(false)
-  const [incognito, setIncognito] = useState(false)
-  const [selectedFile, setSelectedFile] = useState(null)
-  const bottomRef = useRef()
-  const inputRef = useRef()
-  const orbRef = useRef()
+  const messagesEndRef = useRef(null)
+  const inputRef = useRef(null)
+  const abortRef = useRef(null)
+  const guestId = useRef(getOrCreateGuestId()).current
 
-  const activeConv = conversations.find(c => c.id === activeId)
-  const messages = activeConv?.messages || []
-  const isHome = messages.length === 0
-
+  // Save conversations to localStorage
   useEffect(() => {
-    const loadConversations = async () => {
-      try {
-        const res = await fetch(`${API_URL}/conversations`, { headers: { 'X-Guest-Id': getGuestId() } })
-        const data = await res.json()
+    localStorage.setItem('mavis_conversations', JSON.stringify(conversations))
+  }, [conversations])
 
-        const loaded = await Promise.all(
-          data.conversations.map(async (c) => {
-            const msgRes = await fetch(`${API_URL}/conversations/${c.id}/messages`, { headers: { 'X-Guest-Id': getGuestId() } })
-            const msgData = await msgRes.json()
-            return {
-              id: c.id,
-              title: c.title,
-              messages: msgData.messages.map(m => ({
-                role: m.role === 'assistant' ? 'aria' : 'user',
-                content: m.content,
-              })),
-            }
-          })
-        )
-
-        setConversations(loaded)
-        setActiveId(null)
-      } catch (err) {
-        console.error('Failed to load conversations:', err)
-        setConversations([])
-        setActiveId(null)
-      } finally {
-        setLoadingConvs(false)
-      }
-    }
-
-    loadConversations()
-  }, [userType])
-
+  // Auto-scroll
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // Focus input on mount
   useEffect(() => {
-    let t = 0, animId
-    const pulse = () => {
-      t += 0.015
-      const scale = 1 + Math.sin(t) * 0.08
-      const glow = loading
-        ? `0 0 30px rgba(9,12,155,0.5), 0 0 60px rgba(9,12,155,0.2)`
-        : `0 0 15px rgba(9,12,155,0.15)`
-      if (orbRef.current) {
-        orbRef.current.style.transform = `scale(${scale})`
-        orbRef.current.style.boxShadow = glow
-      }
-      animId = requestAnimationFrame(pulse)
-    }
-    pulse()
-    return () => cancelAnimationFrame(animId)
-  }, [loading])
+    inputRef.current?.focus()
+  }, [])
 
-  const generateTitle = (message) => {
-    const words = message.split(' ').slice(0, 5).join(' ')
-    return words.length > 30 ? words.slice(0, 30) + '...' : words
-  }
-
-  const extractUrls = (text) => {
-    const urlPattern = /https?:\/\/[^\s<>"']+/g
-    return text.match(urlPattern) || []
-  }
-
-  const newConversation = () => {
-    const id = Date.now().toString()
-    setConversations(prev => [{ id, title: 'Untitled', messages: [] }, ...prev])
-    setActiveId(id)
+  const startNewChat = useCallback(() => {
+    setActiveConvId(null)
+    setMessages([])
     setInput('')
-    setSelectedFile(null)
-  }
+    inputRef.current?.focus()
+  }, [])
 
-  const deleteConversation = async (convId, e) => {
+  const selectConversation = useCallback((convId) => {
+    const conv = conversations.find(c => c.id === convId)
+    if (conv) {
+      setActiveConvId(convId)
+      setMessages(conv.messages || [])
+    }
+  }, [conversations])
+
+  const deleteConversation = useCallback((convId, e) => {
     e.stopPropagation()
-    try {
-      await fetch(`${API_URL}/conversations/${convId}`, { method: 'DELETE', headers: { 'X-Guest-Id': getGuestId() } })
-    } catch {}
-    setConversations(prev => {
-      const filtered = prev.filter(c => c.id !== convId)
-      if (convId === activeId) {
-        setActiveId(filtered.length > 0 ? filtered[0].id : null)
-      }
-      return filtered
-    })
-  }
-
-  const sendMessage = async () => {
-    if (!input.trim() && !selectedFile) return
-    if (loading) return
-    if (userType === 'guest' && guestCount >= GUEST_LIMIT) {
-      setLimitReached(true)
-      return
+    const updated = conversations.filter(c => c.id !== convId)
+    setConversations(updated)
+    if (activeConvId === convId) {
+      startNewChat()
     }
+  }, [conversations, activeConvId, startNewChat])
 
-    let convId = activeId
-    if (!convId) {
-      convId = Date.now().toString()
-      setConversations(prev => [{ id: convId, title: 'Untitled', messages: [] }, ...prev])
-      setActiveId(convId)
-    }
+  const sendMessage = useCallback(async () => {
+    const text = input.trim()
+    if (!text || loading) return
 
-    const userMessage = input.trim() || (selectedFile ? `Analyze this file: ${selectedFile.name}` : '')
-    const fileToSend = selectedFile
-
+    const userMsg = { role: 'user', content: text, timestamp: new Date().toISOString() }
+    const newMessages = [...messages, userMsg]
+    setMessages(newMessages)
     setInput('')
-    setSelectedFile(null)
-    if (inputRef.current) inputRef.current.style.height = 'auto'
-
-    const displayMessage = fileToSend
-      ? `📎 ${fileToSend.name}${userMessage !== `Analyze this file: ${fileToSend.name}` ? `\n${userMessage}` : ''}`
-      : userMessage
-
-    setConversations(prev =>
-      prev.map(c => {
-        if (c.id !== convId) return c
-        const isFirst = c.messages.length === 0
-        return {
-          ...c,
-          title: isFirst ? generateTitle(userMessage) : c.title,
-          messages: [...c.messages, { role: 'user', content: displayMessage }],
-        }
-      })
-    )
-
     setLoading(true)
-    if (userType === 'guest') setGuestCount(n => n + 1)
+
+    // Create or update conversation
+    let convId = activeConvId
+    if (!convId) {
+      convId = 'conv_' + Date.now()
+      setActiveConvId(convId)
+      const newConv = { id: convId, title: text.slice(0, 40) + (text.length > 40 ? '...' : ''), messages: newMessages, createdAt: new Date().toISOString() }
+      setConversations(prev => [newConv, ...prev])
+    } else {
+      setConversations(prev => prev.map(c => c.id === convId ? { ...c, messages: newMessages } : c))
+    }
+
+    const controller = new AbortController()
+    abortRef.current = controller
 
     try {
-      let response, data
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
+          guest_id: guestId,
+          web_search: webSearchOn,
+        }),
+        signal: controller.signal,
+      })
 
-      if (fileToSend) {
-        // Upload file first
-        const formData = new FormData()
-        formData.append('file', fileToSend)
+      if (!res.ok) {
+        const errText = await res.text()
+        throw new Error(errText || `Server error: ${res.status}`)
+      }
 
-        const uploadRes = await fetch(`${API_URL}/upload-file`, { headers: { 'X-Guest-Id': getGuestId() },
-          method: 'POST',
-          body: formData,
-        })
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let assistantContent = ''
+      const assistantMsg = { role: 'assistant', content: '', timestamp: new Date().toISOString() }
+      setMessages(prev => [...prev, assistantMsg])
 
-        if (!uploadRes.ok) throw new Error('File upload failed')
-        const uploadData = await uploadRes.json()
-
-        if (uploadData.type === 'image') {
-          // Send to vision endpoint
-          const visionForm = new FormData()
-          visionForm.append('message', userMessage || 'What is in this image? Describe it in detail.')
-          visionForm.append('user_type', userType)
-          visionForm.append('session_id', convId)
-          visionForm.append('incognito', incognito)
-          visionForm.append('base64_image', uploadData.base64)
-          visionForm.append('mime', uploadData.mime)
-
-response = await fetch(`${API_URL}/chat-with-image`, {
-            method: 'POST',
-            headers: { 'X-Guest-Id': getGuestId() },
-            body: visionForm,
-          })
-        } else {
-          // Send file content to regular chat
-          const fileMessage = `${userMessage}\n\n[FILE CONTENT FROM ${fileToSend.name}]:\n${uploadData.content}\n\n[Answer based on this file content. Be specific and accurate.]`
-
-response = await fetch(`${API_URL}/chat`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Guest-Id': getGuestId() },
-            body: JSON.stringify({
-              message: fileMessage,
-              user_type: userType,
-              session_id: convId,
-              incognito,
-            }),
-          })
-        }
-      } else {
-        // Regular message with optional URL reading
-        let finalMessage = userMessage
-        const urls = extractUrls(userMessage)
-
-        if (urls.length > 0) {
-          try {
-const urlRes = await fetch(`${API_URL}/fetch-url`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Guest-Id': getGuestId() },
-              body: JSON.stringify({ url: urls[0] }),
-            })
-            if (urlRes.ok) {
-              const urlData = await urlRes.json()
-              finalMessage = `${userMessage}\n\n[PAGE CONTENT FROM ${urls[0]}]\nTitle: ${urlData.title}\n\n${urlData.content}\n\n[Answer using ONLY the page content above.]`
-            } else {
-              finalMessage = `${userMessage}\n\n[Note: couldn't fetch content from ${urls[0]}. Let the user know.]`
-            }
-          } catch {
-            finalMessage = `${userMessage}\n\n[Note: couldn't fetch content from ${urls[0]} due to a network error.]`
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split('\n')
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6)
+            if (data === '[DONE]') continue
+            try {
+              const parsed = JSON.parse(data)
+              if (parsed.content) {
+                assistantContent += parsed.content
+                setMessages(prev => {
+                  const updated = [...prev]
+                  updated[updated.length - 1] = { ...updated[updated.length - 1], content: assistantContent }
+                  return updated
+                })
+              }
+            } catch {}
           }
         }
-
-response = await fetch(`${API_URL}/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Guest-Id': getGuestId() },
-          body: JSON.stringify({
-            message: finalMessage,
-            user_type: userType,
-            session_id: convId,
-            incognito,
-          }),
-        })
       }
 
-if (!response.ok) {
-        let errorDetail = 'Something went wrong. Try again.'
-        try {
-          const errData = await response.json()
-          errorDetail = errData.detail || errorDetail
-        } catch {}
-        setConversations(prev =>
-          prev.map(c =>
-            c.id === convId
-              ? { ...c, messages: [...c.messages, { role: 'aria', content: errorDetail }] }
-              : c
-          )
-        )
-        setLoading(false)
-        return
-      }
+      // Final update to conversations
+      const finalMessages = [...newMessages, { role: 'assistant', content: assistantContent, timestamp: new Date().toISOString() }]
+      setConversations(prev => prev.map(c => c.id === convId ? { ...c, messages: finalMessages } : c))
 
-      data = await response.json()
-
-      if (data.limit_reached) {
-        setLimitReached(true)
-        setLoading(false)
-        return
-      }
-
-      setConversations(prev =>
-        prev.map(c =>
-          c.id === convId
-            ? {
-                ...c,
-                title: incognito ? c.title : (data.title || c.title),
-                messages: [...c.messages, { role: 'aria', content: data.response, sources: data.sources || [] }],
-              }
-            : c
-        )
-      )
     } catch (err) {
-      setConversations(prev =>
-        prev.map(c =>
-          c.id === convId
-            ? {
-                ...c,
-                messages: [...c.messages, { role: 'aria', content: 'Network error — check your connection or try again.' }],
-              }
-            : c
-        )
-      )
+      if (err.name === 'AbortError') return
+      const errorMsg = { role: 'assistant', content: `⚠️ ${err.message || 'Something went wrong. Please try again.'}`, timestamp: new Date().toISOString() }
+      setMessages(prev => [...prev, errorMsg])
+    } finally {
+      setLoading(false)
+      abortRef.current = null
     }
+  }, [input, loading, messages, activeConvId, guestId, webSearchOn])
 
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
+    }
+  }, [sendMessage])
+
+  const stopGeneration = useCallback(() => {
+    abortRef.current?.abort()
     setLoading(false)
-  }
+  }, [])
 
-  if (loadingConvs) {
-    return (
-      <div style={{ width: '100vw', height: '100vh', background: '#080708', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'radial-gradient(circle at 35% 35%, rgba(9,12,155,0.4), rgba(9,12,155,0.1))', border: '1px solid rgba(9,12,155,0.25)', animation: 'orbGlow 1.2s ease infinite' }} />
-      </div>
-    )
-  }
-
-  if (limitReached) {
-    return (
-      <div style={{ width: '100vw', height: '100vh', background: '#080708', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2rem' }}>
-        <div style={{ width: '60px', height: '60px', borderRadius: '50%', border: '1px solid rgba(9,12,155,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'rgba(9,12,155,0.3)' }} />
-        </div>
-        <div style={{ textAlign: 'center' }}>
-          <p style={{ fontSize: '0.9rem', color: 'rgba(213,220,249,0.5)', fontFamily: 'Playfair Display, serif' }}>Demo limit reached</p>
-          <p style={{ fontSize: '0.75rem', color: 'rgba(213,220,249,0.2)', fontFamily: 'Inter, sans-serif', marginTop: '0.5rem' }}>Full access is private</p>
-        </div>
-      </div>
-    )
-  }
+  const activeConv = conversations.find(c => c.id === activeConvId)
 
   return (
-    <div style={{ width: '100vw', height: '100vh', background: '#080708', display: 'flex', overflow: 'hidden', position: 'relative' }}>
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', top: '-150px', left: '15%', width: '600px', height: '500px', background: 'radial-gradient(ellipse, rgba(44,140,153,0.08) 0%, transparent 70%)', filter: 'blur(50px)', animation: 'auroraFloat1 12s ease-in-out infinite' }} />
-        <div style={{ position: 'absolute', top: '20%', right: '10%', width: '500px', height: '400px', background: 'radial-gradient(ellipse, rgba(9,12,155,0.07) 0%, transparent 70%)', filter: 'blur(50px)', animation: 'auroraFloat2 15s ease-in-out infinite' }} />
-        <div style={{ position: 'absolute', bottom: '-150px', left: '30%', width: '500px', height: '400px', background: 'radial-gradient(ellipse, rgba(9,12,155,0.06) 0%, transparent 70%)', filter: 'blur(50px)', animation: 'auroraFloat3 18s ease-in-out infinite' }} />
-      </div>
-
-      {/* Sidebar */}
+    <div style={{
+      display: 'flex',
+      height: '100vh',
+      background: palette.espresso,
+      color: palette.sage,
+      fontFamily: 'Inter, system-ui, sans-serif',
+      overflow: 'hidden',
+    }}>
+      {/* ── SIDEBAR ── */}
       <div style={{
-        width: sidebarOpen ? '250px' : '56px',
-        flexShrink: 0,
+        width: sidebarOpen ? 280 : 0,
+        minWidth: sidebarOpen ? 280 : 0,
+        transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+        background: 'rgba(31,24,21,0.85)',
+        borderRight: sidebarOpen ? '1px solid rgba(210,222,160,0.06)' : 'none',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        transition: 'width 0.25s cubic-bezier(0.16,1,0.3,1)',
-        background: 'rgba(8,7,8,0.85)',
-        backdropFilter: 'blur(20px)',
-        position: 'relative',
-        zIndex: 10,
       }}>
-        <div style={{ padding: '1rem 0.7rem', display: 'flex', alignItems: 'center', justifyContent: sidebarOpen ? 'space-between' : 'center', flexShrink: 0, gap: '8px' }}>
+        {/* Sidebar header */}
+        <div style={{
+          padding: '1.25rem 1rem',
+          borderBottom: '1px solid rgba(210,222,160,0.06)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
+          <span style={{
+            fontSize: '1rem',
+            fontWeight: 700,
+            letterSpacing: '0.2em',
+            color: palette.sage,
+            fontFamily: 'Georgia, serif',
+          }}>
+            MAVIS
+          </span>
           <button
-            onClick={newConversation}
-            title="New chat"
-            style={{ background: 'rgba(9,12,155,0.08)', border: '1px solid rgba(9,12,155,0.2)', color: 'rgba(9,12,155,0.7)', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', fontSize: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.3s ease' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = '#090c9b'; e.currentTarget.style.color = '#090c9b' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(9,12,155,0.2)'; e.currentTarget.style.color = 'rgba(9,12,155,0.7)' }}
-          >+</button>
-          {sidebarOpen && (
-            <button
-              onClick={() => setSidebarOpen(false)}
-              style={{ background: 'none', border: 'none', color: 'rgba(213,220,249,0.3)', cursor: 'pointer', fontSize: '20px', padding: '4px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', transition: 'all 0.3s ease' }}
-              onMouseEnter={e => e.currentTarget.style.color = 'rgba(213,220,249,0.7)'}
-              onMouseLeave={e => e.currentTarget.style.color = 'rgba(213,220,249,0.3)'}
-            >☰</button>
-          )}
-          {!sidebarOpen && (
-            <button
-              onClick={() => setSidebarOpen(true)}
-              style={{ background: 'none', border: 'none', color: 'rgba(213,220,249,0.3)', cursor: 'pointer', fontSize: '20px', padding: '4px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '8px', position: 'absolute', top: '60px' }}
-              onMouseEnter={e => e.currentTarget.style.color = 'rgba(213,220,249,0.7)'}
-              onMouseLeave={e => e.currentTarget.style.color = 'rgba(213,220,249,0.3)'}
-            >☰</button>
+            onClick={() => setSidebarOpen(false)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'rgba(210,222,160,0.4)',
+              cursor: 'pointer',
+              fontSize: '1.1rem',
+              padding: '0.25rem',
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* New chat button */}
+        <button
+          onClick={startNewChat}
+          style={{
+            margin: '0.75rem',
+            padding: '0.65rem 1rem',
+            borderRadius: '12px',
+            background: 'rgba(74,61,57,0.4)',
+            border: '1px solid rgba(210,222,160,0.08)',
+            color: palette.sage,
+            fontSize: '0.82rem',
+            fontWeight: 500,
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            fontFamily: 'Inter, system-ui, sans-serif',
+            textAlign: 'left',
+            letterSpacing: '0.02em',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(136,174,77,0.1)'; e.currentTarget.style.borderColor = 'rgba(136,174,77,0.25)' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(74,61,57,0.4)'; e.currentTarget.style.borderColor = 'rgba(210,222,160,0.08)' }}
+        >
+          + New Conversation
+        </button>
+
+        {/* Conversation list */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 0.5rem' }}>
+          {conversations.map(conv => (
+            <div
+              key={conv.id}
+              onClick={() => selectConversation(conv.id)}
+              style={{
+                padding: '0.7rem 0.75rem',
+                margin: '0.15rem 0.25rem',
+                borderRadius: '10px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                transition: 'all 0.2s',
+                background: activeConvId === conv.id ? 'rgba(35,96,136,0.15)' : 'transparent',
+                border: activeConvId === conv.id ? '1px solid rgba(35,96,136,0.2)' : '1px solid transparent',
+              }}
+              onMouseEnter={e => {
+                if (activeConvId !== conv.id) {
+                  e.currentTarget.style.background = 'rgba(210,222,160,0.03)'
+                }
+              }}
+              onMouseLeave={e => {
+                if (activeConvId !== conv.id) {
+                  e.currentTarget.style.background = 'transparent'
+                }
+              }}
+            >
+              <div style={{
+                flex: 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                fontSize: '0.8rem',
+                color: activeConvId === conv.id ? palette.sage : 'rgba(210,222,160,0.55)',
+                fontWeight: activeConvId === conv.id ? 500 : 400,
+              }}>
+                {conv.title || 'New Conversation'}
+              </div>
+              <button
+                onClick={(e) => deleteConversation(conv.id, e)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'rgba(210,222,160,0.25)',
+                  cursor: 'pointer',
+                  fontSize: '0.75rem',
+                  padding: '0.2rem 0.3rem',
+                  opacity: 0,
+                  transition: 'opacity 0.2s',
+                }}
+                className="delete-btn"
+              >
+                🗑
+              </button>
+            </div>
+          ))}
+          {conversations.length === 0 && (
+            <div style={{
+              textAlign: 'center',
+              padding: '2rem 1rem',
+              color: 'rgba(210,222,160,0.3)',
+              fontSize: '0.78rem',
+            }}>
+              No conversations yet
+            </div>
           )}
         </div>
 
-        {sidebarOpen && (
-          <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem 0.7rem', marginTop: '0.5rem' }}>
-            {conversations.map(conv => (
-              <div
-                key={conv.id}
-                onClick={() => setActiveId(conv.id)}
-                style={{
-                  padding: '0.7rem 0.9rem',
-                  cursor: 'pointer',
-                  borderRadius: '10px',
-                  background: conv.id === activeId ? 'rgba(9,12,155,0.1)' : 'transparent',
-                  transition: 'all 0.2s ease',
-                  marginBottom: '2px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '8px',
-                }}
-                onMouseEnter={e => { if (conv.id !== activeId) e.currentTarget.style.background = 'rgba(213,220,249,0.04)' }}
-                onMouseLeave={e => { if (conv.id !== activeId) e.currentTarget.style.background = 'transparent' }}
-              >
-                <p style={{ fontSize: '0.8rem', color: conv.id === activeId ? '#d5dcf9' : 'rgba(213,220,249,0.4)', fontFamily: 'Inter, sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                  {conv.title}
-                </p>
-                <button
-                  onClick={e => deleteConversation(conv.id, e)}
-                  title="Delete"
-                  style={{ background: 'none', border: 'none', color: 'rgba(213,220,249,0.2)', cursor: 'pointer', fontSize: '12px', padding: '2px 4px', flexShrink: 0, transition: 'color 0.2s ease' }}
-                  onMouseEnter={e => e.currentTarget.style.color = 'rgba(220,80,90,0.7)'}
-                  onMouseLeave={e => e.currentTarget.style.color = 'rgba(213,220,249,0.2)'}
-                >✕</button>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Sidebar footer */}
+        <div style={{
+          padding: '0.75rem 1rem',
+          borderTop: '1px solid rgba(210,222,160,0.06)',
+          fontSize: '0.7rem',
+          color: 'rgba(210,222,160,0.25)',
+          textAlign: 'center',
+        }}>
+          Mavis Demo
+        </div>
+      </div>
 
-        {sidebarOpen && userType === 'guest' && (
-          <div style={{ padding: '0.8rem', flexShrink: 0 }}>
-            <div style={{ background: 'rgba(9,12,155,0.07)', padding: '0.7rem', borderRadius: '10px' }}>
-              <p style={{ fontSize: '0.65rem', color: 'rgba(9,12,155,0.55)', fontFamily: 'Inter, sans-serif', textAlign: 'center' }}>
-                {GUEST_LIMIT - guestCount} / {GUEST_LIMIT} messages
+      {/* ── MAIN CHAT AREA ── */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        position: 'relative',
+      }}>
+        {/* Top bar */}
+        <div style={{
+          padding: '0.85rem 1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: '1px solid rgba(210,222,160,0.05)',
+          background: 'rgba(56,43,39,0.5)',
+          backdropFilter: 'blur(12px)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {!sidebarOpen && (
+              <button
+                onClick={() => setSidebarOpen(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'rgba(210,222,160,0.5)',
+                  cursor: 'pointer',
+                  fontSize: '1.2rem',
+                  padding: '0.25rem',
+                }}
+              >
+                ☰
+              </button>
+            )}
+            <span style={{
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              color: palette.sage,
+              letterSpacing: '0.03em',
+            }}>
+              {activeConv?.title || 'Mavis'}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {/* Web search toggle */}
+            <button
+              onClick={() => setWebSearchOn(!webSearchOn)}
+              title="Toggle web search"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                padding: '0.4rem 0.75rem',
+                borderRadius: '999px',
+                background: webSearchOn ? 'rgba(35,96,136,0.2)' : 'rgba(74,61,57,0.4)',
+                border: webSearchOn ? '1px solid rgba(35,96,136,0.35)' : '1px solid rgba(210,222,160,0.08)',
+                color: webSearchOn ? palette.sage : 'rgba(210,222,160,0.5)',
+                fontSize: '0.72rem',
+                fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                fontFamily: 'Inter, system-ui, sans-serif',
+                letterSpacing: '0.03em',
+              }}
+            >
+              <span style={{ fontSize: '0.85rem' }}>{webSearchOn ? '🌐' : '🌐'}</span>
+              Web
+            </button>
+
+            <button
+              onClick={() => navigate('/')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'rgba(210,222,160,0.4)',
+                cursor: 'pointer',
+                fontSize: '0.78rem',
+                fontWeight: 500,
+                letterSpacing: '0.03em',
+                fontFamily: 'Inter, system-ui, sans-serif',
+              }}
+            >
+              ← Home
+            </button>
+          </div>
+        </div>
+
+        {/* Messages area */}
+        <div style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '1.5rem 1.25rem',
+        }}>
+          {messages.length === 0 ? (
+            /* Empty state */
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              height: '100%',
+              gap: '1rem',
+            }}>
+              {/* Mavis orb icon */}
+              <div style={{
+                width: 72,
+                height: 72,
+                borderRadius: '50%',
+                background: `
+                  radial-gradient(circle at 40% 35%, rgba(210,222,160,0.2), transparent 40%),
+                  radial-gradient(circle at 55% 50%, rgba(35,96,136,0.3), transparent 45%),
+                  radial-gradient(circle at 50% 50%, rgba(136,174,77,0.12), transparent 60%)
+                `,
+                boxShadow: '0 0 40px rgba(35,96,136,0.12)',
+                border: '1px solid rgba(210,222,160,0.08)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.6rem',
+                marginBottom: '0.5rem',
+                animation: 'pulse 3s ease-in-out infinite',
+              }}>
+                ◈
+              </div>
+              <h2 style={{
+                fontSize: '1.5rem',
+                fontWeight: 600,
+                color: palette.sage,
+                margin: 0,
+                fontFamily: 'Playfair Display, Georgia, serif',
+                letterSpacing: '-0.01em',
+              }}>
+                Hey! I'm Mavis
+              </h2>
+              <p style={{
+                fontSize: '0.9rem',
+                color: 'rgba(210,222,160,0.45)',
+                margin: 0,
+                textAlign: 'center',
+                maxWidth: 360,
+                lineHeight: 1.5,
+              }}>
+                Ask me anything — research, code, creative writing, or just a conversation.
               </p>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Main */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative', zIndex: 1 }}>
-        <div style={{ padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0, position: 'relative', zIndex: 2 }}>
-          <div ref={orbRef} style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'radial-gradient(circle at 35% 35%, rgba(9,12,155,0.4), rgba(9,12,155,0.1))', border: '1px solid rgba(9,12,155,0.25)', flexShrink: 0, transition: 'box-shadow 0.5s ease' }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 style={{ fontSize: '0.8rem', fontWeight: '400', letterSpacing: '0.15em', color: '#d5dcf9', fontFamily: 'Playfair Display, serif' }}>Mavis</h1>
-            <p style={{ fontSize: '0.48rem', letterSpacing: '0.2em', color: loading ? 'rgba(9,12,155,0.6)' : 'rgba(213,220,249,0.2)', textTransform: 'uppercase', marginTop: '1px', transition: 'color 0.3s ease', fontFamily: 'Inter, sans-serif' }}>
-              {loading ? 'Processing' : 'Online'}
-            </p>
-          </div>
-
-          <button
-            onClick={() => setIncognito(i => !i)}
-            title={incognito ? "Incognito on — this chat won't be saved" : "Turn on incognito mode"}
-            style={{
-              width: '34px', height: '34px', borderRadius: '50%',
-              background: incognito ? 'rgba(9,12,155,0.15)' : 'rgba(213,220,249,0.03)',
-              border: `1px solid ${incognito ? 'rgba(9,12,155,0.4)' : 'rgba(213,220,249,0.08)'}`,
-              color: incognito ? '#090c9b' : 'rgba(213,220,249,0.35)',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '15px', flexShrink: 0, transition: 'all 0.3s ease',
-            }}
-            onMouseEnter={e => { if (!incognito) { e.currentTarget.style.borderColor = 'rgba(9,12,155,0.3)'; e.currentTarget.style.color = 'rgba(9,12,155,0.7)' } }}
-            onMouseLeave={e => { if (!incognito) { e.currentTarget.style.borderColor = 'rgba(213,220,249,0.08)'; e.currentTarget.style.color = 'rgba(213,220,249,0.35)' } }}
-          >👁</button>
-
-          <button
-            onClick={newConversation}
-            style={{ padding: '0.5rem 1.1rem', borderRadius: '10px', background: 'rgba(213,220,249,0.03)', border: '1px solid rgba(213,220,249,0.08)', color: 'rgba(213,220,249,0.4)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'Inter, sans-serif', transition: 'all 0.3s ease', flexShrink: 0 }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(9,12,155,0.3)'; e.currentTarget.style.color = 'rgba(9,12,155,0.7)' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(213,220,249,0.08)'; e.currentTarget.style.color = 'rgba(213,220,249,0.4)' }}
-          >New chat</button>
+          ) : (
+            messages.map((msg, i) => <ARIAMessage key={i} msg={msg} />)
+          )}
+          <div ref={messagesEndRef} />
         </div>
 
-        {incognito && (
-          <div style={{ padding: '0.5rem 1.5rem', background: 'rgba(9,12,155,0.06)', position: 'relative', zIndex: 2, flexShrink: 0 }}>
-            <p style={{ fontSize: '0.6rem', letterSpacing: '0.1em', color: 'rgba(9,12,155,0.6)', fontFamily: 'Inter, sans-serif', textAlign: 'center' }}>
-              Incognito mode — this conversation won't be saved
-            </p>
+        {/* Input area */}
+        <div style={{
+          padding: '1rem 1.25rem 1.25rem',
+          borderTop: '1px solid rgba(210,222,160,0.05)',
+          background: 'rgba(56,43,39,0.5)',
+          backdropFilter: 'blur(12px)',
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-end',
+            gap: '0.6rem',
+            background: 'rgba(74,61,57,0.5)',
+            borderRadius: '16px',
+            border: '1px solid rgba(210,222,160,0.08)',
+            padding: '0.5rem 0.5rem 0.5rem 1rem',
+            transition: 'border-color 0.2s',
+          }}
+            onFocusCapture={e => {
+              e.currentTarget.style.borderColor = 'rgba(136,174,77,0.3)'
+            }}
+            onBlurCapture={e => {
+              e.currentTarget.style.borderColor = 'rgba(210,222,160,0.08)'
+            }}
+          >
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask Mavis anything..."
+              rows={1}
+              style={{
+                flex: 1,
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                color: palette.sage,
+                fontSize: '0.9rem',
+                fontFamily: 'Inter, system-ui, sans-serif',
+                resize: 'none',
+                lineHeight: 1.5,
+                padding: '0.3rem 0',
+                maxHeight: '150px',
+              }}
+              onInput={e => {
+                e.target.style.height = 'auto'
+                e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px'
+              }}
+            />
+            {loading ? (
+              <button
+                onClick={stopGeneration}
+                style={{
+                  padding: '0.5rem 0.9rem',
+                  borderRadius: '12px',
+                  background: 'rgba(210,222,160,0.1)',
+                  border: '1px solid rgba(210,222,160,0.15)',
+                  color: palette.sage,
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: 'Inter, system-ui, sans-serif',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.2s',
+                }}
+              >
+                ■ Stop
+              </button>
+            ) : (
+              <button
+                onClick={sendMessage}
+                disabled={!input.trim()}
+                style={{
+                  padding: '0.5rem 0.9rem',
+                  borderRadius: '12px',
+                  background: input.trim() ? palette.steel : 'rgba(74,61,57,0.4)',
+                  border: 'none',
+                  color: input.trim() ? '#fff' : 'rgba(210,222,160,0.25)',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  cursor: input.trim() ? 'pointer' : 'default',
+                  fontFamily: 'Inter, system-ui, sans-serif',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.2s',
+                }}
+              >
+                ↑
+              </button>
+            )}
           </div>
-        )}
-
-        {isHome ? (
-          <HomePrompt
-            input={input} setInput={setInput} sendMessage={sendMessage}
-            loading={loading} inputRef={inputRef} focused={focused} setFocused={setFocused}
-            selectedFile={selectedFile} onFileSelect={setSelectedFile} onRemoveFile={() => setSelectedFile(null)}
-          />
-        ) : (
-          <ChatShell
-            messages={messages} loading={loading} bottomRef={bottomRef}
-            input={input} setInput={setInput} sendMessage={sendMessage}
-            inputRef={inputRef} focused={focused} setFocused={setFocused}
-            selectedFile={selectedFile} onFileSelect={setSelectedFile} onRemoveFile={() => setSelectedFile(null)}
-          />
-        )}
+        </div>
       </div>
 
+      {/* Animations */}
       <style>{`
-        @keyframes fadeUp { from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:translateY(0); } }
-        @keyframes dotPulse { 0%,100%{ opacity:0.2; transform:scale(1); } 50%{ opacity:1; transform:scale(1.6); } }
-        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
-        @keyframes orbGlow { 0%,100%{ box-shadow:0 0 10px rgba(9,12,155,0.1); } 50%{ box-shadow:0 0 25px rgba(9,12,155,0.3); } }
-        @keyframes auroraFloat1 { 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(40px,30px) scale(1.1); } }
-        @keyframes auroraFloat2 { 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(-30px,40px) scale(1.05); } }
-        @keyframes auroraFloat3 { 0%,100%{ transform:translate(0,0) scale(1); } 50%{ transform:translate(30px,-30px) scale(1.08); } }
-        ::-webkit-scrollbar{ width:2px; }
-        ::-webkit-scrollbar-track{ background:transparent; }
-        ::-webkit-scrollbar-thumb{ background:rgba(9,12,155,0.2); border-radius:2px; }
+        @keyframes msgIn {
+          from { opacity: 0; transform: translateY(12px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.04); }
+        }
+        .delete-btn { opacity: 0; }
+        div:hover > .delete-btn { opacity: 1; }
       `}</style>
     </div>
   )

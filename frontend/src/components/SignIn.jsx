@@ -1,181 +1,250 @@
-import { useEffect, useRef, useState } from 'react'
-import gsap from 'gsap'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
-export default function SignIn({ onSuccess }) {
-  const wrapRef = useRef(null)
-  const panelRef = useRef(null)
-  const glowRef = useRef(null)
-  const [exiting, setExiting] = useState(false)
+const palette = {
+  espresso: '#382B27',
+  steel: '#236088',
+  indigo: '#5364B1',
+  olive: '#88AE4D',
+  sage: '#D2DEA0',
+  espressoLight: '#4a3d39',
+  espressoDark: '#1f1815',
+}
 
-  useEffect(() => {
-    if (wrapRef.current) {
-      gsap.fromTo(wrapRef.current, { opacity: 0 }, { opacity: 1, duration: 0.8, ease: 'power2.out' })
-    }
-    if (panelRef.current) {
-      gsap.fromTo(
-        panelRef.current,
-        { y: 28, opacity: 0, scale: 0.98 },
-        { y: 0, opacity: 1, scale: 1, duration: 0.95, ease: 'power3.out', delay: 0.08 }
-      )
-    }
-    if (glowRef.current) {
-      gsap.to(glowRef.current, {
-        scale: 1.04,
-        opacity: 0.85,
-        duration: 3.5,
-        yoyo: true,
-        repeat: -1,
-        ease: 'sine.inOut',
-      })
-    }
-  }, [])
+export default function SignIn() {
+  const navigate = useNavigate()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
-  const goToChat = () => {
-    if (exiting) return
-    setExiting(true)
-    gsap.to(panelRef.current, {
-      y: 12,
-      opacity: 0,
-      scale: 0.985,
-      duration: 0.35,
-      ease: 'power2.inOut',
-    })
-    gsap.to(wrapRef.current, {
-      opacity: 0,
-      duration: 0.45,
-      delay: 0.12,
-      ease: 'power2.out',
-      onComplete: () => onSuccess('guest'),
-    })
-  }
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
 
-  const pillStyle = {
-    padding: '0.98rem 1rem',
-    borderRadius: '999px',
-    fontSize: '0.72rem',
-    letterSpacing: '0.22em',
-    textTransform: 'uppercase',
-    cursor: 'pointer',
-    transition: 'all 0.25s ease',
-    fontFamily: 'Inter, system-ui, sans-serif',
-    fontWeight: 500,
+    // Simulate auth for demo
+    setTimeout(() => {
+      setLoading(false)
+      navigate('/chat')
+    }, 1200)
   }
 
   return (
-    <div
-      ref={wrapRef}
-      style={{
-        width: '100vw',
-        minHeight: '100vh',
-        background:
-          'radial-gradient(circle at top, rgba(9,12,155,0.08), transparent 24%), radial-gradient(circle at 20% 80%, rgba(255,255,255,0.04), transparent 18%), #080708',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#d5dcf9',
-        overflow: 'hidden',
-        position: 'relative',
-        padding: '1.25rem',
-        opacity: 1,
-      }}
-    >
-      <div
-        ref={glowRef}
-        style={{
-          position: 'absolute',
-          width: 520,
-          height: 520,
-          borderRadius: '50%',
-          background:
-            'radial-gradient(circle, rgba(9,12,155,0.12), rgba(9,12,155,0.05) 35%, transparent 70%)',
-          filter: 'blur(40px)',
-          opacity: 0.65,
-          pointerEvents: 'none',
-          transform: 'translateY(-8%)',
-        }}
-      />
-
-      <div
-        ref={panelRef}
-        style={{
-          width: 'min(460px, 92vw)',
-          padding: '2rem 1.65rem 1.5rem',
-          borderRadius: '28px',
-          background: 'rgba(8,7,8,0.62)',
-          border: '1px solid rgba(255,255,255,0.07)',
-          boxShadow: '0 18px 60px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05)',
-          backdropFilter: 'blur(24px) saturate(125%)',
-          WebkitBackdropFilter: 'blur(24px) saturate(125%)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '1.35rem',
-          position: 'relative',
-          zIndex: 2,
-        }}
-      >
-        <div
-          style={{
-            width: 68,
-            height: 68,
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: palette.espresso,
+      fontFamily: 'Inter, system-ui, sans-serif',
+      padding: '2rem',
+    }}>
+      <div style={{
+        width: '100%',
+        maxWidth: 400,
+        padding: '2.5rem 2rem',
+        borderRadius: '24px',
+        background: 'rgba(74,61,57,0.35)',
+        border: '1px solid rgba(210,222,160,0.08)',
+        backdropFilter: 'blur(20px)',
+      }}>
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <div style={{
+            width: 56,
+            height: 56,
             borderRadius: '50%',
-            background:
-              'radial-gradient(circle at 35% 35%, rgba(245,239,223,0.96), rgba(9,12,155,0.36) 32%, rgba(9,12,155,0.12) 62%, transparent 72%)',
-            border: '1px solid rgba(9,12,155,0.2)',
-            boxShadow: '0 0 28px rgba(9,12,155,0.12)',
-          }}
-        />
-
-        <div style={{ textAlign: 'center' }}>
-          <h2
-            style={{
-              fontSize: '1.3rem',
-              fontWeight: 400,
-              letterSpacing: '0.34em',
-              color: '#d5dcf9',
-              fontFamily: 'Georgia, serif',
-              margin: 0,
-            }}
-          >
+            background: `
+              radial-gradient(circle at 40% 35%, rgba(210,222,160,0.2), transparent 40%),
+              radial-gradient(circle at 55% 50%, rgba(35,96,136,0.3), transparent 45%)
+            `,
+            boxShadow: '0 0 30px rgba(35,96,136,0.12)',
+            border: '1px solid rgba(210,222,160,0.08)',
+            margin: '0 auto 1rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '1.3rem',
+          }}>
+            ◈
+          </div>
+          <h1 style={{
+            fontSize: '1.5rem',
+            fontWeight: 700,
+            letterSpacing: '0.25em',
+            color: palette.sage,
+            fontFamily: 'Georgia, serif',
+            margin: 0,
+          }}>
             MAVIS
-          </h2>
-          <p
-            style={{
-              fontSize: '0.63rem',
-              letterSpacing: '0.28em',
-              color: 'rgba(9,12,155,0.66)',
-              marginTop: '0.7rem',
-              textTransform: 'uppercase',
-            }}
-          >
-            Access gateway
-          </p>
-          <p
-            style={{
-              fontSize: '0.88rem',
-              lineHeight: 1.7,
-              color: 'rgba(245,239,223,0.62)',
-              margin: '0.9rem auto 0',
-              maxWidth: 320,
-            }}
-          >
-Try Mavis, the AI assistant demo.
+          </h1>
+          <p style={{
+            fontSize: '0.8rem',
+            color: 'rgba(210,222,160,0.4)',
+            margin: '0.4rem 0 0',
+          }}>
+            Sign in to continue
           </p>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', width: '100%', maxWidth: 320 }}>
+        {/* Form */}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div>
+            <label style={{
+              display: 'block',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              color: 'rgba(210,222,160,0.5)',
+              marginBottom: '0.35rem',
+              letterSpacing: '0.04em',
+            }}>
+              Email
+            </label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              required
+              style={{
+                width: '100%',
+                padding: '0.7rem 0.9rem',
+                borderRadius: '12px',
+                background: 'rgba(31,24,21,0.5)',
+                border: '1px solid rgba(210,222,160,0.1)',
+                color: palette.sage,
+                fontSize: '0.88rem',
+                fontFamily: 'Inter, system-ui, sans-serif',
+                outline: 'none',
+                transition: 'border-color 0.2s',
+                boxSizing: 'border-box',
+              }}
+              onFocus={e => e.target.style.borderColor = 'rgba(136,174,77,0.4)'}
+              onBlur={e => e.target.style.borderColor = 'rgba(210,222,160,0.1)'}
+            />
+          </div>
+
+          <div>
+            <label style={{
+              display: 'block',
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              color: 'rgba(210,222,160,0.5)',
+              marginBottom: '0.35rem',
+              letterSpacing: '0.04em',
+            }}>
+              Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+              style={{
+                width: '100%',
+                padding: '0.7rem 0.9rem',
+                borderRadius: '12px',
+                background: 'rgba(31,24,21,0.5)',
+                border: '1px solid rgba(210,222,160,0.1)',
+                color: palette.sage,
+                fontSize: '0.88rem',
+                fontFamily: 'Inter, system-ui, sans-serif',
+                outline: 'none',
+                transition: 'border-color 0.2s',
+                boxSizing: 'border-box',
+              }}
+              onFocus={e => e.target.style.borderColor = 'rgba(136,174,77,0.4)'}
+              onBlur={e => e.target.style.borderColor = 'rgba(210,222,160,0.1)'}
+            />
+          </div>
+
+          {error && (
+            <p style={{
+              fontSize: '0.78rem',
+              color: '#f87171',
+              margin: 0,
+              textAlign: 'center',
+            }}>
+              {error}
+            </p>
+          )}
+
           <button
-            onClick={goToChat}
+            type="submit"
+            disabled={loading}
             style={{
-              ...pillStyle,
-              background: 'rgba(9,12,155,0.1)',
-              border: '1px solid rgba(9,12,155,0.22)',
-              color: '#d5dcf9',
+              width: '100%',
+              padding: '0.75rem',
+              borderRadius: '12px',
+              background: loading ? 'rgba(35,96,136,0.4)' : palette.steel,
+              border: 'none',
+              color: '#fff',
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              letterSpacing: '0.03em',
+              cursor: loading ? 'default' : 'pointer',
+              transition: 'all 0.25s',
+              fontFamily: 'Inter, system-ui, sans-serif',
+              marginTop: '0.5rem',
             }}
+            onMouseEnter={e => { if (!loading) e.target.style.background = palette.indigo }}
+            onMouseLeave={e => { if (!loading) e.target.style.background = palette.steel }}
           >
-            Enter Demo
+            {loading ? 'Signing in...' : 'Sign In'}
           </button>
+        </form>
+
+        {/* Divider */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          margin: '1.5rem 0',
+        }}>
+          <div style={{ flex: 1, height: 1, background: 'rgba(210,222,160,0.08)' }} />
+          <span style={{ fontSize: '0.7rem', color: 'rgba(210,222,160,0.3)', letterSpacing: '0.06em' }}>OR</span>
+          <div style={{ flex: 1, height: 1, background: 'rgba(210,222,160,0.08)' }} />
         </div>
+
+        {/* Demo button */}
+        <button
+          onClick={() => navigate('/chat')}
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            borderRadius: '12px',
+            background: 'transparent',
+            border: '1px solid rgba(136,174,77,0.25)',
+            color: palette.olive,
+            fontSize: '0.9rem',
+            fontWeight: 600,
+            letterSpacing: '0.03em',
+            cursor: 'pointer',
+            transition: 'all 0.25s',
+            fontFamily: 'Inter, system-ui, sans-serif',
+          }}
+          onMouseEnter={e => { e.target.style.background = 'rgba(136,174,77,0.1)'; e.target.style.borderColor = palette.olive }}
+          onMouseLeave={e => { e.target.style.background = 'transparent'; e.target.style.borderColor = 'rgba(136,174,77,0.25)' }}
+        >
+          Try Mavis Demo
+        </button>
+
+        {/* Back link */}
+        <p style={{
+          textAlign: 'center',
+          marginTop: '1.25rem',
+          fontSize: '0.78rem',
+          color: 'rgba(210,222,160,0.35)',
+        }}>
+          <span
+            onClick={() => navigate('/')}
+            style={{ cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}
+          >
+            ← Back to home
+          </span>
+        </p>
       </div>
     </div>
   )

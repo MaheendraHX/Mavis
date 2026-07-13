@@ -1,456 +1,753 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
-import Background from './Background'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
+gsap.registerPlugin(ScrollTrigger)
 
-const stack = [
-  { name: 'Python', desc: 'Core backend language' },
-  { name: 'FastAPI', desc: 'REST API framework' },
-  { name: 'Groq', desc: 'LLM inference engine' },
-  { name: 'Llama 3.3', desc: 'Conversation model' },
-  { name: 'Whisper', desc: 'Voice transcription' },
-  { name: 'React', desc: 'Frontend framework' },
-  { name: 'Vite', desc: 'Build tool' },
-  { name: 'GSAP', desc: 'Animations' },
-  { name: 'psutil', desc: 'PC monitoring' },
-  { name: 'pyttsx3', desc: 'Text to speech' },
-]
-
-
-const capabilities = [
-  { icon: '⟆', title: 'Web Search', desc: 'Mavis searches the internet in real time and filters exactly what you need.' },
-  { icon: '◎', title: 'Voice I/O', desc: 'Talk hands-free. She listens via Whisper and speaks back naturally.' },
-  { icon: '⌘', title: 'PC Control', desc: 'Open apps, check battery, monitor your system. Full machine access.' },
-  { icon: '⌥', title: 'Code Help', desc: 'Debug, explain, write — Mavis handles code with precision.' },
-  { icon: '◈', title: 'Memory', desc: 'She remembers your conversations and gets smarter over time.' },
-  { icon: '⟁', title: 'Always Free', desc: 'Built on Groq free tier and local models. Zero cost to run.' },
-]
-
-
-const steps = [
-  { num: '01', title: 'Sign In', desc: 'Owner access gives full control. Guest mode lets others try a limited demo.' },
-  { num: '02', title: 'Talk or Type', desc: 'Use voice mode for hands-free control or type your message.' },
-  { num: '03', title: 'Get Things Done', desc: 'Search the web, control your PC, write code, or just have a conversation.' },
-]
-
-
-function PillButton({ children, onClick, big, variant = 'gold' }) {
-  const colors = variant === 'gold'
-    ? { bg: 'rgba(9,12,155,0.1)', bgHover: 'rgba(9,12,155,0.2)', border: 'rgba(9,12,155,0.3)', borderHover: '#090c9b', text: '#090c9b', glow: 'rgba(9,12,155,0.15)' }
-    : { bg: 'rgba(213,220,249,0.03)', bgHover: 'rgba(213,220,249,0.06)', border: 'rgba(213,220,249,0.1)', borderHover: 'rgba(213,220,249,0.3)', text: 'rgba(213,220,249,0.5)', glow: 'rgba(213,220,249,0.08)' }
-
-
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        padding: big ? '0.9rem 3rem' : '0.6rem 1.5rem',
-        background: colors.bg,
-        border: `1px solid ${colors.border}`,
-        borderRadius: '999px',
-        color: colors.text,
-        fontSize: big ? '0.8rem' : '0.75rem',
-        letterSpacing: '0.15em',
-        textTransform: 'uppercase',
-        cursor: 'pointer',
-        fontFamily: 'Inter, sans-serif',
-        transition: 'all 0.35s ease',
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.background = colors.bgHover
-        e.currentTarget.style.borderColor = colors.borderHover
-        e.currentTarget.style.boxShadow = `0 0 30px ${colors.glow}`
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.background = colors.bg
-        e.currentTarget.style.borderColor = colors.border
-        e.currentTarget.style.boxShadow = 'none'
-      }}
-    >
-      {children}
-    </button>
-  )
+const palette = {
+  espresso: '#382B27',
+  steel: '#236088',
+  indigo: '#5364B1',
+  olive: '#88AE4D',
+  sage: '#D2DEA0',
+  espressoLight: '#4a3d39',
+  espressoDark: '#1f1815',
 }
 
+export default function Landing() {
+  const navigate = useNavigate()
+  const heroRef = useRef(null)
+  const orbRef = useRef(null)
+  const [menuOpen, setMenuOpen] = useState(false)
 
-export default function Landing({ onEnter }) {
-  const orbRef = useRef()
-  const [heroVisible, setHeroVisible] = useState(false)
+  useEffect(() => {
+    // Hero entrance
+    if (heroRef.current) {
+      gsap.fromTo(
+        heroRef.current.querySelectorAll('.hero-reveal'),
+        { y: 60, opacity: 0 },
+        { y: 0, opacity: 1, duration: 1.1, stagger: 0.15, ease: 'power3.out', delay: 0.3 }
+      )
+    }
 
+    // Floating orb
+    if (orbRef.current) {
+      gsap.to(orbRef.current, {
+        y: -20,
+        duration: 4,
+        yoyo: true,
+        repeat: -1,
+        ease: 'sine.inOut',
+      })
+    }
 
-  useEffect(() => {
-    gsap.fromTo(orbRef.current,
-      { opacity: 0, scale: 0.4 },
-      { opacity: 1, scale: 1, duration: 2.5, ease: 'power3.out', delay: 0.3 }
-    )
+    // Scroll reveals
+    const reveals = document.querySelectorAll('.reveal, .reveal-left, .reveal-right')
+    reveals.forEach(el => {
+      ScrollTrigger.create({
+        trigger: el,
+        start: 'top 85%',
+        onEnter: () => el.classList.add('visible'),
+        once: true,
+      })
+    })
 
+    return () => ScrollTrigger.getAll().forEach(t => t.kill())
+  }, [])
 
-    setTimeout(() => setHeroVisible(true), 600)
+  const goToChat = () => navigate('/chat')
 
+  const features = [
+    {
+      icon: '◆',
+      title: 'Multimodal Understanding',
+      desc: 'Process text, images, and code simultaneously. Mavis sees the full picture, not just words.',
+    },
+    {
+      icon: '◇',
+      title: 'Real-Time Web Search',
+      desc: 'Pull live information from the web mid-conversation. Always current, never outdated.',
+    },
+    {
+      icon: '◈',
+      title: 'Context-Aware Memory',
+      desc: 'Conversations that actually remember. Mavis tracks context across sessions for deeper assistance.',
+    },
+    {
+      icon: '⬖',
+      title: 'Code & Creative Suite',
+      desc: 'Write, debug, and explain code. Generate creative content. One assistant for all your work.',
+    },
+    {
+      icon: '⬗',
+      title: 'Privacy First',
+      desc: 'No account required for demo. Your conversations stay yours. Built with privacy at the core.',
+    },
+    {
+      icon: '◉',
+      title: 'Lightning Fast',
+      desc: 'Streaming responses with sub-second first-token latency. No waiting, just flowing conversation.',
+    },
+  ]
 
-    let t = 0, animId
-    const pulse = () => {
-      t += 0.012
-      const scale = 1 + Math.sin(t) * 0.05
-      const glow = `0 0 ${50 + Math.sin(t) * 20}px rgba(9,12,155,0.2), 0 0 ${100 + Math.sin(t) * 30}px rgba(44,140,153,0.1)`
-      if (orbRef.current) {
-        orbRef.current.style.transform = `scale(${scale})`
-        orbRef.current.style.boxShadow = glow
-      }
-      animId = requestAnimationFrame(pulse)
-    }
-    pulse()
+  const steps = [
+    { num: '01', title: 'Start a Conversation', desc: 'Just type. No setup, no configuration. Mavis is ready the moment you are.' },
+    { num: '02', title: 'Ask Anything', desc: 'Code, research, creative writing, analysis — Mavis adapts to whatever you need.' },
+    { num: '03', title: 'Get Results', desc: 'Streaming responses, web-sourced facts, and contextual memory deliver exactly what you asked for.' },
+  ]
 
+  const techStack = [
+    'React', 'Three.js', 'FastAPI', 'Python', 'WebSocket', 'GSAP',
+    'DuckDuckGo', 'Vite', 'Render', 'Vercel', 'Tailwind', 'R3F',
+  ]
 
-    const reveals = document.querySelectorAll('.reveal, .reveal-left, .reveal-right')
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry, i) => {
-        if (entry.isIntersecting) {
-          setTimeout(() => entry.target.classList.add('visible'), i * 80)
-        }
-      })
-    }, { threshold: 0.08 })
-    reveals.forEach(el => observer.observe(el))
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: palette.espresso,
+      color: palette.sage,
+      fontFamily: 'Inter, system-ui, sans-serif',
+      overflowX: 'hidden',
+    }}>
+      {/* ── NAV ── */}
+      <nav style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 100,
+        padding: '1.25rem 2rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        background: 'rgba(56,43,39,0.75)',
+        backdropFilter: 'blur(20px) saturate(140%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(140%)',
+        borderBottom: '1px solid rgba(210,222,160,0.06)',
+      }}>
+        <div style={{
+          fontSize: '1.35rem',
+          fontWeight: 700,
+          letterSpacing: '0.28em',
+          color: palette.sage,
+          fontFamily: 'Georgia, serif',
+          cursor: 'pointer',
+        }} onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+          MAVIS
+        </div>
 
+        {/* Desktop nav links */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }} className="desktop-nav">
+          {['Features', 'How It Works', 'Tech'].map(link => (
+            <a
+              key={link}
+              href={`#${link.toLowerCase().replace(/\s/g, '-')}`}
+              style={{
+                color: 'rgba(210,222,160,0.65)',
+                textDecoration: 'none',
+                fontSize: '0.82rem',
+                letterSpacing: '0.06em',
+                transition: 'color 0.25s',
+                fontWeight: 400,
+              }}
+              onMouseEnter={e => e.target.style.color = palette.sage}
+              onMouseLeave={e => e.target.style.color = 'rgba(210,222,160,0.65)'}
+            >
+              {link}
+            </a>
+          ))}
+          <button
+            onClick={goToChat}
+            style={{
+              padding: '0.55rem 1.4rem',
+              borderRadius: '999px',
+              background: palette.steel,
+              border: 'none',
+              color: '#fff',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              letterSpacing: '0.04em',
+              cursor: 'pointer',
+              transition: 'all 0.25s',
+              fontFamily: 'Inter, system-ui, sans-serif',
+            }}
+            onMouseEnter={e => { e.target.style.background = palette.indigo; e.target.style.transform = 'translateY(-1px)' }}
+            onMouseLeave={e => { e.target.style.background = palette.steel; e.target.style.transform = 'translateY(0)' }}
+          >
+            Try Mavis
+          </button>
+        </div>
 
-    return () => {
-      cancelAnimationFrame(animId)
-      observer.disconnect()
-    }
-  }, [])
+        {/* Mobile hamburger */}
+        <button
+          onClick={() => setMenuOpen(!menuOpen)}
+          style={{
+            display: 'none',
+            background: 'none',
+            border: 'none',
+            color: palette.sage,
+            fontSize: '1.5rem',
+            cursor: 'pointer',
+            padding: '0.5rem',
+          }}
+          className="mobile-menu-btn"
+        >
+          {menuOpen ? '✕' : '☰'}
+        </button>
+      </nav>
 
+      {/* Mobile menu */}
+      {menuOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 99,
+          background: 'rgba(31,24,21,0.97)',
+          backdropFilter: 'blur(20px)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '2rem',
+        }}>
+          {['Features', 'How It Works', 'Tech'].map(link => (
+            <a
+              key={link}
+              href={`#${link.toLowerCase().replace(/\s/g, '-')}`}
+              onClick={() => setMenuOpen(false)}
+              style={{
+                color: palette.sage,
+                textDecoration: 'none',
+                fontSize: '1.3rem',
+                letterSpacing: '0.08em',
+                fontWeight: 300,
+              }}
+            >
+              {link}
+            </a>
+          ))}
+          <button
+            onClick={() => { setMenuOpen(false); goToChat() }}
+            style={{
+              padding: '0.8rem 2rem',
+              borderRadius: '999px',
+              background: palette.steel,
+              border: 'none',
+              color: '#fff',
+              fontSize: '1rem',
+              fontWeight: 600,
+              letterSpacing: '0.04em',
+              cursor: 'pointer',
+              fontFamily: 'Inter, system-ui, sans-serif',
+            }}
+          >
+            Try Mavis
+          </button>
+        </div>
+      )}
 
-  return (
-    <div style={{
-      width: '100vw',
-      minHeight: '100vh',
-      background: '#080708',
-      overflowY: 'auto',
-      overflowX: 'hidden',
-      position: 'relative',
-    }}>
-      <Background />
+      {/* ── HERO ── */}
+      <section
+        ref={heroRef}
+        style={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '6rem 2rem 4rem',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Hero background gradient */}
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: `
+            radial-gradient(ellipse 80% 60% at 50% 30%, rgba(35,96,136,0.12), transparent 60%),
+            radial-gradient(ellipse 60% 50% at 80% 70%, rgba(136,174,77,0.06), transparent 50%),
+            radial-gradient(ellipse 50% 40% at 20% 50%, rgba(83,100,177,0.08), transparent 50%)
+          `,
+          pointerEvents: 'none',
+        }} />
 
+        <div style={{
+          maxWidth: 1200,
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '3rem',
+          position: 'relative',
+          zIndex: 2,
+          flexWrap: 'wrap',
+        }}>
+          {/* Left: Text */}
+          <div style={{ flex: '1 1 500px', maxWidth: 600 }}>
+            <div
+              className="hero-reveal"
+              style={{
+                display: 'inline-block',
+                padding: '0.35rem 1rem',
+                borderRadius: '999px',
+                background: 'rgba(136,174,77,0.1)',
+                border: '1px solid rgba(136,174,77,0.2)',
+                fontSize: '0.72rem',
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                color: palette.olive,
+                marginBottom: '1.5rem',
+                fontWeight: 500,
+              }}
+            >
+              Now in Public Demo
+            </div>
 
-      {/* Nav */}
-      <nav style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 100,
-        padding: '1.2rem 3rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        background: 'rgba(8,7,8,0.8)',
-        backdropFilter: 'blur(20px)',
-        borderBottom: '1px solid rgba(213,220,249,0.04)',
-      }}>
-        <span style={{ fontFamily: 'Playfair Display, serif', fontSize: '1.1rem', color: '#d5dcf9', letterSpacing: '0.1em' }}>MAVIS</span>
-        <div style={{ display: 'flex', gap: '2rem', alignItems: 'center' }}>
-          {['About', 'Stack', 'Capabilities'].map(item => (
-            <button key={item}
-              onClick={() => document.getElementById(item.toLowerCase()).scrollIntoView({ behavior: 'smooth' })}
-              style={{ background: 'none', border: 'none', color: 'rgba(213,220,249,0.4)', fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'Inter, sans-serif', letterSpacing: '0.1em', transition: 'color 0.3s ease' }}
-              onMouseEnter={e => e.currentTarget.style.color = '#d5dcf9'}
-              onMouseLeave={e => e.currentTarget.style.color = 'rgba(213,220,249,0.4)'}
-            >{item}</button>
-          ))}
-          <PillButton onClick={onEnter}>Chat with Mavis</PillButton>
-        </div>
-      </nav>
+            <h1
+              className="hero-reveal"
+              style={{
+                fontSize: 'clamp(2.8rem, 6vw, 4.5rem)',
+                fontWeight: 700,
+                lineHeight: 1.08,
+                letterSpacing: '-0.02em',
+                color: palette.sage,
+                margin: 0,
+                fontFamily: 'Playfair Display, Georgia, serif',
+              }}
+            >
+              Your AI,<br />
+              <span style={{ color: palette.olive }}>amplified.</span>
+            </h1>
 
+            <p
+              className="hero-reveal"
+              style={{
+                fontSize: '1.15rem',
+                lineHeight: 1.7,
+                color: 'rgba(210,222,160,0.65)',
+                margin: '1.5rem 0 2rem',
+                maxWidth: 460,
+                fontWeight: 350,
+              }}
+            >
+              Mavis is a multimodal AI assistant that searches the web, writes code, and remembers context — all in a single, seamless conversation.
+            </p>
 
-      {/* Hero */}
-      <section style={{
-        width: '100vw',
-        height: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        position: 'relative',
-        zIndex: 1,
-        paddingTop: '80px',
-      }}>
-        <div ref={orbRef} style={{
-          position: 'absolute',
-          width: '280px',
-          height: '280px',
-          borderRadius: '50%',
-          opacity: 0,
-          top: '50%',
-          left: '50%',
-          marginTop: '-140px',
-          marginLeft: '-140px',
-        }}>
-          <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '1px solid rgba(9,12,155,0.08)', animation: 'ring 4s ease-in-out infinite' }} />
-          <div style={{ position: 'absolute', inset: '15%', borderRadius: '50%', border: '1px solid rgba(44,140,153,0.08)', animation: 'ring 4s ease-in-out infinite 0.7s' }} />
-          <div style={{ position: 'absolute', inset: '30%', borderRadius: '50%', border: '1px solid rgba(9,12,155,0.1)', animation: 'ring 4s ease-in-out infinite 1.4s' }} />
-          <div style={{ position: 'absolute', inset: '43%', borderRadius: '50%', background: 'radial-gradient(circle, rgba(9,12,155,0.3) 0%, rgba(9,12,155,0.15) 50%, transparent 70%)', animation: 'core 3s ease-in-out infinite' }} />
-          <div style={{ position: 'absolute', inset: '-20%', borderRadius: '50%', background: 'radial-gradient(circle, rgba(9,12,155,0.05) 0%, transparent 70%)' }} />
-        </div>
+            <div className="hero-reveal" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={goToChat}
+                style={{
+                  padding: '0.85rem 2rem',
+                  borderRadius: '999px',
+                  background: palette.steel,
+                  border: 'none',
+                  color: '#fff',
+                  fontSize: '0.92rem',
+                  fontWeight: 600,
+                  letterSpacing: '0.03em',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s',
+                  fontFamily: 'Inter, system-ui, sans-serif',
+                  boxShadow: '0 4px 24px rgba(35,96,136,0.3)',
+                }}
+                onMouseEnter={e => { e.target.style.background = palette.indigo; e.target.style.transform = 'translateY(-2px)'; e.target.style.boxShadow = '0 8px 32px rgba(83,100,177,0.4)' }}
+                onMouseLeave={e => { e.target.style.background = palette.steel; e.target.style.transform = 'translateY(0)'; e.target.style.boxShadow = '0 4px 24px rgba(35,96,136,0.3)' }}
+              >
+                Start Chatting →
+              </button>
+              <button
+                onClick={() => document.getElementById('features').scrollIntoView({ behavior: 'smooth' })}
+                style={{
+                  padding: '0.85rem 2rem',
+                  borderRadius: '999px',
+                  background: 'transparent',
+                  border: '1px solid rgba(210,222,160,0.2)',
+                  color: palette.sage,
+                  fontSize: '0.92rem',
+                  fontWeight: 500,
+                  letterSpacing: '0.03em',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s',
+                  fontFamily: 'Inter, system-ui, sans-serif',
+                }}
+                onMouseEnter={e => { e.target.style.borderColor = palette.olive; e.target.style.color = palette.olive }}
+                onMouseLeave={e => { e.target.style.borderColor = 'rgba(210,222,160,0.2)'; e.target.style.color = palette.sage }}
+              >
+                See Features
+              </button>
+            </div>
+          </div>
 
+          {/* Right: Floating orb visual */}
+          <div
+            ref={orbRef}
+            style={{
+              flex: '0 0 auto',
+              width: 'clamp(260px, 35vw, 420px)',
+              height: 'clamp(260px, 35vw, 420px)',
+              borderRadius: '50%',
+              background: `
+                radial-gradient(circle at 40% 35%, rgba(210,222,160,0.25), transparent 35%),
+                radial-gradient(circle at 55% 50%, rgba(35,96,136,0.35), transparent 40%),
+                radial-gradient(circle at 45% 45%, rgba(83,100,177,0.2), transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(136,174,77,0.15), transparent 60%)
+              `,
+              boxShadow: `
+                0 0 80px rgba(35,96,136,0.15),
+                0 0 160px rgba(83,100,177,0.08),
+                inset 0 0 60px rgba(210,222,160,0.04)
+              `,
+              border: '1px solid rgba(210,222,160,0.08)',
+              position: 'relative',
+            }}
+          >
+            {/* Inner rings */}
+            <div style={{
+              position: 'absolute',
+              inset: '15%',
+              borderRadius: '50%',
+              border: '1px solid rgba(210,222,160,0.06)',
+            }} />
+            <div style={{
+              position: 'absolute',
+              inset: '30%',
+              borderRadius: '50%',
+              border: '1px solid rgba(136,174,77,0.08)',
+            }} />
+          </div>
+        </div>
+      </section>
 
-        <div style={{ position: 'relative', zIndex: 1, textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }}>
-          <div style={{ overflow: 'hidden' }}>
-            <h1 style={{
-              fontSize: 'clamp(4.5rem, 14vw, 11rem)',
-              fontWeight: '400',
-              letterSpacing: '0.3em',
-              color: '#d5dcf9',
-              fontFamily: 'Playfair Display, serif',
-              lineHeight: 1,
-              display: 'flex',
-              gap: '0.1em',
-            }}>
-              {'MAVIS'.split('').map((letter, i) => (
-                <span key={i} style={{
-                  display: 'inline-block',
-                  opacity: heroVisible ? 1 : 0,
-                  transform: heroVisible ? 'translateY(0)' : 'translateY(60px)',
-                  transition: `opacity 0.8s cubic-bezier(0.16,1,0.3,1) ${0.1 + i * 0.08}s, transform 0.8s cubic-bezier(0.16,1,0.3,1) ${0.1 + i * 0.08}s`,
-                  textShadow: '0 0 80px rgba(9,12,155,0.15)',
-                }}>{letter}</span>
-              ))}
-            </h1>
-          </div>
+      {/* ── FEATURES ── */}
+      <section
+        id="features"
+        style={{
+          padding: '6rem 2rem',
+          maxWidth: 1200,
+          margin: '0 auto',
+        }}
+      >
+        <div className="reveal" style={{ textAlign: 'center', marginBottom: '4rem' }}>
+          <span style={{
+            fontSize: '0.72rem',
+            letterSpacing: '0.22em',
+            textTransform: 'uppercase',
+            color: palette.olive,
+            fontWeight: 500,
+          }}>
+            Capabilities
+          </span>
+          <h2 style={{
+            fontSize: 'clamp(2rem, 4vw, 2.8rem)',
+            fontWeight: 700,
+            color: palette.sage,
+            margin: '0.6rem 0 0.8rem',
+            fontFamily: 'Playfair Display, Georgia, serif',
+            letterSpacing: '-0.01em',
+          }}>
+            Everything you need
+          </h2>
+          <p style={{
+            fontSize: '1rem',
+            color: 'rgba(210,222,160,0.55)',
+            maxWidth: 500,
+            margin: '0 auto',
+            lineHeight: 1.6,
+          }}>
+            One assistant. Every task. No switching between tools.
+          </p>
+        </div>
 
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gap: '1.5rem',
+        }}>
+          {features.map((f, i) => (
+            <div
+              key={f.title}
+              className="reveal"
+              style={{
+                padding: '2rem 1.75rem',
+                borderRadius: '20px',
+                background: 'rgba(74,61,57,0.35)',
+                border: '1px solid rgba(210,222,160,0.06)',
+                transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+                cursor: 'default',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.transform = 'translateY(-6px)'
+                e.currentTarget.style.borderColor = 'rgba(136,174,77,0.25)'
+                e.currentTarget.style.boxShadow = '0 20px 50px rgba(0,0,0,0.3)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.borderColor = 'rgba(210,222,160,0.06)'
+                e.currentTarget.style.boxShadow = 'none'
+              }}
+            >
+              <div style={{
+                fontSize: '1.6rem',
+                color: palette.olive,
+                marginBottom: '1rem',
+                opacity: 0.8,
+              }}>
+                {f.icon}
+              </div>
+              <h3 style={{
+                fontSize: '1.1rem',
+                fontWeight: 600,
+                color: palette.sage,
+                margin: '0 0 0.5rem',
+                letterSpacing: '-0.01em',
+              }}>
+                {f.title}
+              </h3>
+              <p style={{
+                fontSize: '0.88rem',
+                lineHeight: 1.65,
+                color: 'rgba(210,222,160,0.5)',
+                margin: 0,
+              }}>
+                {f.desc}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
 
-          <div style={{
-            opacity: heroVisible ? 1 : 0,
-            transform: heroVisible ? 'translateY(0)' : 'translateY(20px)',
-            transition: 'opacity 1s ease 0.6s, transform 1s ease 0.6s',
-          }}>
-            <span style={{ fontSize: '0.65rem', letterSpacing: '0.4em', color: 'rgba(9,12,155,0.5)', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif' }}>
-              Adaptive Reasoning & Intelligence Architecture
-            </span>
-          </div>
+      {/* ── HOW IT WORKS ── */}
+      <section
+        id="how-it-works"
+        style={{
+          padding: '6rem 2rem',
+          background: 'rgba(31,24,21,0.4)',
+        }}
+      >
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+          <div className="reveal" style={{ textAlign: 'center', marginBottom: '4rem' }}>
+            <span style={{
+              fontSize: '0.72rem',
+              letterSpacing: '0.22em',
+              textTransform: 'uppercase',
+              color: palette.steel,
+              fontWeight: 500,
+            }}>
+              How It Works
+            </span>
+            <h2 style={{
+              fontSize: 'clamp(2rem, 4vw, 2.8rem)',
+              fontWeight: 700,
+              color: palette.sage,
+              margin: '0.6rem 0 0.8rem',
+              fontFamily: 'Playfair Display, Georgia, serif',
+              letterSpacing: '-0.01em',
+            }}>
+              Three steps to smarter work
+            </h2>
+          </div>
 
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            gap: '2rem',
+            position: 'relative',
+          }}>
+            {steps.map((s, i) => (
+              <div
+                key={s.num}
+                className="reveal"
+                style={{
+                  textAlign: 'center',
+                  padding: '2.5rem 1.5rem',
+                  position: 'relative',
+                }}
+              >
+                <div style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: '50%',
+                  background: palette.steel,
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                  margin: '0 auto 1.5rem',
+                  fontFamily: 'Inter, system-ui, sans-serif',
+                }}>
+                  {s.num}
+                </div>
+                <h3 style={{
+                  fontSize: '1.15rem',
+                  fontWeight: 600,
+                  color: palette.sage,
+                  margin: '0 0 0.5rem',
+                }}>
+                  {s.title}
+                </h3>
+                <p style={{
+                  fontSize: '0.88rem',
+                  lineHeight: 1.65,
+                  color: 'rgba(210,222,160,0.5)',
+                  margin: 0,
+                }}>
+                  {s.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-          <div style={{
-            opacity: heroVisible ? 1 : 0,
-            transform: heroVisible ? 'translateY(0)' : 'translateY(20px)',
-            transition: 'opacity 1s ease 0.8s, transform 1s ease 0.8s',
-            maxWidth: '500px',
-          }}>
-            <p style={{ fontSize: '1rem', color: 'rgba(213,220,249,0.4)', fontFamily: 'Inter, sans-serif', fontWeight: '300', lineHeight: '1.8', textAlign: 'center' }}>
-              A personal AI assistant that thinks, searches, speaks, and acts — built from scratch, runs for free.
-            </p>
-          </div>
+      {/* ── TECH STACK ── */}
+      <section
+        id="tech"
+        style={{
+          padding: '6rem 2rem',
+          maxWidth: 1000,
+          margin: '0 auto',
+          textAlign: 'center',
+        }}
+      >
+        <div className="reveal" style={{ marginBottom: '3rem' }}>
+          <span style={{
+            fontSize: '0.72rem',
+            letterSpacing: '0.22em',
+            textTransform: 'uppercase',
+            color: palette.indigo,
+            fontWeight: 500,
+          }}>
+            Built With
+          </span>
+          <h2 style={{
+            fontSize: 'clamp(2rem, 4vw, 2.8rem)',
+            fontWeight: 700,
+            color: palette.sage,
+            margin: '0.6rem 0 0.8rem',
+            fontFamily: 'Playfair Display, Georgia, serif',
+            letterSpacing: '-0.01em',
+          }}>
+            Modern stack, real results
+          </h2>
+        </div>
 
+        <div className="reveal" style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          gap: '0.75rem',
+        }}>
+          {techStack.map(tech => (
+            <span
+              key={tech}
+              style={{
+                padding: '0.5rem 1.2rem',
+                borderRadius: '999px',
+                background: 'rgba(74,61,57,0.4)',
+                border: '1px solid rgba(210,222,160,0.08)',
+                fontSize: '0.8rem',
+                letterSpacing: '0.04em',
+                color: 'rgba(210,222,160,0.7)',
+                fontWeight: 450,
+                transition: 'all 0.25s',
+                cursor: 'default',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = palette.olive
+                e.currentTarget.style.color = palette.olive
+                e.currentTarget.style.background = 'rgba(136,174,77,0.1)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = 'rgba(210,222,160,0.08)'
+                e.currentTarget.style.color = 'rgba(210,222,160,0.7)'
+                e.currentTarget.style.background = 'rgba(74,61,57,0.4)'
+              }}
+            >
+              {tech}
+            </span>
+          ))}
+        </div>
+      </section>
 
-          <div style={{
-            display: 'flex',
-            gap: '1rem',
-            marginTop: '1rem',
-            opacity: heroVisible ? 1 : 0,
-            transform: heroVisible ? 'translateY(0)' : 'translateY(20px)',
-            transition: 'opacity 1s ease 1s, transform 1s ease 1s',
-          }}>
-            <PillButton onClick={onEnter} big>Chat with Mavis</PillButton>
-            <PillButton onClick={() => document.getElementById('about').scrollIntoView({ behavior: 'smooth' })} big variant="neutral">Discover ↓</PillButton>
-          </div>
-        </div>
+      {/* ── CTA FOOTER ── */}
+      <section style={{
+        padding: '6rem 2rem',
+        textAlign: 'center',
+        background: `
+          linear-gradient(180deg, transparent 0%, rgba(35,96,136,0.06) 40%, rgba(35,96,136,0.1) 100%)
+        `,
+        borderTop: '1px solid rgba(210,222,160,0.05)',
+      }}>
+        <div className="reveal">
+          <h2 style={{
+            fontSize: 'clamp(2rem, 4vw, 2.8rem)',
+            fontWeight: 700,
+            color: palette.sage,
+            margin: '0 0 1rem',
+            fontFamily: 'Playfair Display, Georgia, serif',
+            letterSpacing: '-0.01em',
+          }}>
+            Ready to meet Mavis?
+          </h2>
+          <p style={{
+            fontSize: '1.05rem',
+            color: 'rgba(210,222,160,0.55)',
+            margin: '0 auto 2rem',
+            maxWidth: 480,
+            lineHeight: 1.6,
+          }}>
+            No sign-up. No credit card. Just a conversation with the future of AI assistance.
+          </p>
+          <button
+            onClick={goToChat}
+            style={{
+              padding: '0.9rem 2.5rem',
+              borderRadius: '999px',
+              background: palette.olive,
+              border: 'none',
+              color: palette.espressoDark,
+              fontSize: '0.95rem',
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              cursor: 'pointer',
+              transition: 'all 0.3s',
+              fontFamily: 'Inter, system-ui, sans-serif',
+              boxShadow: '0 4px 28px rgba(136,174,77,0.3)',
+            }}
+            onMouseEnter={e => { e.target.style.transform = 'translateY(-2px)'; e.target.style.boxShadow = '0 8px 36px rgba(136,174,77,0.45)' }}
+            onMouseLeave={e => { e.target.style.transform = 'translateY(0)'; e.target.style.boxShadow = '0 4px 28px rgba(136,174,77,0.3)' }}
+          >
+            Launch Demo →
+          </button>
+        </div>
+      </section>
 
+      {/* ── FOOTER ── */}
+      <footer style={{
+        padding: '2.5rem 2rem',
+        textAlign: 'center',
+        borderTop: '1px solid rgba(210,222,160,0.05)',
+        fontSize: '0.78rem',
+        color: 'rgba(210,222,160,0.35)',
+        letterSpacing: '0.04em',
+      }}>
+        © 2026 Mavis — Multimodal Adaptive Virtual Intelligence System
+      </footer>
 
-        <div style={{ position: 'absolute', bottom: '2rem', left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-          <div style={{ width: '1px', height: '50px', background: 'linear-gradient(180deg, rgba(9,12,155,0.5), transparent)', animation: 'scrollLine 2s ease-in-out infinite' }} />
-        </div>
-      </section>
-
-
-      {/* About */}
-      <section id="about" style={{ padding: '10rem 3rem', position: 'relative', zIndex: 1, maxWidth: '1000px', margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6rem', alignItems: 'center' }}>
-          <div>
-            <div className="reveal">
-              <span style={{ fontSize: '0.6rem', letterSpacing: '0.4em', color: 'rgba(9,12,155,0.5)', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif' }}>About</span>
-            </div>
-            <div className="reveal" style={{ marginTop: '1rem' }}>
-              <h2 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: '400', color: '#d5dcf9', fontFamily: 'Playfair Display, serif', lineHeight: 1.3 }}>
-                Not a wrapper.<br />
-                <span style={{ color: '#090c9b', fontStyle: 'italic' }}>A system.</span>
-              </h2>
-            </div>
-            <div className="reveal" style={{ marginTop: '2rem' }}>
-              <p style={{ fontSize: '0.95rem', color: 'rgba(213,220,249,0.45)', fontFamily: 'Inter, sans-serif', fontWeight: '300', lineHeight: '1.9' }}>
-                Mavis was built entirely from scratch by an 18-year-old developer. No templates, no shortcuts. Every phase — from the terminal brain to the web interface — was designed and coded by hand.
-              </p>
-            </div>
-            <div className="reveal" style={{ marginTop: '1.5rem' }}>
-              <p style={{ fontSize: '0.95rem', color: 'rgba(213,220,249,0.45)', fontFamily: 'Inter, sans-serif', fontWeight: '300', lineHeight: '1.9' }}>
-                She runs locally on your machine, searches the internet in real time, controls your PC, and speaks back to you — all completely free.
-              </p>
-            </div>
-          </div>
-
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: 'rgba(213,220,249,0.04)' }}>
-            {[
-              { label: 'Built by', value: 'Maheendra Menon' },
-              { label: 'Started', value: '2025' },
-              { label: 'Stack', value: 'Python · React · Groq' },
-              { label: 'Cost to run', value: 'Completely free' },
-              { label: 'Status', value: 'Active development' },
-            ].map((item, i) => (
-              <div key={i} className="reveal" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.2rem 1.5rem', background: 'rgba(8,7,8,0.8)', backdropFilter: 'blur(20px)' }}>
-                <span style={{ fontSize: '0.75rem', color: 'rgba(213,220,249,0.3)', fontFamily: 'Inter, sans-serif', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{item.label}</span>
-                <span style={{ fontSize: '0.85rem', color: '#d5dcf9', fontFamily: 'Inter, sans-serif' }}>{item.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-
-      {/* Tech Stack */}
-      <section id="stack" style={{ padding: '6rem 3rem', position: 'relative', zIndex: 1, maxWidth: '1000px', margin: '0 auto' }}>
-        <div className="reveal" style={{ marginBottom: '4rem' }}>
-          <span style={{ fontSize: '0.6rem', letterSpacing: '0.4em', color: 'rgba(9,12,155,0.5)', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif' }}>Tech Stack</span>
-          <h2 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: '400', color: '#d5dcf9', fontFamily: 'Playfair Display, serif', marginTop: '1rem', lineHeight: 1.3 }}>
-            What Mavis is<br />
-            <span style={{ color: '#090c9b', fontStyle: 'italic' }}>built with</span>
-          </h2>
-        </div>
-
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1px', background: 'rgba(213,220,249,0.04)' }}>
-          {stack.map((item, i) => (
-            <div key={i} className="reveal" style={{
-              padding: '1.8rem',
-              background: 'rgba(8,7,8,0.9)',
-              backdropFilter: 'blur(20px)',
-              transition: 'background 0.3s ease',
-              cursor: 'default',
-            }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(9,12,155,0.04)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(8,7,8,0.9)'}
-            >
-              <div style={{ fontSize: '0.9rem', fontWeight: '500', color: '#d5dcf9', fontFamily: 'Inter, sans-serif', marginBottom: '0.4rem' }}>{item.name}</div>
-              <div style={{ fontSize: '0.75rem', color: 'rgba(213,220,249,0.3)', fontFamily: 'Inter, sans-serif', fontWeight: '300' }}>{item.desc}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-
-      {/* Capabilities */}
-      <section id="capabilities" style={{ padding: '6rem 3rem', position: 'relative', zIndex: 1, maxWidth: '1000px', margin: '0 auto' }}>
-        <div className="reveal" style={{ marginBottom: '4rem' }}>
-          <span style={{ fontSize: '0.6rem', letterSpacing: '0.4em', color: 'rgba(9,12,155,0.5)', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif' }}>Capabilities</span>
-          <h2 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: '400', color: '#d5dcf9', fontFamily: 'Playfair Display, serif', marginTop: '1rem', lineHeight: 1.3 }}>
-            Everything<br />
-            <span style={{ color: '#090c9b', fontStyle: 'italic' }}>she can do</span>
-          </h2>
-        </div>
-
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1px', background: 'rgba(213,220,249,0.04)' }}>
-          {capabilities.map((cap, i) => (
-            <div key={i} className="reveal" style={{
-              padding: '2.5rem',
-              background: 'rgba(8,7,8,0.9)',
-              backdropFilter: 'blur(20px)',
-              transition: 'all 0.4s ease',
-              cursor: 'default',
-              position: 'relative',
-              overflow: 'hidden',
-            }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = 'rgba(9,12,155,0.04)'
-                e.currentTarget.querySelector('.cap-icon').style.color = '#090c9b'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = 'rgba(8,7,8,0.9)'
-                e.currentTarget.querySelector('.cap-icon').style.color = 'rgba(9,12,155,0.25)'
-              }}
-            >
-              <div className="cap-icon" style={{ fontSize: '1.5rem', color: 'rgba(9,12,155,0.25)', marginBottom: '1.2rem', transition: 'color 0.4s ease' }}>{cap.icon}</div>
-              <h3 style={{ fontSize: '0.85rem', fontWeight: '500', letterSpacing: '0.15em', color: '#d5dcf9', fontFamily: 'Inter, sans-serif', marginBottom: '0.8rem', textTransform: 'uppercase' }}>{cap.title}</h3>
-              <p style={{ fontSize: '0.85rem', color: 'rgba(213,220,249,0.35)', fontFamily: 'Inter, sans-serif', fontWeight: '300', lineHeight: '1.8' }}>{cap.desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-
-      {/* How it works */}
-      <section style={{ padding: '6rem 3rem', position: 'relative', zIndex: 1, maxWidth: '1000px', margin: '0 auto' }}>
-        <div className="reveal" style={{ marginBottom: '4rem' }}>
-          <span style={{ fontSize: '0.6rem', letterSpacing: '0.4em', color: 'rgba(9,12,155,0.5)', textTransform: 'uppercase', fontFamily: 'Inter, sans-serif' }}>How it works</span>
-          <h2 style={{ fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: '400', color: '#d5dcf9', fontFamily: 'Playfair Display, serif', marginTop: '1rem', lineHeight: 1.3 }}>
-            Simple to<br />
-            <span style={{ color: '#090c9b', fontStyle: 'italic' }}>get started</span>
-          </h2>
-        </div>
-
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px', background: 'rgba(213,220,249,0.04)' }}>
-          {steps.map((step, i) => (
-            <div key={i} className="reveal" style={{
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '3rem',
-              padding: '3rem',
-              background: 'rgba(8,7,8,0.9)',
-              backdropFilter: 'blur(20px)',
-              transition: 'background 0.3s ease',
-            }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(9,12,155,0.03)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'rgba(8,7,8,0.9)'}
-            >
-              <div style={{ fontSize: '2.5rem', fontWeight: '300', color: 'rgba(9,12,155,0.2)', fontFamily: 'Playfair Display, serif', flexShrink: 0, lineHeight: 1 }}>{step.num}</div>
-              <div>
-                <h3 style={{ fontSize: '0.9rem', fontWeight: '500', letterSpacing: '0.15em', color: '#d5dcf9', fontFamily: 'Inter, sans-serif', marginBottom: '0.8rem', textTransform: 'uppercase' }}>{step.title}</h3>
-                <p style={{ fontSize: '0.9rem', color: 'rgba(213,220,249,0.35)', fontFamily: 'Inter, sans-serif', fontWeight: '300', lineHeight: '1.8' }}>{step.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-
-      {/* CTA */}
-      <section className="reveal" style={{ padding: '8rem 3rem 10rem', position: 'relative', zIndex: 1, textAlign: 'center' }}>
-        <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-          <h2 style={{ fontSize: 'clamp(2.5rem, 6vw, 4.5rem)', fontWeight: '400', color: '#d5dcf9', fontFamily: 'Playfair Display, serif', lineHeight: 1.2, marginBottom: '1.5rem' }}>
-            Ready to meet<br />
-            <span style={{ color: '#090c9b', fontStyle: 'italic' }}>Mavis?</span>
-          </h2>
-          <p style={{ fontSize: '0.95rem', color: 'rgba(213,220,249,0.35)', fontFamily: 'Inter, sans-serif', fontWeight: '300', lineHeight: '1.8', marginBottom: '3rem' }}>
-            Sign in as owner for full access or try the demo as a guest. No account needed.
-          </p>
-          <PillButton onClick={onEnter} big>Begin</PillButton>
-        </div>
-      </section>
-
-
-      {/* Footer */}
-      <footer style={{
-        padding: '2rem 3rem',
-        position: 'relative',
-        zIndex: 1,
-        borderTop: '1px solid rgba(213,220,249,0.04)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
-        <span style={{ fontFamily: 'Playfair Display, serif', fontSize: '1rem', color: 'rgba(213,220,249,0.2)' }}>MAVIS</span>
-        <span style={{ fontSize: '0.75rem', color: 'rgba(213,220,249,0.2)', fontFamily: 'Inter, sans-serif' }}>Built by Maheendra Menon</span>
-        <a href="https://maheendrahx.github.io/Myprofile/" target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.75rem', color: 'rgba(9,12,155,0.3)', fontFamily: 'Inter, sans-serif', textDecoration: 'none', transition: 'color 0.3s ease' }}
-          onMouseEnter={e => e.currentTarget.style.color = '#090c9b'}
-          onMouseLeave={e => e.currentTarget.style.color = 'rgba(9,12,155,0.3)'}
-        >Portfolio →</a>
-      </footer>
-
-
-      <style>{`
-        @keyframes ring { 0%,100%{ transform:scale(1); opacity:0.5; } 50%{ transform:scale(1.04); opacity:1; } }
-        @keyframes core { 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.12); } }
-        @keyframes scrollLine { 0%,100%{ opacity:0.3; transform:scaleY(1); } 50%{ opacity:1; transform:scaleY(1.1); } }
-      `}</style>
-    </div>
-  )
+      {/* Mobile nav styles */}
+      <style>{`
+        @media (max-width: 768px) {
+          .desktop-nav { display: none !important; }
+          .mobile-menu-btn { display: block !important; }
+        }
+      `}</style>
+    </div>
+  )
 }
