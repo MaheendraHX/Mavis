@@ -9,7 +9,6 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from pydantic import BaseModel, HttpUrl
@@ -72,13 +71,7 @@ class ForceCORSMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(ForceCORSMiddleware)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
 
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
@@ -268,7 +261,13 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
     if not request.incognito:
         memory.create_conversation(conv_id, "New conversation", "guest", guest_id)
 
-    system_prompt = GUEST_SYSTEM_PROMPT
+    # Use owner prompt for Maheendra, guest prompt for demo visitors
+    if request.user_type == "owner":
+        system_prompt = MAVIS_SYSTEM_PROMPT
+        if PC_CONTROL_ENABLED:
+            system_prompt += "\n\nNote: PC control is enabled. You can execute commands on the owner's machine when asked."
+    else:
+        system_prompt = GUEST_SYSTEM_PROMPT
 
     history = memory.get_conversation_messages(conv_id) if not request.incognito else []
     first_turn = len(history) == 0
@@ -403,7 +402,13 @@ async def chat_with_image(
     if not incognito:
         memory.create_conversation(conv_id, "New conversation", "guest", guest_id)
 
-    system_prompt = GUEST_SYSTEM_PROMPT
+    # Use owner prompt for Maheendra, guest prompt for demo visitors
+    if user_type == "owner":
+        system_prompt = MAVIS_SYSTEM_PROMPT
+        if PC_CONTROL_ENABLED:
+            system_prompt += "\n\nNote: PC control is enabled. You can execute commands on the owner's machine when asked."
+    else:
+        system_prompt = GUEST_SYSTEM_PROMPT
 
     if not incognito:
         memory.add_message(conv_id, "user", f"{message} [shared an image]")
