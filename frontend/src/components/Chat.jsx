@@ -84,7 +84,7 @@ export default function Chat({ onNavigate }) {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [pendingImage, setPendingImage] = useState(null)
-  const [webSearchOn, setWebSearchOn] = useState(false)
+  const [webSearchOn, setWebSearchOn] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -236,7 +236,7 @@ export default function Chat({ onNavigate }) {
       const newConvId = data.conv_id || convId
       const finalMessages = [
         ...newMessages,
-        { role: 'assistant', content: assistantContent, timestamp: new Date().toISOString() },
+        { role: 'assistant', content: assistantContent, sources: data.sources || [], timestamp: new Date().toISOString() },
       ]
 
       setMessages(finalMessages)

@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 
 import memory
 from url_reader import extract_urls, fetch_page_text, is_safe_url
-from file_reader import process_file, get_file_type
+from memory import read_uploaded_file, get_file_type
 from web_search import web_search
 
 
