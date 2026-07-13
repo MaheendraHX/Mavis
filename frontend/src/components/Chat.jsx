@@ -315,7 +315,7 @@ function HomePrompt({ input, setInput, sendMessage, loading, inputRef, focused, 
         marginBottom: '0.8rem',
         textShadow: '0 0 60px rgba(9,12,155,0.15)',
 }}>
-        Mavis
+       Hey stranger!
       </h1>
       <p style={{
         fontSize: '1rem',
@@ -324,7 +324,7 @@ function HomePrompt({ input, setInput, sendMessage, loading, inputRef, focused, 
         fontWeight: '300',
         marginBottom: '2.5rem',
       }}>
-        How can Mavis help you today?
+        How can i help you today?
       </p>
 
       <div style={{ width: '100%', maxWidth: '620px' }}>
