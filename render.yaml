@@ -12,3 +12,5 @@
         sync: false
       - key: PC_CONTROL_ENABLED
         value: "false"
+      - key: SERPER_API_KEY
+        sync: false
