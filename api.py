@@ -161,12 +161,13 @@ async def fetch_url(request: UrlRequest):
         resp = requests.get(str(request.url), headers=headers, timeout=20, stream=True)
         resp.raise_for_status()
 
-        content = resp.raw.read(3 * 1024 * 1024 + 1, decode_content=True)
-        if len(content) > 3 * 1024 * 1024:
+        # Read up to 3MB of decoded content without touching internal resp._content
+        raw_bytes = resp.raw.read(3 * 1024 * 1024 + 1, decode_content=True)
+        if len(raw_bytes) > 3 * 1024 * 1024:
             raise HTTPException(status_code=400, detail="Page is too large to read.")
-        resp._content = content
+        page_html = raw_bytes.decode(resp.encoding or "utf-8", errors="ignore")
 
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(page_html, "html.parser")
 
         for tag in soup(["script", "style", "noscript", "svg", "canvas"]):
             tag.decompose()
