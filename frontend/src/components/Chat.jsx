@@ -83,6 +83,7 @@ export default function Chat({ onNavigate }) {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [pendingImage, setPendingImage] = useState(null)
   const [webSearchOn, setWebSearchOn] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const messagesEndRef = useRef(null)
@@ -148,8 +149,12 @@ export default function Chat({ onNavigate }) {
 
       const data = await res.json()
       const attachmentText = data.type === 'image'
-        ? `[Attached image: ${data.filename}]`
-        : `[Attached file: ${data.filename}]\n\n${data.content}`
+        ? `[Image: ${data.filename}]`
+        : `[File: ${data.filename}]\n\n${data.content}`
+
+      if (data.type === 'image') {
+        setPendingImage({ base64: data.content, filename: data.filename, mime_type: data.mime_type })
+      }
 
       setInput(prev => `${prev.trim() ? `${prev}\n\n` : ''}${attachmentText}`)
       inputRef.current?.focus()
@@ -190,16 +195,29 @@ export default function Chat({ onNavigate }) {
     abortRef.current = controller
 
     try {
-      const res = await fetch(`${API_BASE}/chat`, {
+      const img = pendingImage
+      setPendingImage(null)
+      const endpoint = img ? `${API_BASE}/chat-with-image` : `${API_BASE}/chat`
+      const body = img ? {
+        message: text,
+        image_base64: img.base64,
+        filename: img.filename,
+        mime_type: img.mime_type,
+        user_type: 'guest',
+        session_id: convId,
+        incognito: false,
+        web_search: webSearchOn,
+      } : {
+        message: text,
+        user_type: 'guest',
+        session_id: convId,
+        incognito: false,
+        web_search: webSearchOn,
+      }
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Guest-ID': guestId },
-        body: JSON.stringify({
-          message: text,
-          user_type: 'guest',
-          session_id: convId,
-          incognito: false,
-          web_search: webSearchOn,
-        }),
+        body: JSON.stringify(body),
         signal: controller.signal,
       })
 
@@ -542,7 +560,7 @@ export default function Chat({ onNavigate }) {
                 border: 'none',
                 color: uploading ? palette.primary : palette.textMuted,
                 cursor: uploading ? 'default' : 'pointer',
-                fontSize: '0.78rem',
+                fontSize: '1.15rem',
                 fontWeight: 600,
                 padding: '0.3rem',
                 transition: 'color 0.2s',
