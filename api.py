@@ -149,6 +149,7 @@ class ChatRequest(BaseModel):
     user_type: str
     session_id: str = "default"
     incognito: bool = False
+    web_search: bool = True
 
 
 class UrlRequest(BaseModel):
@@ -278,7 +279,7 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
             messages=[{"role": "system", "content": system_prompt}] + history,
             temperature=0.7,
             max_tokens=1024,
-            tools=[{
+            **(dict(tools=[{
                 "type": "function",
                 "function": {
                     "name": "web_search",
@@ -291,8 +292,7 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
                         "required": ["query"]
                     }
                 }
-            }],
-            tool_choice="auto"
+            }], tool_choice="auto") if request.web_search else {})
         )
 
         response_message = response.choices[0].message
