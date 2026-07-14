@@ -32,7 +32,7 @@ function formatTime(iso) {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-function ARIAMessage({ msg, onEdit }) {
+function ARIAMessage({ msg, onEdit, onDelete }) {
   const isUser = msg.role === 'user'
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState(msg.content || '')
@@ -132,7 +132,7 @@ function ARIAMessage({ msg, onEdit }) {
             >✎ Edit</button>
             <button onClick={() => {
               if (window.confirm('Delete this message?')) {
-                setMessages(prev => prev.filter(m => m.id !== msg.id))
+                onDelete(msg.id)
               }
             }}
               style={{
@@ -697,7 +697,7 @@ export default function Chat({ onNavigate }) {
               </p>
             </div>
           ) : (
-            messages.map((msg, i) => <ARIAMessage key={i} msg={msg} onEdit={editMessage} />)
+            messages.map((msg, i) => <ARIAMessage key={i} msg={msg} onEdit={editMessage} onDelete={(id) => setMessages(prev => prev.filter(m => m.id !== id))} />)
           )}
           <div ref={messagesEndRef} />
         </div>
