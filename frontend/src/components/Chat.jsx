@@ -198,6 +198,7 @@ function FileAttachmentCard({ file, onRemove }) {
   }
 
   const formatSize = (mb) => {
+    if (!mb || mb === 0 || typeof mb !== 'number') return 'Unknown size'
     if (mb < 1) return `${(mb * 1024).toFixed(0)} KB`
     return `${mb.toFixed(1)} MB`
   }
