@@ -250,7 +250,7 @@ export default function Chat({ onNavigate }) {
       },
       body: JSON.stringify({
         message: newText,
-        user_type: isOwner ? 'owner' : 'guest',
+        user_type: 'guest',
         session_id: convId,
         incognito: guestMode,
         history: truncated,
@@ -272,7 +272,7 @@ export default function Chat({ onNavigate }) {
         }
       })
       .catch(() => {})
-  }, [messages, activeConvId, isOwner, guestMode])
+  }, [messages, activeConvId, guestMode])
 
   const handleFileUpload = useCallback(async (file) => {
     if (!file || uploading) return
