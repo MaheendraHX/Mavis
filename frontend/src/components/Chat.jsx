@@ -2,6 +2,120 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://aria-backend-b6qb.onrender.com'
 
+// Parse message content to extract code blocks and render them with copy buttons
+function parseMessageContent(content) {
+  if (!content) return []
+  const parts = []
+  const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g
+  let lastIndex = 0
+  let match
+
+  while ((match = codeBlockRegex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: 'text', content: content.slice(lastIndex, match.index) })
+    }
+    parts.push({ type: 'code', lang: match[1] || 'text', content: match[2].trimEnd() })
+    lastIndex = match.index + match[0].length
+  }
+  if (lastIndex < content.length) {
+    parts.push({ type: 'text', content: content.slice(lastIndex) })
+  }
+  return parts
+}
+
+function CodeBlock({ lang, code }) {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { /* fallback */ }
+  }
+
+  return (
+    <div style={{
+      margin: '0.8rem 0',
+      borderRadius: '12px',
+      overflow: 'hidden',
+      border: '1px solid rgba(0,0,0,0.08)',
+      background: '#1e1e1e',
+    }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '0.45rem 0.9rem',
+        background: '#2d2d2d',
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
+      }}>
+        <span style={{
+          fontSize: '0.7rem',
+          color: 'rgba(255,255,255,0.5)',
+          fontFamily: 'monospace',
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+        }}>
+          {lang || 'code'}
+        </span>
+        <button
+          onClick={handleCopy}
+          style={{
+            background: 'rgba(255,255,255,0.08)',
+            border: 'none',
+            borderRadius: '6px',
+            padding: '0.25rem 0.6rem',
+            cursor: 'pointer',
+            fontSize: '0.7rem',
+            color: copied ? '#a8d5ba' : 'rgba(255,255,255,0.5)',
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontWeight: 500,
+            transition: 'all 0.2s',
+          }}
+          onMouseEnter={e => {
+            if (!copied) e.currentTarget.style.background = 'rgba(255,255,255,0.15)'
+          }}
+          onMouseLeave={e => {
+            if (!copied) e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
+          }}
+        >
+          {copied ? '✓ Copied' : '⧉ Copy'}
+        </button>
+      </div>
+      <pre style={{
+        margin: 0,
+        padding: '1rem',
+        overflowX: 'auto',
+        maxHeight: '400px',
+      }}>
+        <code style={{
+          fontSize: '0.82rem',
+          lineHeight: 1.6,
+          color: '#e4e4e7',
+          fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+        }}>
+          {code}
+        </code>
+      </pre>
+    </div>
+  )
+}
+
+function renderTextContent(content) {
+  const parts = parseMessageContent(content)
+  if (parts.length === 1 && parts[0].type === 'text') {
+    return content
+  }
+  return parts.map((part, i) => {
+    if (part.type === 'code') {
+      return <CodeBlock key={i} lang={part.lang} code={part.content} />
+    }
+    return <span key={i} style={{ whiteSpace: 'pre-wrap' }}>{part.content}</span>
+  })
+}
+
 const palette = {
   bg: '#faf9f7',
   bgSoft: '#f4eee7',
@@ -106,7 +220,7 @@ function ARIAMessage({ msg, onEdit, onDelete }) {
             wordBreak: 'break-word',
             fontFamily: 'Inter, system-ui, sans-serif',
           }}>
-            {msg.content}
+            {renderTextContent(msg.content)}
           </div>
         )}
 
@@ -279,8 +393,8 @@ export default function Chat({ onNavigate }) {
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
-  const [pendingImage, setPendingImage] = useState(null)
-  const [pendingFile, setPendingFile] = useState(null)
+const [pendingImage, setPendingImage] = useState(null)
+const [pendingFiles, setPendingFiles] = useState([])
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -399,13 +513,13 @@ export default function Chat({ onNavigate }) {
         setPendingImage({ base64: data.base64, mime: data.mime, filename: data.filename })
       } else if (data.type === 'text') {
         const ext = (data.filename || '').split('.').pop().toLowerCase()
-        setPendingFile({
+        setPendingFiles(prev => [...prev, {
           filename: data.filename,
           type: ext || 'txt',
           size_mb: data.content ? +(data.content.length / (1024 * 1024)).toFixed(2) : 0.01,
           content: data.content,
           mime: data.mime || 'text/plain'
-        })
+        }])
       } else {
         setUploadError(data.content || 'Could not read file.')
       }
@@ -420,15 +534,15 @@ export default function Chat({ onNavigate }) {
 
   const sendMessage = useCallback(async () => {
     const text = input.trim()
-    if (!text && !pendingFile && !pendingImage) return
+    if (!text && pendingFiles.length === 0 && !pendingImage) return
 
     const userMsg = { role: 'user', content: text, timestamp: new Date().toISOString() }
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
     setInput('')
     setUploadError('')
-    setPendingFile(null)
-    setPendingImage(null)
+setPendingFiles([])
+setPendingImage(null)
     setLoading(true)
 
     let convId = activeConvId
@@ -450,6 +564,8 @@ export default function Chat({ onNavigate }) {
     abortRef.current = controller
     const currentImage = pendingImage
     setPendingImage(null)
+    const currentFiles = [...pendingFiles]
+    setPendingFiles([])
 
     try {
       let res
@@ -469,14 +585,17 @@ export default function Chat({ onNavigate }) {
           body: formData,
           signal: controller.signal,
         })
-      } else if (pendingFile) {
+      } else if (pendingFiles.length > 0) {
         const formData = new FormData()
         formData.append('message', text)
         formData.append('user_type', 'guest')
         formData.append('session_id', convId)
         formData.append('incognito', 'false')
-        formData.append('filename', pendingFile.filename)
-        formData.append('file_content', pendingFile.content || '')
+        // Send all file contents concatenated
+        const allFileContent = pendingFiles.map(f => '[File: ' + f.filename + ']\n' + (f.content || '')).join('\n\n---\n\n')
+        const allFilenames = pendingFiles.map(f => f.filename).join(', ')
+        formData.append('filename', allFilenames)
+        formData.append('file_content', allFileContent)
 
         res = await fetch(`${API_BASE}/chat-with-file`, {
           method: 'POST',
@@ -530,7 +649,7 @@ export default function Chat({ onNavigate }) {
       setLoading(false)
       abortRef.current = null
     }
-  }, [input, loading, messages, activeConvId, guestId, pendingImage, pendingFile])
+  }, [input, loading, messages, activeConvId, guestId, pendingImage, pendingFiles])
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -856,7 +975,7 @@ export default function Chat({ onNavigate }) {
               onChange={(e) => {
                 const file = e.target.files?.[0]
                 if (file) {
-                  setPendingFile(null) // Clear previous file
+                  // Keep previous files — accumulate
                   handleFileUpload(file)
                 }
                 e.target.value = ''
@@ -925,11 +1044,16 @@ export default function Chat({ onNavigate }) {
               </button>
             )}
           </div>
-          {pendingFile && (
-            <FileAttachmentCard
-              file={pendingFile}
-              onRemove={() => setPendingFile(null)}
-            />
+          {pendingFiles.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
+              {pendingFiles.map((f, idx) => (
+                <FileAttachmentCard
+                  key={idx}
+                  file={f}
+                  onRemove={() => setPendingFiles(prev => prev.filter((_, i) => i !== idx))}
+                />
+              ))}
+            </div>
           )}
           {uploadError && (
             <div style={{ color: palette.danger, fontSize: '0.75rem', marginTop: '0.5rem' }}>

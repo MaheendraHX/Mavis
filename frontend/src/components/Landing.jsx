@@ -602,7 +602,7 @@ export default function Landing({ onEnter }) {
         color: palette.textMuted,
         letterSpacing: '0.04em',
       }}>
-        © 2026 Mavis - Multimodal Adaptive Virtual Intelligence System
+        © 2026 Mavis - Multimodal Advanced Virtual Intelligence System
       </footer>
 
       {/* Responsive styles now in index.css */}
