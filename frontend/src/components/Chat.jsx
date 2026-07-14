@@ -110,23 +110,42 @@ function ARIAMessage({ msg, onEdit }) {
           </div>
         )}
 
-        {/* Edit/Delete buttons for user messages - show on hover */}
+        {/* Edit/Delete buttons for user messages - always visible below */}
         {isUser && !editing && (
-          <div className="msg-actions" style={{
-            position: 'absolute',
-            top: '0.5rem',
-            right: '-2.5rem',
+          <div style={{
             display: 'flex',
-            gap: '0.25rem',
-            opacity: 0,
-            transition: 'opacity 0.2s',
+            gap: '0.35rem',
+            marginTop: '0.4rem',
+            justifyContent: 'flex-end',
           }}>
             <button onClick={() => { setEditText(msg.content); setEditing(true) }}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
-                fontSize: '0.85rem', padding: '0.2rem', color: palette.textMuted,
-                borderRadius: '4px',
-              }} title="Edit message">✏️</button>
+                fontSize: '0.75rem', padding: '0.2rem 0.5rem',
+                color: palette.textMuted, borderRadius: '4px',
+                fontFamily: 'Inter, system-ui, sans-serif',
+                transition: 'color 0.2s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = palette.text}
+              onMouseLeave={e => e.currentTarget.style.color = palette.textMuted}
+              title="Edit message"
+            >✎ Edit</button>
+            <button onClick={() => {
+              if (window.confirm('Delete this message?')) {
+                setMessages(prev => prev.filter(m => m.id !== msg.id))
+              }
+            }}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: '0.75rem', padding: '0.2rem 0.5rem',
+                color: '#c0706b', borderRadius: '4px',
+                fontFamily: 'Inter, system-ui, sans-serif',
+                transition: 'opacity 0.2s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '0.7'}
+              title="Delete message"
+            >🗑 Delete</button>
           </div>
         )}
       </div>
@@ -180,7 +199,6 @@ export default function Chat({ onNavigate }) {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [pendingImage, setPendingImage] = useState(null)
-  const [webSearchOn, setWebSearchOn] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -370,7 +388,7 @@ export default function Chat({ onNavigate }) {
             user_type: 'guest',
             session_id: convId,
             incognito: false,
-            web_search: webSearchOn,
+            web_search: true,
           }),
           signal: controller.signal,
         })
@@ -407,7 +425,7 @@ export default function Chat({ onNavigate }) {
       setLoading(false)
       abortRef.current = null
     }
-  }, [input, loading, messages, activeConvId, guestId, pendingImage, webSearchOn])
+  }, [input, loading, messages, activeConvId, guestId, pendingImage])
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -610,29 +628,6 @@ export default function Chat({ onNavigate }) {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <button
-              onClick={() => setWebSearchOn(!webSearchOn)}
-              title="Toggle web search"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                padding: '0.4rem 0.75rem',
-                borderRadius: '999px',
-                background: webSearchOn ? '#e8f5ed' : palette.surfaceWarm,
-                border: webSearchOn ? '1px solid rgba(168,213,186,0.9)' : `1px solid ${palette.border}`,
-                color: webSearchOn ? palette.text : palette.textMuted,
-                fontSize: '0.72rem',
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
-                fontFamily: 'Inter, system-ui, sans-serif',
-                letterSpacing: '0.03em',
-              }}
-            >
-              Web
-            </button>
-
             <button onClick={() => onNavigate?.('home')} style={{
               background: 'none',
               border: 'none',
@@ -736,15 +731,15 @@ export default function Chat({ onNavigate }) {
                 border: 'none',
                 color: uploading ? palette.primary : palette.textMuted,
                 cursor: uploading ? 'default' : 'pointer',
-                fontSize: '0.78rem',
+                fontSize: '1.3rem',
                 fontWeight: 600,
-                padding: '0.3rem',
+                padding: '0.4rem 0.5rem',
                 transition: 'color 0.2s',
               }}
               onMouseEnter={e => { if (!uploading) e.currentTarget.style.color = palette.primary }}
               onMouseLeave={e => { if (!uploading) e.currentTarget.style.color = palette.textMuted }}
             >
-              {uploading ? '...' : '??'}
+              {uploading ? '...' : '📎'}
             </button>
             <input
               ref={fileInputRef}

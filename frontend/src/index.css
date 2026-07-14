@@ -255,7 +255,4 @@ h1, h2, h3, .playfair {
   .send-btn-icon { display: none !important; }
 }
 
-/* Message hover actions */
-.msg-bubble-wrap:hover .msg-actions {
-  opacity: 1 !important;
-}
+/* (msg-actions removed — buttons now inline below messages) */
