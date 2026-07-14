@@ -552,16 +552,19 @@ export default function Chat({ onNavigate }) {
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: palette.textMuted,
+                  color: '#c0706b',
                   cursor: 'pointer',
-                  fontSize: '0.75rem',
-                  padding: '0.2rem 0.3rem',
-                  opacity: 0,
-                  transition: 'opacity 0.2s',
+                  fontSize: '0.85rem',
+                  padding: '0.25rem 0.35rem',
+                  borderRadius: '6px',
+                  transition: 'all 0.2s',
+                  opacity: 0.5,
+                  flexShrink: 0,
                 }}
-                className="delete-btn"
+                onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(192,112,107,0.1)' }}
+                onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; e.currentTarget.style.background = 'none' }}
               >
-                Delete
+                🗑
               </button>
             </div>
           ))}
