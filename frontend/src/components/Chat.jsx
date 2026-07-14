@@ -221,7 +221,7 @@ function FileAttachmentCard({ file, onRemove }) {
         padding: '0.5rem',
         boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
       }}>
-        {getFileIcon(file.type)}
+        {getFileIcon(file.type || file.file_type || 'text')}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
@@ -239,7 +239,7 @@ function FileAttachmentCard({ file, onRemove }) {
           color: palette.textMuted,
           marginTop: '0.15rem',
         }}>
-          {file.type.toUpperCase()} • {formatSize(file.size_mb)}
+          {(file.type || file.file_type || 'FILE').toUpperCase()} • {formatSize(file.size_mb)}
         </div>
       </div>
       <button
