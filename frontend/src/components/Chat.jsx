@@ -35,7 +35,7 @@ function formatTime(iso) {
 function ARIAMessage({ msg, onEdit }) {
   const isUser = msg.role === 'user'
   const [editing, setEditing] = useState(false)
-  const [editText, setEditText] = useState(msg.content)
+  const [editText, setEditText] = useState(msg.content || '')
 
   const handleSave = () => {
     if (editText.trim() && editText.trim() !== msg.content) {
@@ -252,13 +252,12 @@ export default function Chat({ onNavigate }) {
         message: newText,
         user_type: 'guest',
         session_id: convId,
-        incognito: guestMode,
+        incognito: false,
         history: truncated,
       }),
     })
       .then(r => r.json())
       .then(data => {
-        if (data.limit_reached) { setGuestMode(true); return }
         const assistantMsg = {
           id: `msg_${Date.now()}_assistant`,
           role: 'assistant',
@@ -272,7 +271,7 @@ export default function Chat({ onNavigate }) {
         }
       })
       .catch(() => {})
-  }, [messages, activeConvId, guestMode])
+  }, [messages, activeConvId])
 
   const handleFileUpload = useCallback(async (file) => {
     if (!file || uploading) return
