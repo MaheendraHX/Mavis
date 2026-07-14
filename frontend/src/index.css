@@ -81,8 +81,161 @@ h1, h2, h3, .playfair {
 /*  RESPONSIVE              */
 /* ======================== */
 
+/* Mobile menu button - hidden on desktop, visible on mobile */
+.mobile-menu-btn {
+  display: none !important;
+}
 @media (max-width: 768px) {
-  /* Chat sidebar becomes full-width overlay */
+  .mobile-menu-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  /* Desktop nav links hidden on mobile */
+  .desktop-nav {
+    display: none !important;
+  }
+
+  /* Global section padding reduction */
+  section {
+    padding-top: 3rem !important;
+    padding-bottom: 3rem !important;
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
+  }
+
+  /* Hero stacking */
+  .hero-inner {
+    flex-direction: column !important;
+    text-align: center !important;
+    gap: 2rem !important;
+  }
+  .hero-inner > div {
+    flex-basis: 100% !important;
+    max-width: 100% !important;
+  }
+  .hero-inner > div p {
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+  .hero-btns {
+    justify-content: center !important;
+  }
+  .hero-btns button {
+    flex: 1 1 auto !important;
+    min-width: 140px !important;
+  }
+  .hero-title {
+    font-size: clamp(1.8rem, 6vw, 2.5rem) !important;
+    line-height: 1.15 !important;
+  }
+  .hero-sub {
+    font-size: 0.95rem !important;
+    line-height: 1.6 !important;
+  }
+
+  /* Orb shrinks */
+  .orb {
+    width: 180px !important;
+    height: 180px !important;
+    margin: 0 auto !important;
+    flex: 0 0 180px !important;
+  }
+
+  /* Demo notice stacks */
+  .demo-notice {
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+    padding: 1rem !important;
+    gap: 0.75rem !important;
+  }
+
+  /* Section titles smaller */
+  .section-title h2 {
+    font-size: clamp(1.6rem, 5vw, 2.2rem) !important;
+  }
+
+  /* Feature cards less padding */
+  .feature-card {
+    padding: 1.5rem 1.25rem !important;
+  }
+
+  /* Step cards less padding */
+  .step-card {
+    padding: 1.5rem 1rem !important;
+  }
+
+  /* Tech pills tighter */
+  .tech-pills {
+    gap: 0.4rem !important;
+  }
+  .tech-pills span {
+    padding: 0.35rem 0.7rem !important;
+    font-size: 0.7rem !important;
+  }
+
+  /* Scroll indicator smaller or hidden */
+  .scroll-indicator-wrap {
+    bottom: 1rem !important;
+  }
+
+  /* CTA footer */
+  .cta-footer h2 {
+    font-size: clamp(1.6rem, 5vw, 2.2rem) !important;
+  }
+  .cta-footer p {
+    font-size: 0.9rem !important;
+  }
+
+  /* Mobile dropdown menu full-screen */
+  .mobile-dropdown {
+    width: 100% !important;
+    padding: 5rem 1.5rem 3rem !important;
+  }
+  .mobile-dropdown a {
+    font-size: 1.15rem !important;
+    padding: 0.9rem 0 !important;
+  }
+}
+
+/* Very small phones */
+@media (max-width: 480px) {
+  .hero-title {
+    font-size: 1.8rem !important;
+  }
+  .hero-sub {
+    font-size: 0.88rem !important;
+  }
+  .hero-btns button {
+    min-width: 120px !important;
+    font-size: 0.82rem !important;
+    padding: 0.65rem 1rem !important;
+  }
+  .orb {
+    width: 140px !important;
+    height: 140px !important;
+    flex: 0 0 140px !important;
+  }
+  .scroll-indicator-wrap {
+    display: none !important;
+  }
+  .feature-card {
+    padding: 1.25rem 1rem !important;
+  }
+  .tech-pills span {
+    font-size: 0.65rem !important;
+    padding: 0.3rem 0.55rem !important;
+  }
+}
+
+/* ======================== */
+/*  CHAT RESPONSIVE          */
+/* ======================== */
+
+@media (max-width: 768px) {
   .sidebar {
     position: fixed !important;
     top: 0;
@@ -93,7 +246,6 @@ h1, h2, h3, .playfair {
     z-index: 100;
     box-shadow: 4px 0 20px rgba(0,0,0,0.15);
   }
-  /* Send button: hide text, show icon */
   .send-btn-text { display: none !important; }
   .send-btn-icon { display: inline !important; }
 }

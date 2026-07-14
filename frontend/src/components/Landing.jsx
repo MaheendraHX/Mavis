@@ -180,7 +180,6 @@ export default function Landing({ onEnter }) {
         <button
           onClick={() => setMenuOpen(!menuOpen)}
           style={{
-            display: 'none',
             background: 'none',
             border: 'none',
             color: palette.text,
@@ -192,7 +191,7 @@ export default function Landing({ onEnter }) {
           className="mobile-menu-btn"
           aria-label="Toggle navigation"
         >
-          {menuOpen ? 'Close' : 'Menu'}
+          {menuOpen ? '✕' : '☰'}
         </button>
       </nav>
 
@@ -583,31 +582,7 @@ export default function Landing({ onEnter }) {
         © 2026 Mavis - Multimodal Adaptive Virtual Intelligence System
       </footer>
 
-      <style>{`
-        @media (max-width: 768px) {
-          .desktop-nav { display: none !important; }
-          .mobile-menu-btn { display: block !important; }
-          section { padding-left: 1.25rem !important; padding-right: 1.25rem !important; padding-top: 3.5rem !important; padding-bottom: 3.5rem !important; }
-          .hero-inner { flex-direction: column !important; text-align: center !important; gap: 2rem !important; }
-          .hero-inner > div { flex-basis: 100% !important; max-width: 100% !important; }
-          .hero-inner > div p { margin-left: auto !important; margin-right: auto !important; }
-          .hero-btns { justify-content: center !important; }
-          .hero-btns button { flex: 1 1 auto !important; min-width: 140px !important; }
-          .orb { width: 180px !important; height: 180px !important; margin: 0 auto !important; flex: 0 0 180px !important; }
-          .demo-notice { flex-direction: column !important; align-items: center !important; text-align: center !important; padding: 1rem !important; }
-          .scroll-indicator-wrap { bottom: 1rem !important; }
-          .tech-pills { gap: 0.5rem !important; }
-          .tech-pills span { padding: 0.4rem 0.8rem !important; font-size: 0.72rem !important; }
-          .feature-card { padding: 1.5rem 1.25rem !important; }
-          .step-card { padding: 1.5rem 1rem !important; }
-        }
-        @media (max-width: 480px) {
-          .hero-title { font-size: 2.1rem !important; }
-          .hero-sub { font-size: 0.92rem !important; }
-          .orb { width: 140px !important; height: 140px !important; flex: 0 0 140px !important; }
-          .scroll-indicator-wrap { display: none !important; }
-        }
-      `}</style>
+      {/* Responsive styles now in index.css */}
     </div>
   )
 }
