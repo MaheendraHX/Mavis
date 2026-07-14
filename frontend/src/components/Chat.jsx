@@ -468,6 +468,22 @@ export default function Chat({ onNavigate }) {
           body: formData,
           signal: controller.signal,
         })
+      } else if (pendingFile) {
+        const formData = new FormData()
+        formData.append('message', text)
+        formData.append('user_type', 'guest')
+        formData.append('session_id', convId)
+        formData.append('incognito', 'false')
+        formData.append('file_type', pendingFile.type)
+        formData.append('size_mb', pendingFile.size_mb)
+        formData.append('filename', pendingFile.filename)
+
+        res = await fetch(`${API_BASE}/chat-with-file`, {
+          method: 'POST',
+          headers: { 'X-Guest-ID': guestId },
+          body: formData,
+          signal: controller.signal,
+        })
       } else {
         res = await fetch(`${API_BASE}/chat`, {
           method: 'POST',

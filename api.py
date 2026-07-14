@@ -380,6 +380,81 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
     return {"response": assistant_message, "title": title, "conv_id": conv_id, "sources": sources}
 
 
+@app.post("/chat-with-file")
+async def chat_with_file(
+    message: str = Form(...),
+    user_type: str = Form(...),
+    session_id: str = Form("default"),
+    incognito: bool = Form(False),
+    file_type: str = Form(...),
+    size_mb: float = Form(...),
+    filename: str = Form(...),
+    x_guest_id: str = Header(default="anonymous"),
+):
+    conv_id = session_id
+    guest_id = x_guest_id or "anonymous"
+
+    if check_guest_limit(guest_id):
+        return {
+            "response": "You've hit the demo message limit. Thanks for trying MAVIS!",
+            "conv_id": conv_id,
+            "limit_reached": True,
+        }
+
+    if not incognito:
+        memory.create_conversation(conv_id, "New conversation", "guest", guest_id)
+
+    # Use owner prompt for Maheendra, guest prompt for demo visitors
+    if user_type == "owner":
+        system_prompt = MAVIS_SYSTEM_PROMPT
+        if PC_CONTROL_ENABLED:
+            system_prompt += "\n\nNote: PC control is enabled. You can execute commands on the owner's machine when asked."
+    else:
+        system_prompt = GUEST_SYSTEM_PROMPT
+
+    # Read and process the file
+    try:
+        content = await file.file.read()
+        file_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4().hex}.{filename.split('.')[-1] if '.' in filename else 'tmp'}")
+        with open(file_path, "wb") as f:
+            f.write(content)
+
+        result = process_file(file_path, filename)
+        file_content = result.get('content', '')
+
+        if not incognito:
+            memory.add_message(conv_id, "user", f"{message} [attached a {file_type} file: {filename}]")
+
+        history = [{"role": "system", "content": system_prompt}]
+        if file_content:
+            history.append({"role": "user", "content": f"{message}\n\nFile content:\n{file_content}"})
+        else:
+            history.append({"role": "user", "content": f"{message} [attached a {file_type} file: {filename}]"})
+
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=history,
+            temperature=0.7,
+            max_tokens=1024,
+        )
+        assistant_message = response.choices[0].message.content
+
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+    except Exception as e:
+        assistant_message = f"I had trouble reading that file. Try again? ({str(e)})"
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+    if not incognito:
+        memory.add_message(conv_id, "assistant", assistant_message)
+
+    increment_guest_count(guest_id)
+
+    return {"response": assistant_message, "conv_id": conv_id}
+
+
 @app.post("/chat-with-image")
 async def chat_with_image(
     message: str = Form(...),
