@@ -257,7 +257,7 @@ export default function Landing({ onEnter }) {
           pointerEvents: 'none',
         }} />
 
-        <div style={{
+        <div className="hero-inner" style={{
           maxWidth: 1180,
           width: '100%',
           display: 'flex',
@@ -285,7 +285,7 @@ export default function Landing({ onEnter }) {
               Now in Public Demo
             </div>
 
-            <h1 className="hero-reveal" style={{
+            <h1 className="hero-reveal hero-title" style={{
               fontSize: 'clamp(2.8rem, 6vw, 4.7rem)',
               fontWeight: 700,
               lineHeight: 1.08,
@@ -297,7 +297,7 @@ export default function Landing({ onEnter }) {
               <span style={{ color: palette.secondary }}>amplified.</span>
             </h1>
 
-            <p className="hero-reveal" style={{
+            <p className="hero-reveal hero-sub" style={{
               fontSize: '1.08rem',
               lineHeight: 1.7,
               color: palette.textMuted,
@@ -308,7 +308,7 @@ export default function Landing({ onEnter }) {
               Mavis is a multimodal AI assistant that searches the web, reads files, writes code, and keeps conversations organized in one warm workspace.
             </p>
 
-            <div className="hero-reveal" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+            <div className="hero-reveal hero-btns" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
               <button
                 onClick={goToChat}
                 style={buttonPrimary}
@@ -336,6 +336,7 @@ export default function Landing({ onEnter }) {
 
           <div
             ref={orbRef}
+            className="orb"
             style={{
               flex: '0 0 auto',
               width: 'clamp(250px, 34vw, 410px)',
@@ -402,7 +403,7 @@ export default function Landing({ onEnter }) {
         </div>
       </section>
       <section id="demo-notice" style={{ padding: '0 2rem' }}>
-        <div style={{
+        <div className="demo-notice" style={{
           maxWidth: 900,
           margin: '0 auto',
           padding: '1.5rem 2rem',
@@ -525,7 +526,7 @@ export default function Landing({ onEnter }) {
           </h2>
         </div>
 
-        <div className="reveal" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0.75rem' }}>
+        <div className="reveal tech-pills" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '0.75rem' }}>
           {techStack.map(tech => (
             <span
               key={tech}
@@ -587,6 +588,20 @@ export default function Landing({ onEnter }) {
           .desktop-nav { display: none !important; }
           .mobile-menu-btn { display: block !important; }
           section { padding-left: 1.25rem !important; padding-right: 1.25rem !important; }
+          .hero-inner { flex-direction: column !important; text-align: center !important; gap: 2rem !important; }
+          .hero-inner > div:first-child { max-width: 100% !important; }
+          .hero-inner > div:first-child p { margin-left: auto !important; margin-right: auto !important; }
+          .hero-btns { justify-content: center !important; }
+          .orb { width: 200px !important; height: 200px !important; margin: 0 auto !important; }
+          .demo-notice { flex-direction: column !important; align-items: center !important; text-align: center !important; }
+          .scroll-indicator-wrap { bottom: 1.2rem !important; }
+          .tech-pills { gap: 0.5rem !important; }
+          .tech-pills span { padding: 0.4rem 0.8rem !important; font-size: 0.72rem !important; }
+        }
+        @media (max-width: 480px) {
+          .hero-title { font-size: 2.2rem !important; }
+          .hero-sub { font-size: 0.95rem !important; }
+          .section-title { font-size: 1.7rem !important; }
         }
       `}</style>
     </div>

@@ -76,3 +76,29 @@ h1, h2, h3, .playfair {
   from { opacity: 0; transform: translateX(-50%) translateY(20px); }
   to { opacity: 0.5; transform: translateX(-50%) translateY(0); }
 }
+
+/* ======================== */
+/*  RESPONSIVE              */
+/* ======================== */
+
+@media (max-width: 768px) {
+  /* Chat sidebar becomes full-width overlay */
+  .sidebar {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    height: 100vh !important;
+    width: 100% !important;
+    min-width: 100% !important;
+    z-index: 100;
+    box-shadow: 4px 0 20px rgba(0,0,0,0.15);
+  }
+  /* Send button: hide text, show icon */
+  .send-btn-text { display: none !important; }
+  .send-btn-icon { display: inline !important; }
+}
+
+@media (min-width: 769px) {
+  .send-btn-text { display: inline !important; }
+  .send-btn-icon { display: none !important; }
+}

@@ -109,7 +109,7 @@ export default function Chat({ onNavigate }) {
   const [uploadError, setUploadError] = useState('')
   const [pendingImage, setPendingImage] = useState(null)
   const [webSearchOn, setWebSearchOn] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -310,7 +310,7 @@ export default function Chat({ onNavigate }) {
       fontFamily: 'Inter, system-ui, sans-serif',
       overflow: 'hidden',
     }}>
-      <div style={{
+      <div className="sidebar" style={{
         width: sidebarOpen ? 280 : 0,
         minWidth: sidebarOpen ? 280 : 0,
         transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
@@ -341,10 +341,15 @@ export default function Chat({ onNavigate }) {
             border: 'none',
             color: palette.textMuted,
             cursor: 'pointer',
-            fontSize: '1.1rem',
-            padding: '0.25rem',
+            fontSize: '1.3rem',
+            padding: '0.4rem',
+            minWidth: '44px',
+            minHeight: '44px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}>
-            x
+            ✕
           </button>
         </div>
 
@@ -438,6 +443,22 @@ export default function Chat({ onNavigate }) {
         </div>
       </div>
 
+      {/* Mobile backdrop */}
+      {sidebarOpen && window.innerWidth <= 768 && (
+        <div
+          onClick={() => setSidebarOpen(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0,0,0,0.3)',
+            zIndex: 99,
+          }}
+        />
+      )}
+
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, position: 'relative' }}>
         <div style={{
           padding: '0.85rem 1.25rem',
@@ -450,7 +471,7 @@ export default function Chat({ onNavigate }) {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             {!sidebarOpen && (
-              <button onClick={() => setSidebarOpen(true)} style={{
+              <button onClick={() => setSidebarOpen(true)} className="sidebar-toggle" style={{
                 background: 'none',
                 border: 'none',
                 color: palette.textMuted,
@@ -458,7 +479,7 @@ export default function Chat({ onNavigate }) {
                 fontSize: '1.2rem',
                 padding: '0.25rem',
               }}>
-                Menu
+                <span className="menu-icon">☰</span>
               </button>
             )}
             <span style={{ fontSize: '0.85rem', fontWeight: 600, color: palette.text, letterSpacing: '0.03em' }}>
@@ -667,8 +688,12 @@ export default function Chat({ onNavigate }) {
                 fontFamily: 'Inter, system-ui, sans-serif',
                 whiteSpace: 'nowrap',
                 transition: 'all 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem',
               }}>
-                Send
+                <span className="send-btn-text">Send</span>
+                <span className="send-btn-icon" style={{ display: 'none', fontSize: '1rem' }}>↑</span>
               </button>
             )}
           </div>
