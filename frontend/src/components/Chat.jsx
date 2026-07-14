@@ -398,12 +398,13 @@ export default function Chat({ onNavigate }) {
       if (data.type === 'image') {
         setPendingImage({ base64: data.base64, mime: data.mime, filename: data.filename })
       } else if (data.type === 'text') {
+        const ext = (data.filename || '').split('.').pop().toLowerCase()
         setPendingFile({
           filename: data.filename,
-          type: data.file_type,
-          size_mb: data.size_mb,
+          type: ext || 'txt',
+          size_mb: data.content ? +(data.content.length / (1024 * 1024)).toFixed(2) : 0.01,
           content: data.content,
-          mime: data.mime
+          mime: data.mime || 'text/plain'
         })
       } else {
         setUploadError(data.content || 'Could not read file.')
