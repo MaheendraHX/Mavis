@@ -1,10 +1,6 @@
 import os
-import json
-import shutil
 import uuid
-import time
 import traceback
-from urllib.parse import urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -16,7 +12,7 @@ from groq import Groq
 from dotenv import load_dotenv
 
 import memory
-from url_reader import extract_urls, fetch_page_text, is_safe_url
+from url_reader import is_safe_url
 from file_reader import process_file, get_file_type
 from web_search import web_search
 
@@ -102,10 +98,6 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 if not GROQ_API_KEY:
     print("ERROR: GROQ_API_KEY not set! Chat will fail with 500.")
 client = Groq(api_key=GROQ_API_KEY)
-
-
-def get_guest_id(x_guest_id: str = Header(default="anonymous")):
-    return x_guest_id or "anonymous"
 
 
 def check_guest_limit(guest_id):
