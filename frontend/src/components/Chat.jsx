@@ -32,8 +32,18 @@ function formatTime(iso) {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-function ARIAMessage({ msg }) {
+function ARIAMessage({ msg, onEdit }) {
   const isUser = msg.role === 'user'
+  const [editing, setEditing] = useState(false)
+  const [editText, setEditText] = useState(msg.content)
+
+  const handleSave = () => {
+    if (editText.trim() && editText.trim() !== msg.content) {
+      onEdit(msg.id, editText.trim())
+    }
+    setEditing(false)
+  }
+
   return (
     <div style={{
       display: 'flex',
@@ -41,22 +51,84 @@ function ARIAMessage({ msg }) {
       alignItems: isUser ? 'flex-end' : 'flex-start',
       marginBottom: '1.25rem',
       animation: 'msgIn 0.35s ease-out',
+      position: 'relative',
     }}>
-      <div style={{
-        maxWidth: '72%',
-        padding: '0.85rem 1.2rem',
-        borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-        background: isUser ? palette.secondary : palette.surface,
-        border: isUser ? 'none' : `1px solid ${palette.border}`,
-        color: isUser ? '#fff' : palette.text,
-        boxShadow: `0 10px 28px ${palette.shadow}`,
-        fontSize: '0.92rem',
-        lineHeight: 1.65,
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-word',
-        fontFamily: 'Inter, system-ui, sans-serif',
-      }}>
-        {msg.content}
+      <div className="msg-bubble-wrap" style={{ position: 'relative', maxWidth: '72%' }}>
+        {editing ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSave() }
+                if (e.key === 'Escape') setEditing(false)
+              }}
+              style={{
+                width: '100%',
+                minHeight: '60px',
+                padding: '0.75rem',
+                borderRadius: '12px',
+                border: `2px solid ${palette.secondary}`,
+                background: palette.surface,
+                color: palette.text,
+                fontSize: '0.92rem',
+                lineHeight: 1.65,
+                fontFamily: 'Inter, system-ui, sans-serif',
+                resize: 'vertical',
+                outline: 'none',
+              }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <button onClick={() => setEditing(false)} style={{
+                padding: '0.3rem 0.75rem', borderRadius: '8px', border: `1px solid ${palette.border}`,
+                background: 'transparent', color: palette.textMuted, fontSize: '0.78rem',
+                cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif',
+              }}>Cancel</button>
+              <button onClick={handleSave} style={{
+                padding: '0.3rem 0.75rem', borderRadius: '8px', border: 'none',
+                background: palette.secondary, color: '#fff', fontSize: '0.78rem',
+                cursor: 'pointer', fontFamily: 'Inter, system-ui, sans-serif',
+              }}>Save & Resend</button>
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            padding: '0.85rem 1.2rem',
+            borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+            background: isUser ? palette.secondary : palette.surface,
+            border: isUser ? 'none' : `1px solid ${palette.border}`,
+            color: isUser ? '#fff' : palette.text,
+            boxShadow: `0 10px 28px ${palette.shadow}`,
+            fontSize: '0.92rem',
+            lineHeight: 1.65,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            fontFamily: 'Inter, system-ui, sans-serif',
+          }}>
+            {msg.content}
+          </div>
+        )}
+
+        {/* Edit/Delete buttons for user messages - show on hover */}
+        {isUser && !editing && (
+          <div className="msg-actions" style={{
+            position: 'absolute',
+            top: '0.5rem',
+            right: '-2.5rem',
+            display: 'flex',
+            gap: '0.25rem',
+            opacity: 0,
+            transition: 'opacity 0.2s',
+          }}>
+            <button onClick={() => { setEditText(msg.content); setEditing(true) }}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: '0.85rem', padding: '0.2rem', color: palette.textMuted,
+                borderRadius: '4px',
+              }} title="Edit message">✏️</button>
+          </div>
+        )}
       </div>
       {msg.sources && msg.sources.length > 0 && (
         <div style={{
@@ -149,7 +221,58 @@ export default function Chat({ onNavigate }) {
     e.stopPropagation()
     setConversations(prev => prev.filter(c => c.id !== convId))
     if (activeConvId === convId) startNewChat()
+    // Also delete from backend
+    fetch(`${API_BASE}/conversations/${convId}`, {
+      method: 'DELETE',
+      headers: { 'X-Guest-Id': getOrCreateGuestId() },
+    }).catch(() => {})
   }, [activeConvId, startNewChat])
+
+  const editMessage = useCallback((msgId, newText) => {
+    // Find the message and re-send from that point
+    const msgIndex = messages.findIndex(m => m.id === msgId)
+    if (msgIndex < 0) return
+
+    // Replace the edited message content
+    setMessages(prev => prev.map((m, i) => i === msgIndex ? { ...m, content: newText } : m).slice(0, msgIndex + 1))
+
+    // Re-send: build messages up to and including the edited one
+    const truncated = messages.slice(0, msgIndex).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }))
+    truncated.push({ role: 'user', content: newText })
+
+    const convId = activeConvId || `conv_${Date.now()}_${Math.random().toString(36).slice(2)}`
+
+    fetch(`${API_BASE}/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Guest-Id': getOrCreateGuestId(),
+      },
+      body: JSON.stringify({
+        message: newText,
+        user_type: isOwner ? 'owner' : 'guest',
+        session_id: convId,
+        incognito: guestMode,
+        history: truncated,
+      }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.limit_reached) { setGuestMode(true); return }
+        const assistantMsg = {
+          id: `msg_${Date.now()}_assistant`,
+          role: 'assistant',
+          content: data.response,
+          timestamp: new Date().toISOString(),
+          sources: data.sources || [],
+        }
+        setMessages(prev => [...prev, assistantMsg])
+        if (data.title) {
+          setConversations(prev => prev.map(c => c.id === convId ? { ...c, title: data.title } : c))
+        }
+      })
+      .catch(() => {})
+  }, [messages, activeConvId, isOwner, guestMode])
 
   const handleFileUpload = useCallback(async (file) => {
     if (!file || uploading) return
@@ -580,7 +703,7 @@ export default function Chat({ onNavigate }) {
               </p>
             </div>
           ) : (
-            messages.map((msg, i) => <ARIAMessage key={i} msg={msg} />)
+            messages.map((msg, i) => <ARIAMessage key={i} msg={msg} onEdit={editMessage} />)
           )}
           <div ref={messagesEndRef} />
         </div>

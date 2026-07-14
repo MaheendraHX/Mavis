@@ -281,7 +281,7 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
 
     try:
         if request.web_search:
-            search_results = web_search(request.message, max_results=5)
+            search_results = web_search(request.message, max_results=8)
             sources = [{"title": r["title"], "url": r["url"]} for r in search_results]
             if search_results:
                 results_text = "\n\n".join(

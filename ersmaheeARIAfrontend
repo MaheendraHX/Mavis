@@ -1,0 +1,26 @@
+[1mdiff --git a/frontend/src/components/Chat.jsx b/frontend/src/components/Chat.jsx[m
+[1mindex b469cee..e942a9b 100644[m
+[1m--- a/frontend/src/components/Chat.jsx[m
+[1m+++ b/frontend/src/components/Chat.jsx[m
+[36m@@ -310,7 +310,7 @@[m [mexport default function Chat({ onNavigate }) {[m
+       fontFamily: 'Inter, system-ui, sans-serif',[m
+       overflow: 'hidden',[m
+     }}>[m
+[31m-      <div className="sidebar" style={{[m
+[32m+[m[32m      <div className={sidebarOpen ? 'sidebar sidebar-open' : 'sidebar'} style={{[m
+         width: sidebarOpen ? 280 : 0,[m
+         minWidth: sidebarOpen ? 280 : 0,[m
+         transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',[m
+[1mdiff --git a/frontend/src/index.css b/frontend/src/index.css[m
+[1mindex a712330..bdba6d1 100644[m
+[1m--- a/frontend/src/index.css[m
+[1m+++ b/frontend/src/index.css[m
+[36m@@ -236,7 +236,7 @@[m [mh1, h2, h3, .playfair {[m
+ /* ======================== */[m
+ [m
+ @media (max-width: 768px) {[m
+[31m-  .sidebar {[m
+[32m+[m[32m  .sidebar-open {[m
+     position: fixed !important;[m
+     top: 0;[m
+     left: 0;[m
