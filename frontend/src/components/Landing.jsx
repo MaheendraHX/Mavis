@@ -268,7 +268,7 @@ export default function Landing({ onEnter }) {
           zIndex: 2,
           flexWrap: 'wrap',
         }}>
-          <div style={{ flex: '1 1 500px', maxWidth: 620 }}>
+          <div style={{ flex: '1 1 45%', minWidth: 0 }}>
             <div className="hero-reveal" style={{
               display: 'inline-block',
               padding: '0.35rem 1rem',
@@ -428,8 +428,8 @@ export default function Landing({ onEnter }) {
         </div>
       </section>
 
-      <section id="features" style={{ padding: '6rem 2rem', maxWidth: 1200, margin: '0 auto' }}>
-        <div className="reveal" style={{ textAlign: 'center', marginBottom: '4rem' }}>
+      <section id="features" style={{ padding: '6rem 2rem', maxWidth: 1200, margin: '0 auto' }} className="section-reduce-pad">
+        <div className="reveal section-title" style={{ textAlign: 'center', marginBottom: '4rem' }}>
           <span style={{ fontSize: '0.72rem', letterSpacing: '0.22em', textTransform: 'uppercase', color: palette.secondary, fontWeight: 700 }}>
             Capabilities
           </span>
@@ -445,7 +445,7 @@ export default function Landing({ onEnter }) {
           {features.map((f) => (
             <div
               key={f.title}
-              className="reveal"
+              className="reveal feature-card"
               style={{
                 padding: '2rem 1.75rem',
                 borderRadius: '14px',
@@ -491,7 +491,7 @@ export default function Landing({ onEnter }) {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1.5rem' }}>
             {steps.map((s) => (
-              <div key={s.num} className="reveal" style={{ textAlign: 'center', padding: '2rem 1.5rem' }}>
+              <div key={s.num} className="reveal step-card" style={{ textAlign: 'center', padding: '2rem 1.5rem' }}>
                 <div style={{
                   width: 56,
                   height: 56,
@@ -587,21 +587,25 @@ export default function Landing({ onEnter }) {
         @media (max-width: 768px) {
           .desktop-nav { display: none !important; }
           .mobile-menu-btn { display: block !important; }
-          section { padding-left: 1.25rem !important; padding-right: 1.25rem !important; }
+          section { padding-left: 1.25rem !important; padding-right: 1.25rem !important; padding-top: 3.5rem !important; padding-bottom: 3.5rem !important; }
           .hero-inner { flex-direction: column !important; text-align: center !important; gap: 2rem !important; }
-          .hero-inner > div:first-child { max-width: 100% !important; }
-          .hero-inner > div:first-child p { margin-left: auto !important; margin-right: auto !important; }
+          .hero-inner > div { flex-basis: 100% !important; max-width: 100% !important; }
+          .hero-inner > div p { margin-left: auto !important; margin-right: auto !important; }
           .hero-btns { justify-content: center !important; }
-          .orb { width: 200px !important; height: 200px !important; margin: 0 auto !important; }
-          .demo-notice { flex-direction: column !important; align-items: center !important; text-align: center !important; }
-          .scroll-indicator-wrap { bottom: 1.2rem !important; }
+          .hero-btns button { flex: 1 1 auto !important; min-width: 140px !important; }
+          .orb { width: 180px !important; height: 180px !important; margin: 0 auto !important; flex: 0 0 180px !important; }
+          .demo-notice { flex-direction: column !important; align-items: center !important; text-align: center !important; padding: 1rem !important; }
+          .scroll-indicator-wrap { bottom: 1rem !important; }
           .tech-pills { gap: 0.5rem !important; }
           .tech-pills span { padding: 0.4rem 0.8rem !important; font-size: 0.72rem !important; }
+          .feature-card { padding: 1.5rem 1.25rem !important; }
+          .step-card { padding: 1.5rem 1rem !important; }
         }
         @media (max-width: 480px) {
-          .hero-title { font-size: 2.2rem !important; }
-          .hero-sub { font-size: 0.95rem !important; }
-          .section-title { font-size: 1.7rem !important; }
+          .hero-title { font-size: 2.1rem !important; }
+          .hero-sub { font-size: 0.92rem !important; }
+          .orb { width: 140px !important; height: 140px !important; flex: 0 0 140px !important; }
+          .scroll-indicator-wrap { display: none !important; }
         }
       `}</style>
     </div>
