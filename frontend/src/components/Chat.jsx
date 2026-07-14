@@ -477,6 +477,7 @@ export default function Chat({ onNavigate }) {
         formData.append('file_type', pendingFile.type)
         formData.append('size_mb', pendingFile.size_mb)
         formData.append('filename', pendingFile.filename)
+        formData.append('file_content', pendingFile.content || '')
 
         res = await fetch(`${API_BASE}/chat-with-file`, {
           method: 'POST',
@@ -530,7 +531,7 @@ export default function Chat({ onNavigate }) {
       setLoading(false)
       abortRef.current = null
     }
-  }, [input, loading, messages, activeConvId, guestId, pendingImage])
+  }, [input, loading, messages, activeConvId, guestId, pendingImage, pendingFile])
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {

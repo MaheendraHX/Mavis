@@ -389,6 +389,7 @@ async def chat_with_file(
     file_type: str = Form(...),
     size_mb: float = Form(...),
     filename: str = Form(...),
+    file_content: str = Form(...),
     x_guest_id: str = Header(default="anonymous"),
 ):
     conv_id = session_id
@@ -412,40 +413,27 @@ async def chat_with_file(
     else:
         system_prompt = GUEST_SYSTEM_PROMPT
 
-    # Read and process the file
+    # Use the pre-read file content
     try:
-        content = await file.file.read()
-        file_path = os.path.join(UPLOAD_DIR, f"{uuid.uuid4().hex}.{filename.split('.')[-1] if '.' in filename else 'tmp'}")
-        with open(file_path, "wb") as f:
-            f.write(content)
-
-        result = process_file(file_path, filename)
-        file_content = result.get('content', '')
-
-        if not incognito:
-            memory.add_message(conv_id, "user", f"{message} [attached a {file_type} file: {filename}]")
-
-        history = [{"role": "system", "content": system_prompt}]
         if file_content:
+            if not incognito:
+                memory.add_message(conv_id, "user", f"{message} [attached a {file_type} file: {filename}]")
+
+            history = [{"role": "system", "content": system_prompt}]
             history.append({"role": "user", "content": f"{message}\n\nFile content:\n{file_content}"})
+
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=history,
+                temperature=0.7,
+                max_tokens=1024,
+            )
+            assistant_message = response.choices[0].message.content
         else:
-            history.append({"role": "user", "content": f"{message} [attached a {file_type} file: {filename}]"})
-
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=history,
-            temperature=0.7,
-            max_tokens=1024,
-        )
-        assistant_message = response.choices[0].message.content
-
-        if os.path.exists(file_path):
-            os.remove(file_path)
+            assistant_message = f"I had trouble reading that file. Please try again."
 
     except Exception as e:
         assistant_message = f"I had trouble reading that file. Try again? ({str(e)})"
-        if os.path.exists(file_path):
-            os.remove(file_path)
 
     if not incognito:
         memory.add_message(conv_id, "assistant", assistant_message)
