@@ -185,6 +185,86 @@ function ARIAMessage({ msg, onEdit, onDelete }) {
   )
 }
 
+// File attachment card component
+function FileAttachmentCard({ file, onRemove }) {
+  const getFileIcon = (type) => {
+    switch (type) {
+      case 'pdf': return '📄'
+      case 'image': return '🖼️'
+      case 'docx': return '📝'
+      case 'text': return '📃'
+      default: return '📎'
+    }
+  }
+
+  const formatSize = (mb) => {
+    if (mb < 1) return `${(mb * 1024).toFixed(0)} KB`
+    return `${mb.toFixed(1)} MB`
+  }
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.75rem',
+      padding: '0.75rem 1rem',
+      borderRadius: '12px',
+      background: `linear-gradient(135deg, ${palette.surfaceWarm} 0%, ${palette.accent} 100%)`,
+      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+      border: `1px solid ${palette.border}`,
+      marginBottom: '0.5rem',
+    }}>
+      <div style={{
+        fontSize: '2rem',
+        background: 'rgba(255,255,255,0.9)',
+        borderRadius: '10px',
+        padding: '0.5rem',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+      }}>
+        {getFileIcon(file.type)}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: '0.85rem',
+          fontWeight: 600,
+          color: palette.text,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}>
+          {file.filename}
+        </div>
+        <div style={{
+          fontSize: '0.7rem',
+          color: palette.textMuted,
+          marginTop: '0.15rem',
+        }}>
+          {file.type.toUpperCase()} • {formatSize(file.size_mb)}
+        </div>
+      </div>
+      <button
+        onClick={onRemove}
+        style={{
+          background: 'rgba(255,255,255,0.9)',
+          border: 'none',
+          borderRadius: '8px',
+          width: '28px',
+          height: '28px',
+          cursor: 'pointer',
+          fontSize: '0.9rem',
+          color: '#c0706b',
+          transition: 'all 0.2s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = '#c0706b'; e.currentTarget.style.color = 'white' }}
+        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.9)'; e.currentTarget.style.color = '#c0706b' }}
+        title="Remove file"
+      >
+        ✕
+      </button>
+    </div>
+  )
+}
+
 export default function Chat({ onNavigate }) {
   const [conversations, setConversations] = useState(() => {
     try {
@@ -199,6 +279,7 @@ export default function Chat({ onNavigate }) {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [pendingImage, setPendingImage] = useState(null)
+  const [pendingFile, setPendingFile] = useState(null)
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
@@ -315,9 +396,14 @@ export default function Chat({ onNavigate }) {
 
       if (data.type === 'image') {
         setPendingImage({ base64: data.base64, mime: data.mime, filename: data.filename })
-        setInput(prev => `${prev.trim() ? `${prev}\n\n` : ''}[Image attached: ${data.filename}]`)
       } else if (data.type === 'text') {
-        setInput(prev => `${prev.trim() ? `${prev}\n\n` : ''}[File: ${data.filename}]\n\n${data.content}`)
+        setPendingFile({
+          filename: data.filename,
+          type: data.file_type,
+          size_mb: data.size_mb,
+          content: data.content,
+          mime: data.mime
+        })
       } else {
         setUploadError(data.content || 'Could not read file.')
       }
@@ -332,13 +418,15 @@ export default function Chat({ onNavigate }) {
 
   const sendMessage = useCallback(async () => {
     const text = input.trim()
-    if (!text || loading) return
+    if (!text && !pendingFile && !pendingImage) return
 
     const userMsg = { role: 'user', content: text, timestamp: new Date().toISOString() }
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
     setInput('')
     setUploadError('')
+    setPendingFile(null)
+    setPendingImage(null)
     setLoading(true)
 
     let convId = activeConvId
@@ -750,7 +838,10 @@ export default function Chat({ onNavigate }) {
               style={{ display: 'none' }}
               onChange={(e) => {
                 const file = e.target.files?.[0]
-                if (file) handleFileUpload(file)
+                if (file) {
+                  setPendingFile(null) // Clear previous file
+                  handleFileUpload(file)
+                }
                 e.target.value = ''
               }}
             />
@@ -817,6 +908,12 @@ export default function Chat({ onNavigate }) {
               </button>
             )}
           </div>
+          {pendingFile && (
+            <FileAttachmentCard
+              file={pendingFile}
+              onRemove={() => setPendingFile(null)}
+            />
+          )}
           {uploadError && (
             <div style={{ color: palette.danger, fontSize: '0.75rem', marginTop: '0.5rem' }}>
               {uploadError}
