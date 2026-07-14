@@ -37,6 +37,30 @@ PC_CONTROL_ENABLED = os.environ.get("PC_CONTROL_ENABLED", "false").lower() == "t
 
 app = FastAPI()
 
+
+def _generate_title(message: str, assistant_message: str) -> str:
+    """Generate a short conversation title from the first exchange."""
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Generate a short conversation title in 3-5 words max. Summarize the topic of the exchange. Reply with ONLY the title, no quotes, no punctuation at the end, no explanation."
+                },
+                {
+                    "role": "user",
+                    "content": f"User: {message}\nAssistant: {assistant_message}"
+                }
+            ],
+            max_tokens=20,
+            temperature=0.3,
+        )
+        title = response.choices[0].message.content.strip()
+    except Exception:
+        title = " ".join(message.split()[:5])
+    return " ".join(title.replace('"', '').replace("'", '').split())[:40].strip()
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     traceback.print_exc()
@@ -320,27 +344,7 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
             sources = []
 
         if first_turn:
-            try:
-                title_response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "Generate a short conversation title in 3-5 words max. Summarize the topic of the exchange. Reply with ONLY the title, no quotes, no punctuation at the end, no explanation."
-                        },
-                        {
-                            "role": "user",
-                            "content": f"User: {request.message}\nAssistant: {assistant_message}"
-                        }
-                    ],
-                    max_tokens=20,
-                    temperature=0.3,
-                )
-                title = title_response.choices[0].message.content.strip()
-            except Exception:
-                title = " ".join(request.message.split()[:5])
-
-            title = " ".join(title.replace('"', '').replace("'", '').split())[:40].strip()
+            title = _generate_title(request.message, assistant_message)
             if not request.incognito:
                 memory.update_conversation_title(conv_id, title)
 
@@ -358,27 +362,7 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
         sources = []
 
         if first_turn and title is None:
-            try:
-                title_response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "Generate a short conversation title in 3-5 words max. Summarize the topic of the exchange. Reply with ONLY the title, no quotes, no punctuation at the end, no explanation."
-                        },
-                        {
-                            "role": "user",
-                            "content": f"User: {request.message}\nAssistant: {assistant_message}"
-                        }
-                    ],
-                    max_tokens=20,
-                    temperature=0.3,
-                )
-                title = title_response.choices[0].message.content.strip()
-            except Exception:
-                title = " ".join(request.message.split()[:5])
-
-            title = " ".join(title.replace('"', '').replace("'", '').split())[:40].strip()
+            title = _generate_title(request.message, assistant_message)
             if not request.incognito:
                 memory.update_conversation_title(conv_id, title)
 
@@ -396,8 +380,6 @@ async def chat_with_file(
     user_type: str = Form(...),
     session_id: str = Form("default"),
     incognito: bool = Form(False),
-    file_type: str = Form(...),
-    size_mb: float = Form(...),
     filename: str = Form(...),
     file_content: str = Form(""),
     x_guest_id: str = Header(default="anonymous"),
@@ -423,11 +405,19 @@ async def chat_with_file(
     else:
         system_prompt = GUEST_SYSTEM_PROMPT
 
+    # Derive file type from filename extension
+    file_ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "file"
+
     # Use the pre-read file content
+    title = None
+    first_turn = False
+    if not incognito:
+        first_turn = not memory.has_messages(conv_id)
+
     try:
         if file_content:
             if not incognito:
-                memory.add_message(conv_id, "user", f"{message} [attached a {file_type} file: {filename}]")
+                memory.add_message(conv_id, "user", f"{message} [attached a {file_ext} file: {filename}]")
 
             history = memory.get_conversation_messages(conv_id) if not incognito else []
             # Replace the last user message (simplified DB version) with full content
@@ -446,6 +436,11 @@ async def chat_with_file(
         else:
             assistant_message = f"I had trouble reading that file. Please try again."
 
+        if first_turn:
+            title = _generate_title(message, assistant_message)
+            if not incognito:
+                memory.update_conversation_title(conv_id, title)
+
     except Exception as e:
         assistant_message = f"I had trouble reading that file. Try again? ({str(e)})"
 
@@ -454,7 +449,7 @@ async def chat_with_file(
 
     increment_guest_count(guest_id)
 
-    return {"response": assistant_message, "conv_id": conv_id}
+    return {"response": assistant_message, "title": title, "conv_id": conv_id}
 
 
 @app.post("/chat-with-image")
@@ -491,6 +486,11 @@ async def chat_with_image(
     if not incognito:
         memory.add_message(conv_id, "user", f"{message} [shared an image]")
 
+    title = None
+    first_turn = False
+    if not incognito:
+        first_turn = not memory.has_messages(conv_id)
+
     try:
         history = memory.get_conversation_messages(conv_id) if not incognito else []
         # Replace the last user message (simplified DB version) with full multimodal content
@@ -515,6 +515,11 @@ async def chat_with_image(
             max_tokens=1024,
         )
         assistant_message = response.choices[0].message.content
+
+        if first_turn:
+            title = _generate_title(message, assistant_message)
+            if not incognito:
+                memory.update_conversation_title(conv_id, title)
     except Exception as e:
         assistant_message = f"I had trouble seeing that image. Try again? ({str(e)})"
 
@@ -523,7 +528,7 @@ async def chat_with_image(
 
     increment_guest_count(guest_id)
 
-    return {"response": assistant_message, "conv_id": conv_id}
+    return {"response": assistant_message, "title": title, "conv_id": conv_id}
 
 
 @app.get("/conversations")

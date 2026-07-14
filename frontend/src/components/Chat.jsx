@@ -475,8 +475,6 @@ export default function Chat({ onNavigate }) {
         formData.append('user_type', 'guest')
         formData.append('session_id', convId)
         formData.append('incognito', 'false')
-        formData.append('file_type', pendingFile.type)
-        formData.append('size_mb', pendingFile.size_mb)
         formData.append('filename', pendingFile.filename)
         formData.append('file_content', pendingFile.content || '')
 
