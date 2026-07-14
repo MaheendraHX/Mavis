@@ -429,12 +429,16 @@ async def chat_with_file(
             if not incognito:
                 memory.add_message(conv_id, "user", f"{message} [attached a {file_type} file: {filename}]")
 
-            history = [{"role": "system", "content": system_prompt}]
-            history.append({"role": "user", "content": f"{message}\n\nFile content:\n{file_content}"})
+            history = memory.get_conversation_messages(conv_id) if not incognito else []
+            # Replace the last user message (simplified DB version) with full content
+            if history and history[-1]["role"] == "user":
+                history[-1] = {"role": "user", "content": f"{message}\n\nFile content:\n{file_content}"}
+            else:
+                history.append({"role": "user", "content": f"{message}\n\nFile content:\n{file_content}"})
 
             response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=history,
+                messages=[{"role": "system", "content": system_prompt}] + history,
                 temperature=0.7,
                 max_tokens=1024,
             )
@@ -488,21 +492,26 @@ async def chat_with_image(
         memory.add_message(conv_id, "user", f"{message} [shared an image]")
 
     try:
+        history = memory.get_conversation_messages(conv_id) if not incognito else []
+        # Replace the last user message (simplified DB version) with full multimodal content
+        image_content = {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": message},
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{mime};base64,{base64_image}"}
+                }
+            ]
+        }
+        if history and history[-1]["role"] == "user":
+            history[-1] = image_content
+        else:
+            history.append(image_content)
+
         response = client.chat.completions.create(
             model="meta-llama/llama-4-scout-17b-16e-instruct",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": message},
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": f"data:{mime};base64,{base64_image}"}
-                        }
-                    ]
-                }
-            ],
+            messages=[{"role": "system", "content": system_prompt}] + history,
             max_tokens=1024,
         )
         assistant_message = response.choices[0].message.content
