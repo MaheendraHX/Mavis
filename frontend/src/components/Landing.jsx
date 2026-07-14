@@ -211,6 +211,29 @@ export default function Landing({ onEnter }) {
           justifyContent: 'center',
           gap: '2rem',
         }}>
+          <button
+            onClick={() => setMenuOpen(false)}
+            style={{
+              position: 'absolute',
+              top: '1.5rem',
+              right: '1.5rem',
+              background: 'none',
+              border: 'none',
+              color: palette.text,
+              fontSize: '1.8rem',
+              cursor: 'pointer',
+              padding: '0.5rem',
+              lineHeight: 1,
+              minWidth: '44px',
+              minHeight: '44px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            aria-label="Close menu"
+          >
+            ✕
+          </button>
           {['Features', 'How It Works', 'Tech'].map(link => (
             <a
               key={link}

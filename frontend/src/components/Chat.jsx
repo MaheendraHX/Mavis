@@ -310,7 +310,7 @@ export default function Chat({ onNavigate }) {
       fontFamily: 'Inter, system-ui, sans-serif',
       overflow: 'hidden',
     }}>
-      <div className="sidebar" style={{
+      <div className={sidebarOpen ? 'sidebar sidebar-open' : 'sidebar'} style={{
         width: sidebarOpen ? 280 : 0,
         minWidth: sidebarOpen ? 280 : 0,
         transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
