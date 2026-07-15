@@ -47,7 +47,6 @@ export default function SignIn({ onEnter }) {
       return
     }
     localStorage.setItem('mavis_demo_id', demoId)
-    localStorage.setItem('mavis_demo_message_count', String(parseInt(storedCount) + 1))
     onEnter?.('chat')
   }
 

@@ -564,13 +564,29 @@ const [pendingFiles, setPendingFiles] = useState([])
     const text = input.trim()
     if (!text && pendingFiles.length === 0 && !pendingImage) return
 
+    // Check demo limit before sending message
+    if (!isOwner) {
+      const storedCount = localStorage.getItem('mavis_demo_message_count') || 0
+      if (parseInt(storedCount) >= DEMO_MESSAGE_LIMIT) {
+        setUploadError(`🚫 Demo limit reached! You've sent ${DEMO_MESSAGE_LIMIT} messages. Upgrade to Owner for unlimited access.`)
+        return
+      }
+    }
+
     const userMsg = { role: 'user', content: text, timestamp: new Date().toISOString() }
     const newMessages = [...messages, userMsg]
     setMessages(newMessages)
     setInput('')
     setUploadError('')
-setPendingFiles([])
-setPendingImage(null)
+    setPendingFiles([])
+    setPendingImage(null)
+    
+    // Increment demo message count if not owner
+    if (!isOwner) {
+      const storedCount = localStorage.getItem('mavis_demo_message_count') || 0
+      localStorage.setItem('mavis_demo_message_count', String(parseInt(storedCount) + 1))
+    }
+    
     setLoading(true)
 
     let convId = activeConvId
