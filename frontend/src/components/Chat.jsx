@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://aria-backend-b6qb.onrender.com'
-const OWNER_PASSKEY = 'MAHIS2026' // Simple passkey for owner authentication
+const OWNER_PASSKEY = '24130636' // Owner passkey
 
 // Parse message content to extract code blocks and render them with copy buttons
 function parseMessageContent(content) {

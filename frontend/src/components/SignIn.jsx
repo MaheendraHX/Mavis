@@ -1,5 +1,8 @@
 import { useState } from 'react'
 
+const OWNER_PASSKEY = '24130636'
+const DEMO_MESSAGE_LIMIT = 10
+
 const palette = {
   bg: '#faf9f7',
   surface: '#ffffff',
@@ -14,32 +17,38 @@ const palette = {
 }
 
 export default function SignIn({ onEnter }) {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [mode, setMode] = useState('demo')
+  const [passkey, setPasskey] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showPasskeyInput, setShowPasskeyInput] = useState(false)
 
-  const handleSubmit = async (e) => {
-    e.preventDefault()
+  const handleOwnerLogin = () => {
+    setShowPasskeyInput(true)
     setError('')
-    setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
-      onEnter?.('chat')
-    }, 1200)
   }
 
-  const inputStyle = {
-    width: '100%',
-    padding: '0.75rem 0.9rem',
-    borderRadius: '12px',
-    background: palette.surface,
-    border: `1px solid ${palette.border}`,
-    color: palette.text,
-    fontSize: '0.88rem',
-    fontFamily: 'Inter, system-ui, sans-serif',
-    outline: 'none',
-    boxSizing: 'border-box',
+  const submitOwnerLogin = (e) => {
+    e.preventDefault()
+    if (passkey === OWNER_PASSKEY) {
+      const sessionId = 'owner_' + Date.now()
+      localStorage.setItem('mavis_owner_session', JSON.stringify({ sessionId, passkey: OWNER_PASSKEY }))
+      onEnter?.('chat')
+    } else {
+      setError(' Incorrect passkey')
+    }
+  }
+
+  const handleDemoAccess = () => {
+    const demoId = 'demo_' + Date.now()
+    const storedCount = localStorage.getItem('mavis_demo_message_count') || 0
+    if (parseInt(storedCount) >= DEMO_MESSAGE_LIMIT) {
+      setError(`🚫 Demo limit reached! You've sent ${DEMO_MESSAGE_LIMIT} messages. Upgrade to Owner for unlimited access.`)
+      return
+    }
+    localStorage.setItem('mavis_demo_id', demoId)
+    localStorage.setItem('mavis_demo_message_count', String(parseInt(storedCount) + 1))
+    onEnter?.('chat')
   }
 
   return (
@@ -54,7 +63,7 @@ export default function SignIn({ onEnter }) {
     }}>
       <div style={{
         width: '100%',
-        maxWidth: 400,
+        maxWidth: 420,
         padding: '2.5rem 2rem',
         borderRadius: '20px',
         background: palette.surface,
@@ -90,106 +99,201 @@ export default function SignIn({ onEnter }) {
             margin: 0,
           }}>MAVIS</h1>
           <p style={{ fontSize: '0.8rem', color: palette.textMuted, margin: '0.4rem 0 0' }}>
-            Sign in to continue
+            Choose your access mode
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div>
-            <label style={{
-              display: 'block',
-              fontSize: '0.75rem',
-              fontWeight: 500,
-              color: palette.textMuted,
-              marginBottom: '0.35rem',
-              letterSpacing: '0.04em',
-            }}>Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              required
-              style={inputStyle}
-              onFocus={e => e.target.style.borderColor = palette.primary}
-              onBlur={e => e.target.style.borderColor = palette.border}
-            />
+        {error && (
+          <div style={{
+            background: '#ffe8e8',
+            border: '1px solid #ffcccc',
+            borderRadius: '12px',
+            padding: '0.75rem 1rem',
+            color: '#c0706b',
+            fontSize: '0.82rem',
+            marginBottom: '1.25rem',
+            textAlign: 'center',
+          }}>
+            {error}
           </div>
-          <div>
-            <label style={{
-              display: 'block',
-              fontSize: '0.75rem',
-              fontWeight: 500,
-              color: palette.textMuted,
-              marginBottom: '0.35rem',
-              letterSpacing: '0.04em',
-            }}>Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="Password"
-              required
-              style={inputStyle}
-              onFocus={e => e.target.style.borderColor = palette.primary}
-              onBlur={e => e.target.style.borderColor = palette.border}
-            />
-          </div>
-          {error && <p style={{ fontSize: '0.78rem', color: '#c85850', margin: 0, textAlign: 'center' }}>{error}</p>}
+        )}
+
+        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.5rem' }}>
           <button
-            type="submit"
+            onClick={() => setMode('demo')}
+            style={{
+              flex: 1,
+              padding: '0.7rem',
+              borderRadius: '10px',
+              border: mode === 'demo' ? `2px solid ${palette.primary}` : `1px solid ${palette.border}`,
+              background: mode === 'demo' ? palette.hover : 'transparent',
+              color: mode === 'demo' ? palette.primary : palette.textMuted,
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+          >
+            Demo Access
+          </button>
+          <button
+            onClick={() => setMode('owner')}
+            style={{
+              flex: 1,
+              padding: '0.7rem',
+              borderRadius: '10px',
+              border: mode === 'owner' ? `2px solid ${palette.accent}` : `1px solid ${palette.border}`,
+              background: mode === 'owner' ? 'rgba(168,213,186,0.1)' : 'transparent',
+              color: mode === 'owner' ? palette.accent : palette.textMuted,
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+          >
+            Owner Access
+          </button>
+        </div>
+
+        {mode === 'demo' ? (
+          <button
+            onClick={handleDemoAccess}
             disabled={loading}
             style={{
               width: '100%',
-              padding: '0.8rem',
+              padding: '0.85rem',
               borderRadius: '12px',
-              background: loading ? palette.primary : palette.secondary,
               border: 'none',
+              background: palette.primary,
               color: '#fff',
               fontSize: '0.9rem',
               fontWeight: 700,
               letterSpacing: '0.03em',
-              cursor: loading ? 'default' : 'pointer',
-              fontFamily: 'Inter, system-ui, sans-serif',
-              marginTop: '0.5rem',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.7 : 1,
               transition: 'all 0.2s',
             }}
-            onMouseEnter={e => { if (!loading) e.target.style.background = palette.primary }}
-            onMouseLeave={e => { if (!loading) e.target.style.background = palette.secondary }}
+            onMouseEnter={e => { if (!loading) e.target.style.transform = 'translateY(-2px)' }}
+            onMouseLeave={e => { if (!loading) e.target.style.transform = 'translateY(0)' }}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading ? 'Accessing...' : 'Continue as Demo'}
           </button>
-        </form>
+        ) : (
+          <form onSubmit={submitOwnerLogin}>
+            {showPasskeyInput ? (
+              <>
+                <input
+                  type="password"
+                  value={passkey}
+                  onChange={(e) => setPasskey(e.target.value)}
+                  placeholder="Enter owner passkey"
+                  style={{
+                    width: '100%',
+                    padding: '0.85rem',
+                    borderRadius: '12px',
+                    border: `2px solid ${palette.border}`,
+                    background: palette.surface,
+                    color: palette.text,
+                    fontSize: '0.9rem',
+                    marginBottom: '0.75rem',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  disabled={loading || !passkey}
+                  style={{
+                    width: '100%',
+                    padding: '0.85rem',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: palette.accent,
+                    color: '#fff',
+                    fontSize: '0.9rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.03em',
+                    cursor: loading || !passkey ? 'not-allowed' : 'pointer',
+                    opacity: loading || !passkey ? 0.7 : 1,
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={e => { if (!loading && passkey) e.target.style.transform = 'translateY(-2px)' }}
+                  onMouseLeave={e => { if (!loading && passkey) e.target.style.transform = 'translateY(0)' }}
+                >
+                  {loading ? 'Verifying...' : 'Unlock Owner Access'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setShowPasskeyInput(false); setPasskey(''); setError(''); }}
+                  style={{
+                    width: '100%',
+                    marginTop: '0.75rem',
+                    padding: '0.7rem',
+                    borderRadius: '10px',
+                    border: `1px solid ${palette.border}`,
+                    background: 'transparent',
+                    color: palette.textMuted,
+                    fontSize: '0.8rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleOwnerLogin}
+                style={{
+                  width: '100%',
+                  padding: '0.85rem',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: palette.accent,
+                  color: '#fff',
+                  fontSize: '0.9rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.03em',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => e.target.style.transform = 'translateY(-2px)'}
+                onMouseLeave={e => e.target.style.transform = 'translateY(0)'}
+              >
+                Enter Passkey
+              </button>
+            )}
+          </form>
+        )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '1.5rem 0' }}>
-          <div style={{ flex: 1, height: 1, background: palette.border }} />
-          <span style={{ fontSize: '0.7rem', color: palette.textMuted, letterSpacing: '0.06em' }}>OR</span>
-          <div style={{ flex: 1, height: 1, background: palette.border }} />
+        <div style={{
+          marginTop: '1.5rem',
+          paddingTop: '1.25rem',
+          borderTop: `1px solid ${palette.border}`,
+          textAlign: 'center',
+        }}>
+          <p style={{
+            color: palette.textMuted,
+            fontSize: '0.75rem',
+            lineHeight: 1.6,
+          }}>
+            {mode === 'demo' ? (
+              <>
+                <strong>10 messages</strong> limit • Perfect for trying out Mavis
+                <br />
+                <span style={{ fontSize: '0.7rem' }}>Upgrade to Owner for unlimited access</span>
+              </>
+            ) : (
+              <>
+                Secure passkey authentication • Full system access
+                <br />
+                <span style={{ fontSize: '0.7rem' }}>Unlimited messages • Priority features</span>
+              </>
+            )}
+          </p>
         </div>
 
-        <button
-          onClick={() => onEnter?.('chat')}
-          style={{
-            width: '100%',
-            padding: '0.8rem',
-            borderRadius: '12px',
-            background: palette.surface,
-            border: `1px solid ${palette.primary}`,
-            color: palette.text,
-            fontSize: '0.9rem',
-            fontWeight: 700,
-            letterSpacing: '0.03em',
-            cursor: 'pointer',
-            fontFamily: 'Inter, system-ui, sans-serif',
-            transition: 'all 0.2s',
-          }}
-          onMouseEnter={e => { e.target.style.background = palette.hover }}
-          onMouseLeave={e => { e.target.style.background = palette.surface }}
-        >
-          Try Mavis Demo
-        </button>
-
-        <p style={{ textAlign: 'center', marginTop: '1.25rem', fontSize: '0.78rem', color: palette.textMuted }}>
+        <p style={{ textAlign: 'center', marginTop: '1.25rem', fontSize: '0.75rem', color: palette.textMuted }}>
           <span onClick={() => onEnter?.('landing')} style={{ cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3 }}>
             Back to home
           </span>
