@@ -10,7 +10,7 @@ export default function App() {
     <div style={{ width: '100vw', minHeight: '100vh', background: '#faf9f7' }}>
       {screen === 'boot' && <Boot onComplete={() => setScreen('landing')} />}
       {screen === 'landing' && (
-        <Landing onNavigate={setScreen} />
+        <Landing onEnter={setScreen} />
       )}
       {screen === 'chat' && (
         <Chat onNavigate={setScreen} />
