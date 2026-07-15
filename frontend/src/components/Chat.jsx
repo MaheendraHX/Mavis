@@ -4,6 +4,120 @@ const API_BASE = import.meta.env.VITE_API_URL || 'https://aria-backend-b6qb.onre
 const OWNER_PASSKEY = '24130636' // Owner passkey
 const DEMO_MESSAGE_LIMIT = 10
 
+// Parse message content to extract code blocks and render them with copy buttons
+function parseMessageContent(content) {
+  if (!content) return []
+  const parts = []
+  const codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g
+  let lastIndex = 0
+  let match
+
+  while ((match = codeBlockRegex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ type: 'text', content: content.slice(lastIndex, match.index) })
+    }
+    parts.push({ type: 'code', lang: match[1] || 'text', content: match[2].trimEnd() })
+    lastIndex = match.index + match[0].length
+  }
+  if (lastIndex < content.length) {
+    parts.push({ type: 'text', content: content.slice(lastIndex) })
+  }
+  return parts
+}
+
+function CodeBlock({ lang, code }) {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch { /* fallback */ }
+  }
+
+  return (
+    <div style={{
+      margin: '0.8rem 0',
+      borderRadius: '12px',
+      overflow: 'hidden',
+      border: '1px solid rgba(0,0,0,0.08)',
+      background: '#1e1e1e',
+    }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '0.45rem 0.9rem',
+        background: '#2d2d2d',
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
+      }}>
+        <span style={{
+          fontSize: '0.7rem',
+          color: 'rgba(255,255,255,0.5)',
+          fontFamily: 'monospace',
+          letterSpacing: '0.05em',
+          textTransform: 'uppercase',
+        }}>
+          {lang || 'code'}
+        </span>
+        <button
+          onClick={handleCopy}
+          style={{
+            background: 'rgba(255,255,255,0.08)',
+            border: 'none',
+            borderRadius: '6px',
+            padding: '0.25rem 0.6rem',
+            cursor: 'pointer',
+            fontSize: '0.7rem',
+            color: copied ? '#a8d5ba' : 'rgba(255,255,255,0.5)',
+            fontFamily: 'Inter, system-ui, sans-serif',
+            fontWeight: 500,
+            transition: 'all 0.2s',
+          }}
+          onMouseEnter={e => {
+            if (!copied) e.currentTarget.style.background = 'rgba(255,255,255,0.15)'
+          }}
+          onMouseLeave={e => {
+            if (!copied) e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
+          }}
+        >
+          {copied ? '✓ Copied' : '⧉ Copy'}
+        </button>
+      </div>
+      <pre style={{
+        margin: 0,
+        padding: '1rem',
+        overflowX: 'auto',
+        maxHeight: '400px',
+      }}>
+        <code style={{
+          fontSize: '0.82rem',
+          lineHeight: 1.6,
+          color: '#e4e4e7',
+          fontFamily: "'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace",
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
+        }}>
+          {code}
+        </code>
+      </pre>
+    </div>
+  )
+}
+
+function renderTextContent(content) {
+  const parts = parseMessageContent(content)
+  if (parts.length === 1 && parts[0].type === 'text') {
+    return content
+  }
+  return parts.map((part, i) => {
+    if (part.type === 'code') {
+      return <CodeBlock key={i} lang={part.lang} code={part.content} />
+    }
+    return <span key={i} style={{ whiteSpace: 'pre-wrap' }}>{part.content}</span>
+  })
+}
+
 const palette = {
   bg: '#faf9f7',
   bgSoft: '#f4eee7',
@@ -108,12 +222,49 @@ function ARIAMessage({ msg, onEdit, onDelete }) {
             wordBreak: 'break-word',
             fontFamily: 'Inter, system-ui, sans-serif',
           }}>
-            {msg.content}
+            {renderTextContent(msg.content)}
           </div>
         )}
 
 
       </div>
+      {isUser && !editing && (
+        <div style={{
+          display: 'flex',
+          gap: '0.35rem',
+          marginTop: '0.4rem',
+          justifyContent: 'flex-end',
+        }}>
+          <button onClick={() => { setEditText(msg.content); setEditing(true) }}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: '0.75rem', padding: '0.2rem 0.5rem',
+              color: palette.textMuted, borderRadius: '4px',
+              fontFamily: 'Inter, system-ui, sans-serif',
+              transition: 'color 0.2s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = palette.text}
+            onMouseLeave={e => e.currentTarget.style.color = palette.textMuted}
+            title="Edit message"
+          >✎ Edit</button>
+          <button onClick={() => {
+            if (window.confirm('Delete this message?')) {
+              onDelete(msg.id)
+            }
+          }}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: '0.75rem', padding: '0.2rem 0.5rem',
+              color: '#c0706b', borderRadius: '4px',
+              fontFamily: 'Inter, system-ui, sans-serif',
+              transition: 'opacity 0.2s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '0.7'}
+            title="Delete message"
+          >🗑 Delete</button>
+        </div>
+      )}
       {msg.sources && msg.sources.length > 0 && (
         <div style={{
           maxWidth: '72%',
@@ -526,6 +677,13 @@ const [pendingFiles, setPendingFiles] = useState([])
         ...newMessages,
         { role: 'assistant', content: assistantContent, timestamp: new Date().toISOString(), sources: data.sources || [] },
       ]
+
+      // Increment demo message count AFTER successful API response
+      if (!isOwner) {
+        const storedCount = localStorage.getItem('mavis_demo_message_count') || 0
+        const newCount = parseInt(storedCount) + 1
+        localStorage.setItem('mavis_demo_message_count', String(newCount))
+      }
 
       setMessages(finalMessages)
       setConversations(prev => prev.map(c => c.id === convId ? {
