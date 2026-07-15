@@ -228,43 +228,6 @@ function ARIAMessage({ msg, onEdit, onDelete }) {
 
 
       </div>
-      {isUser && !editing && (
-        <div style={{
-          display: 'flex',
-          gap: '0.35rem',
-          marginTop: '0.4rem',
-          justifyContent: 'flex-end',
-        }}>
-          <button onClick={() => { setEditText(msg.content); setEditing(true) }}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: '0.75rem', padding: '0.2rem 0.5rem',
-              color: palette.textMuted, borderRadius: '4px',
-              fontFamily: 'Inter, system-ui, sans-serif',
-              transition: 'color 0.2s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.color = palette.text}
-            onMouseLeave={e => e.currentTarget.style.color = palette.textMuted}
-            title="Edit message"
-          >✎ Edit</button>
-          <button onClick={() => {
-            if (window.confirm('Delete this message?')) {
-              onDelete(msg.id)
-            }
-          }}
-            style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              fontSize: '0.75rem', padding: '0.2rem 0.5rem',
-              color: '#c0706b', borderRadius: '4px',
-              fontFamily: 'Inter, system-ui, sans-serif',
-              transition: 'opacity 0.2s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-            onMouseLeave={e => e.currentTarget.style.opacity = '0.7'}
-            title="Delete message"
-          >🗑 Delete</button>
-        </div>
-      )}
       {msg.sources && msg.sources.length > 0 && (
         <div style={{
           maxWidth: '72%',
