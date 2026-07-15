@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://aria-backend-b6qb.onrender.com'
+const OWNER_PASSKEY = 'MAHIS2026' // Simple passkey for owner authentication
 
 // Parse message content to extract code blocks and render them with copy buttons
 function parseMessageContent(content) {
@@ -401,6 +402,20 @@ const [pendingFiles, setPendingFiles] = useState([])
   const fileInputRef = useRef(null)
   const abortRef = useRef(null)
   const guestId = useRef(getOrCreateGuestId()).current
+  const [isOwner, setIsOwner] = useState(false)
+  const [ownerSessionId, setOwnerSessionId] = useState(null)
+
+  // Check if user is owner on mount
+  useEffect(() => {
+    const storedOwner = localStorage.getItem('mavis_owner_session')
+    if (storedOwner) {
+      const { sessionId, passkey } = JSON.parse(storedOwner)
+      if (passkey === OWNER_PASSKEY) {
+        setIsOwner(true)
+        setOwnerSessionId(sessionId)
+      }
+    }
+  }, [])
 
   useEffect(() => {
     localStorage.setItem('mavis_conversations', JSON.stringify(conversations))
@@ -420,6 +435,19 @@ const [pendingFiles, setPendingFiles] = useState([])
     setInput('')
     setUploadError('')
     inputRef.current?.focus()
+  }, [])
+
+  const authenticateOwner = useCallback(() => {
+    const passkey = prompt('Enter owner passkey:')
+    if (passkey === OWNER_PASSKEY) {
+      const sessionId = 'owner_' + Date.now()
+      setIsOwner(true)
+      setOwnerSessionId(sessionId)
+      localStorage.setItem('mavis_owner_session', JSON.stringify({ sessionId, passkey }))
+      alert('✅ Owner access granted!')
+    } else if (passkey) {
+      alert('❌ Incorrect passkey')
+    }
   }, [])
 
   const selectConversation = useCallback((convId) => {
@@ -570,26 +598,29 @@ setPendingImage(null)
     try {
       let res
 
+      const userSession = isOwner ? ownerSessionId : guestId
+      const userType = isOwner ? 'owner' : 'guest'
+
       if (currentImage) {
         const formData = new FormData()
         formData.append('message', text)
-        formData.append('user_type', 'guest')
-        formData.append('session_id', convId)
+        formData.append('user_type', userType)
+        formData.append('session_id', userSession)
         formData.append('incognito', 'false')
         formData.append('base64_image', currentImage.base64)
         formData.append('mime', currentImage.mime)
 
         res = await fetch(`${API_BASE}/chat-with-image`, {
           method: 'POST',
-          headers: { 'X-Guest-ID': guestId },
+          headers: { 'X-Guest-ID': userSession },
           body: formData,
           signal: controller.signal,
         })
       } else if (pendingFiles.length > 0) {
         const formData = new FormData()
         formData.append('message', text)
-        formData.append('user_type', 'guest')
-        formData.append('session_id', convId)
+        formData.append('user_type', userType)
+        formData.append('session_id', userSession)
         formData.append('incognito', 'false')
         // Send all file contents concatenated
         const allFileContent = pendingFiles.map(f => '[File: ' + f.filename + ']\n' + (f.content || '')).join('\n\n---\n\n')
@@ -599,18 +630,18 @@ setPendingImage(null)
 
         res = await fetch(`${API_BASE}/chat-with-file`, {
           method: 'POST',
-          headers: { 'X-Guest-ID': guestId },
+          headers: { 'X-Guest-ID': userSession },
           body: formData,
           signal: controller.signal,
         })
       } else {
         res = await fetch(`${API_BASE}/chat`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Guest-ID': guestId },
+          headers: { 'Content-Type': 'application/json', 'X-Guest-ID': userSession },
           body: JSON.stringify({
             message: text,
-            user_type: 'guest',
-            session_id: convId,
+            user_type: userType,
+            session_id: userSession,
             incognito: false,
             web_search: true,
           }),
@@ -855,6 +886,24 @@ setPendingImage(null)
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {isOwner ? (
+              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: palette.accent, letterSpacing: '0.03em', fontFamily: 'Inter, system-ui, sans-serif' }}>
+                🔒 Owner Access
+              </span>
+            ) : (
+              <button onClick={authenticateOwner} style={{
+                background: 'none',
+                border: 'none',
+                color: palette.textMuted,
+                cursor: 'pointer',
+                fontSize: '0.7rem',
+                fontWeight: 500,
+                letterSpacing: '0.03em',
+                fontFamily: 'Inter, system-ui, sans-serif',
+              }}>
+                Owner Login
+              </button>
+            )}
             <button onClick={() => onNavigate?.('home')} style={{
               background: 'none',
               border: 'none',
