@@ -89,7 +89,7 @@ class ForceCORSMiddleware(BaseHTTPMiddleware):
         response.headers["access-control-max-age"] = "600"
         return response
 
-app.add_middleware(ForceCORSMiddleware)
+app.add_middleware(ForceCORSMiddleware)  # CORS enabled for all origins
 
 
 
