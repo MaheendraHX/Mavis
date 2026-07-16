@@ -61,12 +61,33 @@ def _generate_title(message: str, assistant_message: str) -> str:
         title = " ".join(message.split()[:5])
     return " ".join(title.replace('"', '').replace("'", '').split())[:40].strip()
 
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    origin = request.headers.get("origin", "*")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+        headers={
+            "access-control-allow-origin": origin,
+            "access-control-allow-credentials": "true",
+            "access-control-allow-methods": "*",
+            "access-control-allow-headers": "*",
+        },
+    )
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     traceback.print_exc()
+    origin = request.headers.get("origin", "*")
     return JSONResponse(
         status_code=500,
         content={"detail": f"Internal server error: {type(exc).__name__}: {str(exc)}"},
+        headers={
+            "access-control-allow-origin": origin,
+            "access-control-allow-credentials": "true",
+            "access-control-allow-methods": "*",
+            "access-control-allow-headers": "*",
+        },
     )
 
 # CORS headers — always added to every response via middleware
@@ -387,6 +408,65 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
     increment_guest_count(guest_id)
 
     return {"response": assistant_message, "title": title, "conv_id": conv_id, "sources": sources}
+
+
+class CreateFileRequest(BaseModel):
+    content: str
+    filename: str = "document"
+    file_type: str = "docx"  # docx, txt, md, html
+
+@app.post("/create-file")
+async def create_file(req: CreateFileRequest):
+    """Generate a downloadable file from content."""
+    import io
+    content = req.content
+    filename = req.filename
+    file_type = req.file_type
+
+    if file_type == "docx":
+        doc = Document()
+        # Parse markdown-style formatting
+        for line in content.split('\n'):
+            if line.startswith('# '):
+                doc.add_heading(line[2:], level=1)
+            elif line.startswith('## '):
+                doc.add_heading(line[3:], level=2)
+            elif line.startswith('### '):
+                doc.add_heading(line[4:], level=3)
+            elif line.startswith('- '):
+                doc.add_paragraph(line[2:], style='List Bullet')
+            elif line.startswith('```'):
+                pass  # skip code fence markers
+            else:
+                if line.strip():
+                    doc.add_paragraph(line)
+        buf = io.BytesIO()
+        doc.save(buf)
+        buf.seek(0)
+        base64_data = base64.b64encode(buf.read()).decode()
+        mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ext = "docx"
+    elif file_type == "txt":
+        base64_data = base64.b64encode(content.encode('utf-8')).decode()
+        mime = "text/plain"
+        ext = "txt"
+    elif file_type == "md":
+        base64_data = base64.b64encode(content.encode('utf-8')).decode()
+        mime = "text/markdown"
+        ext = "md"
+    elif file_type == "html":
+        base64_data = base64.b64encode(content.encode('utf-8')).decode()
+        mime = "text/html"
+        ext = "html"
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {file_type}")
+
+    return {
+        "success": True,
+        "filename": f"{filename}.{ext}",
+        "base64": base64_data,
+        "mime": mime,
+    }
 
 
 @app.post("/chat-with-file")

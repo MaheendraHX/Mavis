@@ -186,6 +186,117 @@ function formatTime(iso) {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+function DownloadButton({ content }) {
+  const [downloading, setDownloading] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
+
+  const handleDownload = async (fileType) => {
+    setDownloading(true)
+    setShowMenu(false)
+    try {
+      const res = await fetch(`${API_BASE}/create-file`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          filename: 'mavis-response',
+          file_type: fileType,
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        const byteChars = atob(data.base64)
+        const byteArr = new Uint8Array(byteChars.length)
+        for (let i = 0; i < byteChars.length; i++) {
+          byteArr[i] = byteChars.charCodeAt(i)
+        }
+        const blob = new Blob([byteArr], { type: data.mime })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = data.filename
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      } else {
+        alert('Failed to create file')
+      }
+    } catch {
+      alert('Backend may be offline — try again later')
+    }
+    setDownloading(false)
+  }
+
+  return (
+    <div style={{ maxWidth: '72%', marginTop: '0.25rem', position: 'relative' }}>
+      <button
+        onClick={() => setShowMenu(!showMenu)}
+        disabled={downloading}
+        style={{
+          background: 'transparent',
+          border: `1px solid ${palette.border}`,
+          borderRadius: '8px',
+          padding: '0.2rem 0.55rem',
+          cursor: 'pointer',
+          fontSize: '0.68rem',
+          color: palette.textMuted,
+          fontFamily: 'Inter, system-ui, sans-serif',
+          transition: 'all 0.2s',
+        }}
+        onMouseEnter={e => e.currentTarget.style.borderColor = palette.accent}
+        onMouseLeave={e => e.currentTarget.style.borderColor = palette.border}
+      >
+        {downloading ? '⏳ Creating...' : '⬇ Download'}
+      </button>
+      {showMenu && (
+        <div style={{
+          position: 'absolute',
+          bottom: '100%',
+          left: 0,
+          marginBottom: '4px',
+          background: palette.surface,
+          border: `1px solid ${palette.border}`,
+          borderRadius: '10px',
+          boxShadow: `0 8px 24px ${palette.shadow}`,
+          zIndex: 10,
+          overflow: 'hidden',
+          minWidth: '130px',
+        }}>
+          {[
+            { type: 'docx', label: '📄 Word Document' },
+            { type: 'txt', label: '📝 Plain Text' },
+            { type: 'md', label: '📑 Markdown' },
+            { type: 'html', label: '🌐 HTML' },
+          ].map(opt => (
+            <button
+              key={opt.type}
+              onClick={() => handleDownload(opt.type)}
+              style={{
+                display: 'block',
+                width: '100%',
+                padding: '0.45rem 0.75rem',
+                background: 'transparent',
+                border: 'none',
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontSize: '0.75rem',
+                color: palette.text,
+                fontFamily: 'Inter, system-ui, sans-serif',
+                transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ARIAMessage({ msg, onEdit, onDelete }) {
   const isUser = msg.role === 'user'
   const [editing, setEditing] = useState(false)
@@ -289,6 +400,9 @@ function ARIAMessage({ msg, onEdit, onDelete }) {
             </span>
           ))}
         </div>
+      )}
+      {!isUser && msg.content && msg.content.length > 50 && (
+        <DownloadButton content={msg.content} />
       )}
       <span style={{
         fontSize: '0.65rem',
