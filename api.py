@@ -1,9 +1,12 @@
 import os
 import uuid
 import traceback
+import base64
+import io
 
 import requests
 from bs4 import BeautifulSoup
+from docx import Document as DocxDocument
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -418,13 +421,12 @@ class CreateFileRequest(BaseModel):
 @app.post("/create-file")
 async def create_file(req: CreateFileRequest):
     """Generate a downloadable file from content."""
-    import io
     content = req.content
     filename = req.filename
     file_type = req.file_type
 
     if file_type == "docx":
-        doc = Document()
+        doc = DocxDocument()
         # Parse markdown-style formatting
         for line in content.split('\n'):
             if line.startswith('# '):
