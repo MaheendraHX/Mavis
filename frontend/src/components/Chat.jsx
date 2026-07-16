@@ -190,6 +190,30 @@ function DownloadButton({ content }) {
   const [downloading, setDownloading] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
 
+  const getBestFileType = (content) => {
+    const lower = content.toLowerCase()
+    if (content.includes('```python') || content.includes('```py') || lower.includes('def ') || lower.includes('import ') || lower.includes('class ')) {
+      return 'py'
+    }
+    if (content.includes('```html') || content.includes('<html') || content.includes('<div')) {
+      return 'html'
+    }
+    if (content.includes('```css') || content.includes('body {') || content.includes('.class')) {
+      return 'css'
+    }
+    if (content.includes('```javascript') || content.includes('```js') || lower.includes('function ') || lower.includes('const ') || lower.includes('let ')) {
+      return 'js'
+    }
+    if (content.includes('```markdown') || content.includes('```md') || content.includes('# ') || content.includes('## ')) {
+      return 'md'
+    }
+    // Long text documents → Word
+    if (content.length > 200) {
+      return 'docx'
+    }
+    return 'docx' // default
+  }
+
   const handleDownload = async (fileType) => {
     setDownloading(true)
     setShowMenu(false)
@@ -228,26 +252,40 @@ function DownloadButton({ content }) {
     setDownloading(false)
   }
 
+  const bestType = getBestFileType(content)
+  const typeLabel = bestType === 'docx' ? '📄 Word' : bestType === 'py' ? '🐍 Python' : bestType === 'html' ? '🌐 HTML' : bestType === 'md' ? '📑 Markdown' : bestType === 'js' ? '⚡ JS' : bestType === 'css' ? '🎨 CSS' : '📄 Word'
+
   return (
     <div style={{ maxWidth: '72%', marginTop: '0.25rem', position: 'relative' }}>
       <button
         onClick={() => setShowMenu(!showMenu)}
         disabled={downloading}
         style={{
-          background: 'transparent',
-          border: `1px solid ${palette.border}`,
-          borderRadius: '8px',
-          padding: '0.2rem 0.55rem',
+          background: 'linear-gradient(135deg, #d4a574, #e89f71)',
+          border: 'none',
+          borderRadius: '12px',
+          padding: '0.45rem 0.85rem',
           cursor: 'pointer',
-          fontSize: '0.68rem',
-          color: palette.textMuted,
+          fontSize: '0.78rem',
+          fontWeight: 600,
+          color: '#2d2d2d',
           fontFamily: 'Inter, system-ui, sans-serif',
+          boxShadow: '0 4px 12px rgba(212,165,116,0.25)',
           transition: 'all 0.2s',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.35rem',
         }}
-        onMouseEnter={e => e.currentTarget.style.borderColor = palette.accent}
-        onMouseLeave={e => e.currentTarget.style.borderColor = palette.border}
+        onMouseEnter={e => {
+          e.currentTarget.style.transform = 'translateY(-2px)'
+          e.currentTarget.style.boxShadow = '0 6px 16px rgba(212,165,116,0.35)'
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.transform = 'translateY(0)'
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(212,165,116,0.25)'
+        }}
       >
-        {downloading ? '⏳ Creating...' : '⬇ Download'}
+        {downloading ? '⏳ Creating...' : `⬇ ${typeLabel}`}
       </button>
       {showMenu && (
         <div style={{
@@ -257,17 +295,20 @@ function DownloadButton({ content }) {
           marginBottom: '4px',
           background: palette.surface,
           border: `1px solid ${palette.border}`,
-          borderRadius: '10px',
+          borderRadius: '12px',
           boxShadow: `0 8px 24px ${palette.shadow}`,
           zIndex: 10,
           overflow: 'hidden',
-          minWidth: '130px',
+          minWidth: '140px',
         }}>
           {[
             { type: 'docx', label: '📄 Word Document' },
             { type: 'txt', label: '📝 Plain Text' },
             { type: 'md', label: '📑 Markdown' },
             { type: 'html', label: '🌐 HTML' },
+            { type: 'py', label: '🐍 Python' },
+            { type: 'js', label: '⚡ JavaScript' },
+            { type: 'css', label: '🎨 CSS' },
           ].map(opt => (
             <button
               key={opt.type}
@@ -275,17 +316,18 @@ function DownloadButton({ content }) {
               style={{
                 display: 'block',
                 width: '100%',
-                padding: '0.45rem 0.75rem',
+                padding: '0.5rem 0.85rem',
                 background: 'transparent',
                 border: 'none',
                 textAlign: 'left',
                 cursor: 'pointer',
-                fontSize: '0.75rem',
+                fontSize: '0.78rem',
                 color: palette.text,
                 fontFamily: 'Inter, system-ui, sans-serif',
                 transition: 'background 0.15s',
+                fontWeight: opt.type === bestType ? 600 : 400,
               }}
-              onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(212,165,116,0.08)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >
               {opt.label}
@@ -401,7 +443,7 @@ function ARIAMessage({ msg, onEdit, onDelete }) {
           ))}
         </div>
       )}
-      {!isUser && msg.content && msg.content.length > 50 && (
+      {!isUser && msg.content && (
         <DownloadButton content={msg.content} />
       )}
       <span style={{
