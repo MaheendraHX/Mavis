@@ -34,6 +34,20 @@ function CodeBlock({ lang, code }) {
       setTimeout(() => setCopied(false), 2000)
     } catch { /* fallback */ }
   }
+  const handleDownload = () => {
+    const ext = lang || 'txt'
+    const mimeMap = { html: 'text/html', css: 'text/css', js: 'text/javascript', python: 'text/x-python', py: 'text/x-python', json: 'application/json', md: 'text/markdown', txt: 'text/plain' }
+    const mime = mimeMap[ext] || 'text/plain'
+    const blob = new Blob([code], { type: mime })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `mavis-output.${ext}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div style={{
@@ -60,29 +74,54 @@ function CodeBlock({ lang, code }) {
         }}>
           {lang || 'code'}
         </span>
-        <button
-          onClick={handleCopy}
-          style={{
-            background: 'rgba(255,255,255,0.08)',
-            border: 'none',
-            borderRadius: '6px',
-            padding: '0.25rem 0.6rem',
-            cursor: 'pointer',
-            fontSize: '0.7rem',
-            color: copied ? '#a8d5ba' : 'rgba(255,255,255,0.5)',
-            fontFamily: 'Inter, system-ui, sans-serif',
-            fontWeight: 500,
-            transition: 'all 0.2s',
-          }}
-          onMouseEnter={e => {
-            if (!copied) e.currentTarget.style.background = 'rgba(255,255,255,0.15)'
-          }}
-          onMouseLeave={e => {
-            if (!copied) e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
-          }}
-        >
-          {copied ? '✓ Copied' : '⧉ Copy'}
-        </button>
+        <div style={{ display: 'flex', gap: '0.4rem' }}>
+          <button
+            onClick={handleCopy}
+            style={{
+              background: 'rgba(255,255,255,0.08)',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '0.25rem 0.6rem',
+              cursor: 'pointer',
+              fontSize: '0.7rem',
+              color: copied ? '#a8d5ba' : 'rgba(255,255,255,0.5)',
+              fontFamily: 'Inter, system-ui, sans-serif',
+              fontWeight: 500,
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => {
+              if (!copied) e.currentTarget.style.background = 'rgba(255,255,255,0.15)'
+            }}
+            onMouseLeave={e => {
+              if (!copied) e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
+            }}
+          >
+            {copied ? '✓ Copied' : '⧉ Copy'}
+          </button>
+          <button
+            onClick={handleDownload}
+            style={{
+              background: 'rgba(255,255,255,0.08)',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '0.25rem 0.6rem',
+              cursor: 'pointer',
+              fontSize: '0.7rem',
+              color: 'rgba(255,255,255,0.5)',
+              fontFamily: 'Inter, system-ui, sans-serif',
+              fontWeight: 500,
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.15)'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
+            }}
+          >
+            ⬇ Download
+          </button>
+        </div>
       </div>
       <pre style={{
         margin: 0,
@@ -271,6 +310,7 @@ function FileAttachmentCard({ file, onRemove }) {
       case 'pdf': return '📄'
       case 'image': return '🖼️'
       case 'docx': return '📝'
+      case 'pptx': return '📊'
       case 'text': return '📃'
       default: return '📎'
     }
@@ -1037,6 +1077,7 @@ const [pendingFiles, setPendingFiles] = useState([])
                 resize: 'none',
                 lineHeight: 1.5,
                 padding: '0.3rem 0',
+                textAlign: 'left',
                 maxHeight: '150px',
               }}
               onInput={e => {

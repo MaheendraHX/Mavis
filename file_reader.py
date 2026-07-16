@@ -3,6 +3,11 @@ import base64
 from pypdf import PdfReader
 from docx import Document
 
+try:
+    from pptx import Presentation
+except ImportError:
+    Presentation = None
+
 def extract_pdf_text(file_path, max_chars=15000):
     try:
         reader = PdfReader(file_path)
@@ -28,6 +33,32 @@ def extract_txt_text(file_path, max_chars=15000):
     except Exception as e:
         return f"Error reading text file: {str(e)}"
 
+def extract_pptx_text(file_path, max_chars=15000):
+    """Extract text from PPTX, slide by slide."""
+    if not Presentation:
+        return "Error: python-pptx not installed"
+    try:
+        prs = Presentation(file_path)
+        parts = [f"[PPTX: {len(prs.slides)} slides]\n"]
+        for i, slide in enumerate(prs.slides):
+            slide_texts = []
+            for shape in slide.shapes:
+                if shape.has_text_frame:
+                    for para in shape.text_frame.paragraphs:
+                        text = para.text.strip()
+                        if text:
+                            slide_texts.append(text)
+                if shape.has_table:
+                    for row in shape.table.rows[:10]:
+                        row_text = " | ".join(cell.text.strip() for cell in row.cells)
+                        if row_text.strip():
+                            slide_texts.append(row_text)
+            if slide_texts:
+                parts.append(f"\n--- Slide {i+1} ---\n" + "\n".join(slide_texts))
+        return "".join(parts).strip()[:max_chars]
+    except Exception as e:
+        return f"Error reading PPTX: {str(e)}"
+
 def encode_image_base64(file_path):
     try:
         with open(file_path, "rb") as image_file:
@@ -41,6 +72,8 @@ def get_file_type(filename):
         return 'pdf'
     elif ext == 'docx':
         return 'docx'
+    elif ext == 'pptx':
+        return 'pptx'
     elif ext in ['txt', 'md']:
         return 'text'
     elif ext in ['png', 'jpg', 'jpeg', 'webp']:
@@ -55,6 +88,8 @@ def process_file(file_path, filename):
         return {'type': 'text', 'content': extract_pdf_text(file_path)}
     elif file_type == 'docx':
         return {'type': 'text', 'content': extract_docx_text(file_path)}
+    elif file_type == 'pptx':
+        return {'type': 'text', 'content': extract_pptx_text(file_path)}
     elif file_type == 'text':
         return {'type': 'text', 'content': extract_txt_text(file_path)}
     elif file_type == 'image':

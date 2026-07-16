@@ -47,17 +47,20 @@ export default function Boot({ onComplete }) {
   return (
     <div style={{
       height: '100vh',
+      width: '100%',
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
       background: palette.bg,
-      gap: '2rem',
+      gap: 'clamp(1.2rem, 3vw, 2rem)',
       fontFamily: 'Inter, system-ui, sans-serif',
+      padding: '0 clamp(1rem, 5vw, 2rem)',
+      boxSizing: 'border-box',
     }}>
       <div style={{
-        width: 80,
-        height: 80,
+        width: 'clamp(56px, 12vw, 80px)',
+        height: 'clamp(56px, 12vw, 80px)',
         borderRadius: '50%',
         background: `
           radial-gradient(circle at 38% 34%, rgba(255,255,255,0.9), transparent 34%),
@@ -67,33 +70,38 @@ export default function Boot({ onComplete }) {
         boxShadow: '0 16px 44px rgba(232,159,113,0.18)',
         border: `1px solid ${palette.border}`,
         animation: 'bootPulse 2s ease-in-out infinite',
+        flexShrink: 0,
       }} />
       <h1 style={{
-        fontSize: '2.2rem',
+        fontSize: 'clamp(1.6rem, 6vw, 2.2rem)',
         fontWeight: 700,
         letterSpacing: '0.35em',
         color: palette.text,
         fontFamily: 'Georgia, serif',
         margin: 0,
-        minHeight: '2.8rem',
+        textAlign: 'center',
+        lineHeight: 1.2,
       }}>
         {text}<span style={{ animation: 'blink 0.8s step-end infinite', color: palette.secondary }}>|</span>
       </h1>
       <p style={{
-        fontSize: '0.8rem',
+        fontSize: 'clamp(0.65rem, 1.8vw, 0.8rem)',
         letterSpacing: '0.12em',
         color: palette.textMuted,
         margin: 0,
         textTransform: 'uppercase',
+        textAlign: 'center',
+        maxWidth: '90vw',
       }}>
-        Multimodal Adaptive Virtual Intelligence System
+        Multimodal Advanced Virtual Intelligence System
       </p>
       <div style={{
-        width: 200,
+        width: 'clamp(140px, 40vw, 200px)',
         height: 3,
         background: 'rgba(0,0,0,0.06)',
         borderRadius: 999,
         overflow: 'hidden',
+        flexShrink: 0,
       }}>
         <div style={{
           height: '100%',
