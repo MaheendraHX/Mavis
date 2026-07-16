@@ -3,6 +3,9 @@ import uuid
 import traceback
 import base64
 import io
+import hmac
+import hashlib
+import time
 
 import requests
 from bs4 import BeautifulSoup
@@ -35,8 +38,34 @@ _guest_message_counts = {}
 PC_CONTROL_ENABLED = os.environ.get("PC_CONTROL_ENABLED", "false").lower() == "true"
 OWNER_PASSKEY = os.environ.get("OWNER_PASSKEY", "changeme")
 
-# In-memory set of valid owner session tokens (reset on server restart — fine for demo)
-_owner_sessions = set()
+# Session secret for HMAC signing (survives server restarts)
+_SESSION_SECRET = os.environ.get("SESSION_SECRET", os.urandom(32).hex())
+
+def _sign_session(session_id: str) -> str:
+    """Create an HMAC signature for a session ID."""
+    return hmac.new(_SESSION_SECRET.encode(), session_id.encode(), hashlib.sha256).hexdigest()[:32]
+
+def _verify_session(session_id: str, signature: str) -> bool:
+    """Verify an HMAC-signed session ID."""
+    expected = _sign_session(session_id)
+    return hmac.compare_digest(expected, signature)
+
+def create_owner_session() -> str:
+    """Create a signed owner session token. Format: owner_<uuid>_<signature>"""
+    raw = f"owner_{uuid.uuid4().hex[:12]}"
+    sig = _sign_session(raw)
+    return f"{raw}_{sig}"
+
+def validate_owner_session(session_id: str) -> bool:
+    """Validate an owner session token by checking the HMAC signature."""
+    if not session_id.startswith("owner_"):
+        return False
+    # Find the last underscore to split raw_id from signature
+    parts = session_id.rsplit("_", 1)
+    if len(parts) != 2:
+        return False
+    raw_id, signature = parts
+    return _verify_session(raw_id, signature)
 
 app = FastAPI()
 
@@ -216,10 +245,9 @@ class OwnerAuthResponse(BaseModel):
 
 @app.post("/auth/owner", response_model=OwnerAuthResponse)
 async def auth_owner(req: OwnerAuthRequest):
-    """Validate owner passkey. Returns a session_id on success."""
+    """Validate owner passkey. Returns a signed session token on success."""
     if req.passkey == OWNER_PASSKEY:
-        session_id = f"owner_{uuid.uuid4().hex[:12]}"
-        _owner_sessions.add(session_id)
+        session_id = create_owner_session()
         return OwnerAuthResponse(authenticated=True, session_id=session_id)
     raise HTTPException(status_code=403, detail="Invalid passkey")
 
@@ -327,7 +355,7 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
     guest_id = x_guest_id or "anonymous"
 
     # Determine user type: validate owner session server-side, don't trust client
-    is_owner = request.session_id.startswith("owner_") and request.session_id in _owner_sessions
+    is_owner = validate_owner_session(request.session_id)
 
     # Owner bypasses guest limit
     if not is_owner and check_guest_limit(guest_id):
@@ -492,7 +520,7 @@ async def chat_with_file(
     guest_id = x_guest_id or "anonymous"
 
     # Determine user type: validate owner session server-side, don't trust client
-    is_owner = session_id.startswith("owner_") and session_id in _owner_sessions
+    is_owner = validate_owner_session(session_id)
 
     # Owner bypasses guest limit
     if not is_owner and check_guest_limit(guest_id):
@@ -573,7 +601,7 @@ async def chat_with_image(
     guest_id = x_guest_id or "anonymous"
 
     # Determine user type: validate owner session server-side, don't trust client
-    is_owner = session_id.startswith("owner_") and session_id in _owner_sessions
+    is_owner = validate_owner_session(session_id)
 
     # Owner bypasses guest limit
     if not is_owner and check_guest_limit(guest_id):
