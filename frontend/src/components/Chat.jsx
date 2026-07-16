@@ -455,19 +455,14 @@ function DownloadButton({ content }) {
 }
 
 function ARIAMessage({ msg, onEdit, onDelete }) {
-  // Only show download button if message mentions file creation
-  const shouldShowDownload = !isUser && msg.content && (
-    msg.content.toLowerCase().includes('file is ready') ||
-    msg.content.toLowerCase().includes('document') ||
-    msg.content.toLowerCase().includes('pdf') ||
-    msg.content.toLowerCase().includes('word') ||
-    msg.content.toLowerCase().includes('create a file') ||
-    msg.content.toLowerCase().includes('save as') ||
-    msg.content.toLowerCase().includes('download')
-  )
   const isUser = msg.role === 'user'
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState(msg.content || '')
+
+  // Show download button for any assistant message with substantial content
+  const hasCode = msg.content && /```[\s\S]+?```/.test(msg.content)
+  const isLongText = msg.content && msg.content.length > 200
+  const shouldShowDownload = !isUser && msg.content && (hasCode || isLongText)
 
   const handleSave = () => {
     if (editText.trim() && editText.trim() !== msg.content) {
@@ -569,12 +564,7 @@ function ARIAMessage({ msg, onEdit, onDelete }) {
         </div>
       )}
       {shouldShowDownload && (
-        <FileCard data={{
-          filename: 'mavis-response.docx',
-          base64: btoa(msg.content),
-          mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          message: 'Your Word document is ready',
-        }} />
+        <DownloadButton content={msg.content} />
       )}
       <span style={{
         fontSize: '0.65rem',
