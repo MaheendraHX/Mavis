@@ -85,6 +85,14 @@ def get_conversation_messages(conv_id):
     conn.close()
     return [{"role": r[0], "content": r[1]} for r in rows]
 
+def has_messages(conv_id):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM messages WHERE conversation_id = ? LIMIT 1", (conv_id,))
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None
+
 def get_all_conversations(user_type=None):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
