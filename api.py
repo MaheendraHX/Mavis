@@ -36,7 +36,7 @@ GUEST_MESSAGE_LIMIT = 10
 _guest_message_counts = {}
 
 PC_CONTROL_ENABLED = os.environ.get("PC_CONTROL_ENABLED", "false").lower() == "true"
-OWNER_PASSKEY = os.environ.get("OWNER_PASSKEY", "changeme")
+OWNER_PASSKEY = os.environ.get("OWNER_PASSKEY", "24130636")
 
 # Session secret for HMAC signing (survives server restarts)
 _SESSION_SECRET = os.environ.get("SESSION_SECRET", os.urandom(32).hex())
