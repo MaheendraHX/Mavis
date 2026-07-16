@@ -186,6 +186,121 @@ function formatTime(iso) {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+function FileCard({ data }) {
+  const handleOpen = () => {
+    const byteChars = atob(data.base64)
+    const byteArr = new Uint8Array(byteChars.length)
+    for (let i = 0; i < byteChars.length; i++) {
+      byteArr[i] = byteChars.charCodeAt(i)
+    }
+    const blob = new Blob([byteArr], { type: data.mime })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = data.filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  const iconMap = {
+    docx: '📄',
+    pdf: '📕',
+    txt: '📝',
+    md: '📑',
+    html: '🌐',
+    py: '🐍',
+    js: '⚡',
+    css: '🎨',
+  }
+
+  const ext = data.filename.split('.').pop().toUpperCase()
+  const icon = iconMap[data.filename.split('.').pop()] || '📄'
+
+  return (
+    <div style={{
+      maxWidth: '72%',
+      marginTop: '0.5rem',
+      background: 'linear-gradient(135deg, #1e1e1e, #2d2d2d)',
+      border: `1px solid ${palette.border}`,
+      borderRadius: '16px',
+      padding: '1rem',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.75rem',
+      boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+    }}>
+      <div style={{
+        width: '48px',
+        height: '48px',
+        borderRadius: '12px',
+        background: 'linear-gradient(135deg, #d4a574, #e89f71)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '1.5rem',
+        fontWeight: 700,
+        color: '#2d2d2d',
+      }}>
+        {icon}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: '0.85rem',
+          color: palette.textMuted,
+          marginBottom: '0.25rem',
+        }}>
+          {data.message || 'Your file is ready'}
+        </div>
+        <div style={{
+          fontSize: '0.95rem',
+          fontWeight: 600,
+          color: palette.text,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}>
+          {data.filename}
+        </div>
+        <div style={{
+          fontSize: '0.7rem',
+          color: palette.textMuted,
+          marginTop: '0.25rem',
+        }}>
+          {ext}
+        </div>
+      </div>
+      <button
+        onClick={handleOpen}
+        style={{
+          background: 'linear-gradient(135deg, #d4a574, #e89f71)',
+          border: 'none',
+          borderRadius: '10px',
+          padding: '0.5rem 0.85rem',
+          cursor: 'pointer',
+          fontSize: '0.78rem',
+          fontWeight: 600,
+          color: '#2d2d2d',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          transition: 'all 0.2s',
+          minWidth: '60px',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.transform = 'translateY(-2px)'
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(212,165,116,0.3)'
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.transform = 'translateY(0)'
+          e.currentTarget.style.boxShadow = 'none'
+        }}
+      >
+        Open
+      </button>
+    </div>
+  )
+}
+
 function DownloadButton({ content }) {
   const [downloading, setDownloading] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
@@ -340,6 +455,16 @@ function DownloadButton({ content }) {
 }
 
 function ARIAMessage({ msg, onEdit, onDelete }) {
+  // Only show download button if message mentions file creation
+  const shouldShowDownload = !isUser && msg.content && (
+    msg.content.toLowerCase().includes('file is ready') ||
+    msg.content.toLowerCase().includes('document') ||
+    msg.content.toLowerCase().includes('pdf') ||
+    msg.content.toLowerCase().includes('word') ||
+    msg.content.toLowerCase().includes('create a file') ||
+    msg.content.toLowerCase().includes('save as') ||
+    msg.content.toLowerCase().includes('download')
+  )
   const isUser = msg.role === 'user'
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState(msg.content || '')
@@ -443,8 +568,13 @@ function ARIAMessage({ msg, onEdit, onDelete }) {
           ))}
         </div>
       )}
-      {!isUser && msg.content && (
-        <DownloadButton content={msg.content} />
+      {shouldShowDownload && (
+        <FileCard data={{
+          filename: 'mavis-response.docx',
+          base64: btoa(msg.content),
+          mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          message: 'Your Word document is ready',
+        }} />
       )}
       <span style={{
         fontSize: '0.65rem',
