@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 
 const palette = {
   bg: '#faf9f7',
@@ -14,6 +14,8 @@ export default function Boot({ onComplete }) {
   const [progress, setProgress] = useState(0)
   const [text, setText] = useState('')
   const fullText = 'MAVIS'
+  const onCompleteRef = useRef(onComplete)
+  onCompleteRef.current = onComplete
 
   useEffect(() => {
     let i = 0
@@ -34,7 +36,7 @@ export default function Boot({ onComplete }) {
       setProgress(p)
       if (p >= 100) {
         clearInterval(progInterval)
-        setTimeout(() => onComplete?.(), 400)
+        setTimeout(() => onCompleteRef.current?.(), 400)
       }
     }, 30)
 
@@ -42,7 +44,7 @@ export default function Boot({ onComplete }) {
       clearInterval(typeInterval)
       clearInterval(progInterval)
     }
-  }, [onComplete])
+  }, [])
 
   return (
     <div style={{

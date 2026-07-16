@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://aria-backend-b6qb.onrender.com'
-const OWNER_PASSKEY = '24130636' // Owner passkey
 const DEMO_MESSAGE_LIMIT = 10
 
 // Parse message content to extract code blocks and render them with copy buttons
@@ -409,12 +408,13 @@ const [pendingFiles, setPendingFiles] = useState([])
   const [isOwner, setIsOwner] = useState(false)
   const [ownerSessionId, setOwnerSessionId] = useState(null)
 
-  // Check if user is owner on mount
+  // Check if user is owner on mount (validate stored session, don't check passkey client-side)
   useEffect(() => {
     const storedOwner = localStorage.getItem('mavis_owner_session')
     if (storedOwner) {
-      const { sessionId, passkey } = JSON.parse(storedOwner)
-      if (passkey === OWNER_PASSKEY) {
+      const { sessionId } = JSON.parse(storedOwner)
+      // Session starts with "owner_" — trust the server-validated session
+      if (sessionId && sessionId.startsWith('owner_')) {
         setIsOwner(true)
         setOwnerSessionId(sessionId)
       }
@@ -441,16 +441,26 @@ const [pendingFiles, setPendingFiles] = useState([])
     inputRef.current?.focus()
   }, [])
 
-  const authenticateOwner = useCallback(() => {
+  const authenticateOwner = useCallback(async () => {
     const passkey = prompt('Enter owner passkey:')
-    if (passkey === OWNER_PASSKEY) {
-      const sessionId = 'owner_' + Date.now()
-      setIsOwner(true)
-      setOwnerSessionId(sessionId)
-      localStorage.setItem('mavis_owner_session', JSON.stringify({ sessionId, passkey }))
-      alert('✅ Owner access granted!')
-    } else if (passkey) {
-      alert('❌ Incorrect passkey')
+    if (!passkey) return
+    try {
+      const res = await fetch(`${API_BASE}/auth/owner`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ passkey }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setIsOwner(true)
+        setOwnerSessionId(data.session_id)
+        localStorage.setItem('mavis_owner_session', JSON.stringify({ sessionId: data.session_id }))
+        alert('✅ Owner access granted!')
+      } else {
+        alert('❌ Incorrect passkey')
+      }
+    } catch (err) {
+      alert('❌ Auth failed — backend may be offline')
     }
   }, [])
 

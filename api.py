@@ -30,6 +30,10 @@ GUEST_MESSAGE_LIMIT = 10
 _guest_message_counts = {}
 
 PC_CONTROL_ENABLED = os.environ.get("PC_CONTROL_ENABLED", "false").lower() == "true"
+OWNER_PASSKEY = os.environ.get("OWNER_PASSKEY", "changeme")
+
+# In-memory set of valid owner session tokens (reset on server restart — fine for demo)
+_owner_sessions = set()
 
 app = FastAPI()
 
@@ -175,6 +179,23 @@ class UrlRequest(BaseModel):
     url: HttpUrl
 
 
+class OwnerAuthRequest(BaseModel):
+    passkey: str
+
+class OwnerAuthResponse(BaseModel):
+    authenticated: bool
+    session_id: str
+
+@app.post("/auth/owner", response_model=OwnerAuthResponse)
+async def auth_owner(req: OwnerAuthRequest):
+    """Validate owner passkey. Returns a session_id on success."""
+    if req.passkey == OWNER_PASSKEY:
+        session_id = f"owner_{uuid.uuid4().hex[:12]}"
+        _owner_sessions.add(session_id)
+        return OwnerAuthResponse(authenticated=True, session_id=session_id)
+    raise HTTPException(status_code=403, detail="Invalid passkey")
+
+
 @app.post("/fetch-url")
 async def fetch_url(request: UrlRequest):
     if not is_safe_url(str(request.url)):
@@ -288,8 +309,10 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
     if not request.incognito:
         memory.create_conversation(conv_id, "New conversation", "guest", guest_id)
 
-    # Use owner prompt for Maheendra, guest prompt for demo visitors
-    if request.user_type == "owner":
+    # Determine user type: validate owner session server-side, don't trust client
+    is_owner = request.session_id.startswith("owner_") and request.session_id in _owner_sessions
+
+    if is_owner:
         system_prompt = MAVIS_SYSTEM_PROMPT
         if PC_CONTROL_ENABLED:
             system_prompt += "\n\nNote: PC control is enabled. You can execute commands on the owner's machine when asked."
