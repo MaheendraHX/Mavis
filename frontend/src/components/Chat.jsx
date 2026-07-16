@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+﻿import { useState, useRef, useEffect, useCallback } from 'react'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://aria-backend-b6qb.onrender.com'
 const DEMO_MESSAGE_LIMIT = 10
@@ -459,10 +459,9 @@ function ARIAMessage({ msg, onEdit, onDelete }) {
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState(msg.content || '')
 
-  // Show download button for any assistant message with substantial content
-  const hasCode = msg.content && /```[\s\S]+?```/.test(msg.content)
-  const isLongText = msg.content && msg.content.length > 200
-  const shouldShowDownload = !isUser && msg.content && (hasCode || isLongText)
+  // Only show download button when Mavis explicitly created a file
+  const hasFileCard = msg.content && /file is ready|document created|created.*for you|here.?s your|saved as|download the|attached file/i.test(msg.content)
+  const shouldShowDownload = !isUser && hasFileCard
 
   const handleSave = () => {
     if (editText.trim() && editText.trim() !== msg.content) {
@@ -684,18 +683,15 @@ const [pendingFiles, setPendingFiles] = useState([])
   const [isOwner, setIsOwner] = useState(false)
   const [ownerSessionId, setOwnerSessionId] = useState(null)
 
-  // Check if user is owner on mount (validate stored session, don't check passkey client-side)
+
+  // On mount, check if owner session exists from SignIn page
   useEffect(() => {
-    const storedOwner = localStorage.getItem('mavis_owner_session')
-    if (storedOwner) {
-      const { sessionId } = JSON.parse(storedOwner)
-      // Session starts with "owner_" — trust the server-validated session
-      if (sessionId && sessionId.startsWith('owner_')) {
-        setIsOwner(true)
-        setOwnerSessionId(sessionId)
-      }
+    const stored = localStorage.getItem('mavis_owner_session')
+    if (stored) {
+      setIsOwner(true)
+      setOwnerSessionId(stored)
     }
-  }, [])
+  }, []) // intentional: run once on mount
 
   useEffect(() => {
     localStorage.setItem('mavis_conversations', JSON.stringify(conversations))
@@ -717,6 +713,13 @@ const [pendingFiles, setPendingFiles] = useState([])
     inputRef.current?.focus()
   }, [])
 
+  const revokeOwnerAccess = useCallback(() => {
+    setIsOwner(false)
+    setOwnerSessionId('')
+    localStorage.removeItem('mavis_owner_session')
+    startNewChat()
+  }, [startNewChat])
+
   const authenticateOwner = useCallback(async () => {
     const passkey = prompt('Enter owner passkey:')
     if (!passkey) return
@@ -730,15 +733,15 @@ const [pendingFiles, setPendingFiles] = useState([])
         const data = await res.json()
         setIsOwner(true)
         setOwnerSessionId(data.session_id)
-        localStorage.setItem('mavis_owner_session', JSON.stringify({ sessionId: data.session_id }))
-        alert('✅ Owner access granted!')
+        localStorage.setItem('mavis_owner_session', data.session_id)
       } else {
-        alert('❌ Incorrect passkey')
+        alert('Incorrect passkey')
       }
     } catch (err) {
-      alert('❌ Auth failed — backend may be offline')
+      alert('Auth failed')
     }
   }, [])
+
 
   const selectConversation = useCallback((convId) => {
     const conv = conversations.find(c => c.id === convId)
@@ -1202,9 +1205,9 @@ const [pendingFiles, setPendingFiles] = useState([])
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             {isOwner ? (
-              <span style={{ fontSize: '0.7rem', fontWeight: 600, color: palette.accent, letterSpacing: '0.03em', fontFamily: 'Inter, system-ui, sans-serif' }}>
-                🔒 Owner Access
-              </span>
+              <button onClick={revokeOwnerAccess} title="Revoke owner access" style={{ fontSize: '0.7rem', fontWeight: 600, color: '#e74c3c', letterSpacing: '0.03em', fontFamily: 'Inter, system-ui, sans-serif', background: 'none', border: `1px solid #e74c3c`, borderRadius: '8px', padding: '0.2rem 0.6rem', cursor: 'pointer' }}>
+                🔓 Exit Owner
+              </button>
             ) : (
               <button onClick={authenticateOwner} style={{
                 background: 'none',
@@ -1219,7 +1222,7 @@ const [pendingFiles, setPendingFiles] = useState([])
                 Owner Login
               </button>
             )}
-            <button onClick={() => onNavigate?.('home')} style={{
+            <button onClick={() => onNavigate?.('landing')} style={{
               background: 'none',
               border: 'none',
               color: palette.textMuted,
@@ -1443,3 +1446,4 @@ const [pendingFiles, setPendingFiles] = useState([])
     </div>
   )
 }
+

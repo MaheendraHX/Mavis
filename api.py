@@ -326,7 +326,11 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
     conv_id = request.session_id
     guest_id = x_guest_id or "anonymous"
 
-    if check_guest_limit(guest_id):
+    # Determine user type: validate owner session server-side, don't trust client
+    is_owner = request.session_id.startswith("owner_") and request.session_id in _owner_sessions
+
+    # Owner bypasses guest limit
+    if not is_owner and check_guest_limit(guest_id):
         return {
             "response": "You've hit the demo message limit. Thanks for trying MAVIS!",
             "title": None,
@@ -336,9 +340,6 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
 
     if not request.incognito:
         memory.create_conversation(conv_id, "New conversation", "guest", guest_id)
-
-    # Determine user type: validate owner session server-side, don't trust client
-    is_owner = request.session_id.startswith("owner_") and request.session_id in _owner_sessions
 
     if is_owner:
         system_prompt = MAVIS_SYSTEM_PROMPT
@@ -490,7 +491,11 @@ async def chat_with_file(
     conv_id = session_id
     guest_id = x_guest_id or "anonymous"
 
-    if check_guest_limit(guest_id):
+    # Determine user type: validate owner session server-side, don't trust client
+    is_owner = session_id.startswith("owner_") and session_id in _owner_sessions
+
+    # Owner bypasses guest limit
+    if not is_owner and check_guest_limit(guest_id):
         return {
             "response": "You've hit the demo message limit. Thanks for trying MAVIS!",
             "conv_id": conv_id,
@@ -500,8 +505,7 @@ async def chat_with_file(
     if not incognito:
         memory.create_conversation(conv_id, "New conversation", "guest", guest_id)
 
-    # Use owner prompt for Maheendra, guest prompt for demo visitors
-    if user_type == "owner":
+    if is_owner:
         system_prompt = MAVIS_SYSTEM_PROMPT
         if PC_CONTROL_ENABLED:
             system_prompt += "\n\nNote: PC control is enabled. You can execute commands on the owner's machine when asked."
@@ -568,7 +572,11 @@ async def chat_with_image(
     conv_id = session_id
     guest_id = x_guest_id or "anonymous"
 
-    if check_guest_limit(guest_id):
+    # Determine user type: validate owner session server-side, don't trust client
+    is_owner = session_id.startswith("owner_") and session_id in _owner_sessions
+
+    # Owner bypasses guest limit
+    if not is_owner and check_guest_limit(guest_id):
         return {
             "response": "You've hit the demo message limit. Thanks for trying MAVIS!",
             "conv_id": conv_id,
@@ -578,8 +586,7 @@ async def chat_with_image(
     if not incognito:
         memory.create_conversation(conv_id, "New conversation", "guest", guest_id)
 
-    # Use owner prompt for Maheendra, guest prompt for demo visitors
-    if user_type == "owner":
+    if is_owner:
         system_prompt = MAVIS_SYSTEM_PROMPT
         if PC_CONTROL_ENABLED:
             system_prompt += "\n\nNote: PC control is enabled. You can execute commands on the owner's machine when asked."

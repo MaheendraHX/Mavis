@@ -74,7 +74,7 @@ export default function Landing({ onEnter }) {
     return () => ScrollTrigger.getAll().forEach(t => t.kill())
   }, [])
 
-  const goToChat = () => onEnter?.('chat')
+  const goToChat = () => onEnter?.('signin')
 
   const features = [
     { icon: 'Text', title: 'Multimodal Understanding', desc: 'Process text, files, images, and code in one conversation.' },
