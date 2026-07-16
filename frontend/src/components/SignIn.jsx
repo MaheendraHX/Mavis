@@ -42,7 +42,7 @@ export default function SignIn({ onOwnerAccess, onDemoAccess }) {
       })
       const data = await res.json()
 
-      if (data.success) {
+      if (data.authenticated) {
         localStorage.setItem('mavis_owner_session', data.session_id)
         onOwnerAccess(data.session_id)
       } else {
