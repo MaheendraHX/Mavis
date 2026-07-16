@@ -14,3 +14,5 @@ services:
         value: "false"
       - key: SERPER_API_KEY
         sync: false
+      - key: OWNER_PASSKEY
+        value: "changeme"
