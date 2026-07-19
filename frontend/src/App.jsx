@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ThemeProvider } from './components/chat-features/ThemeContext'
 import Boot from './components/Boot'
 import Landing from './components/Landing'
 import SignIn from './components/SignIn'
@@ -17,17 +18,19 @@ export default function App() {
   }
 
   return (
-    <div style={{ width: '100vw', minHeight: '100vh', background: '#faf9f7' }}>
-      {screen === 'boot' && <Boot onComplete={() => setScreen('landing')} />}
-      {screen === 'landing' && (
-        <Landing onEnter={setScreen} />
-      )}
-      {screen === 'signin' && (
-        <SignIn onOwnerAccess={handleOwnerAccess} onDemoAccess={handleDemoAccess} />
-      )}
-      {screen === 'chat' && (
-        <Chat onNavigate={setScreen} />
-      )}
-    </div>
+    <ThemeProvider>
+      <div style={{ width: '100vw', minHeight: '100vh' }}>
+        {screen === 'boot' && <Boot onComplete={() => setScreen('landing')} />}
+        {screen === 'landing' && (
+          <Landing onEnter={setScreen} />
+        )}
+        {screen === 'signin' && (
+          <SignIn onOwnerAccess={handleOwnerAccess} onDemoAccess={handleDemoAccess} />
+        )}
+        {screen === 'chat' && (
+          <Chat onNavigate={setScreen} />
+        )}
+      </div>
+    </ThemeProvider>
   )
 }

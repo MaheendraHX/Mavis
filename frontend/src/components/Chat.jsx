@@ -1,4 +1,16 @@
-﻿import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import { ThemeProvider, useTheme } from './chat-features/ThemeContext'
+import ThemeToggle from './chat-features/ThemeToggle'
+import FullscreenToggle from './chat-features/FullscreenToggle'
+import ExportChat from './chat-features/ExportChat'
+import ConversationSearch from './chat-features/ConversationSearch'
+import TokenCounter from './chat-features/TokenCounter'
+import TypingIndicator from './chat-features/TypingIndicator'
+import EmojiReactions from './chat-features/EmojiReactions'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://aria-backend-b6qb.onrender.com'
 const DEMO_MESSAGE_LIMIT = 10
@@ -156,21 +168,7 @@ function renderTextContent(content) {
   })
 }
 
-const palette = {
-  bg: '#faf9f7',
-  bgSoft: '#f4eee7',
-  surface: '#ffffff',
-  surfaceWarm: '#fffaf4',
-  text: '#2d2d2d',
-  textMuted: '#6b6b6b',
-  primary: '#d4a574',
-  secondary: '#e89f71',
-  accent: '#a8d5ba',
-  border: 'rgba(0,0,0,0.08)',
-  borderStrong: 'rgba(212,165,116,0.28)',
-  shadow: 'rgba(62,42,28,0.08)',
-  danger: '#c85850',
-}
+// palette is now dynamic via useTheme() inside Chat component
 
 function getOrCreateGuestId() {
   let id = localStorage.getItem('mavis_guest_id')
@@ -454,7 +452,13 @@ function DownloadButton({ content }) {
   )
 }
 
-function ARIAMessage({ msg, onEdit, onDelete }) {
+function ARIAMessage({ msg, onEdit, onDelete, palette: paletteProp }) {
+  const palette = paletteProp || {
+    bg: '#faf9f7', bgSoft: '#f4eee7', surface: '#ffffff', surfaceWarm: '#fffaf4',
+    text: '#2d2d2d', textMuted: '#6b6b6b', primary: '#d4a574', secondary: '#e89f71',
+    accent: '#a8d5ba', border: 'rgba(0,0,0,0.08)', borderStrong: 'rgba(212,165,116,0.28)',
+    shadow: 'rgba(62,42,28,0.08)', danger: '#c85850',
+  }
   const isUser = msg.role === 'user'
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState(msg.content || '')
@@ -528,11 +532,65 @@ function ARIAMessage({ msg, onEdit, onDelete }) {
             boxShadow: `0 10px 28px ${palette.shadow}`,
             fontSize: '0.92rem',
             lineHeight: 1.65,
-            whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
             fontFamily: 'Inter, system-ui, sans-serif',
           }}>
-            {renderTextContent(msg.content)}
+            {isUser ? (
+              <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
+            ) : (
+              <div style={{ whiteSpace: 'pre-wrap' }}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    code({ node, inline, className, children, ...props }) {
+                      const match = /language-(\w+)/.exec(className || '')
+                      return !inline && match ? (
+                        <div style={{ margin: '8px 0', borderRadius: '10px', overflow: 'hidden' }}>
+                          <div style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                            padding: '6px 12px', background: '#2d2d2d', fontSize: '0.7rem', color: '#a1a1aa',
+                          }}>
+                            <span>{match[1]}</span>
+                            <button onClick={() => { navigator.clipboard.writeText(String(children)); }}
+                              style={{ background: 'none', border: 'none', color: '#a1a1aa', cursor: 'pointer', fontSize: '0.7rem' }}>
+                              ⧉ Copy
+                            </button>
+                          </div>
+                          <SyntaxHighlighter style={oneDark} language={match[1]} PreTag="div"
+                            customStyle={{ margin: 0, borderRadius: '0 0 10px 10px', fontSize: '0.85rem', padding: '12px' }}>
+                            {String(children).replace(/\n$/, '')}
+                          </SyntaxHighlighter>
+                        </div>
+                      ) : (
+                        <code style={{ background: 'rgba(0,0,0,0.06)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.88em' }} {...props}>
+                          {children}
+                        </code>
+                      )
+                    },
+                    a({ children, ...props }) {
+                      return <a {...props} style={{ color: palette.secondary, textDecoration: 'underline' }} target="_blank" rel="noopener noreferrer">{children}</a>
+                    },
+                    ul({ children }) {
+                      return <ul style={{ margin: '4px 0', paddingLeft: '1.2em' }}>{children}</ul>
+                    },
+                    ol({ children }) {
+                      return <ol style={{ margin: '4px 0', paddingLeft: '1.2em' }}>{children}</ol>
+                    },
+                    p({ children }) {
+                      return <p style={{ margin: '4px 0' }}>{children}</p>
+                    },
+                    h1({ children }) { return <h1 style={{ fontSize: '1.3rem', margin: '8px 0 4px' }}>{children}</h1> },
+                    h2({ children }) { return <h2 style={{ fontSize: '1.15rem', margin: '8px 0 4px' }}>{children}</h2> },
+                    h3({ children }) { return <h3 style={{ fontSize: '1.05rem', margin: '6px 0 4px' }}>{children}</h3> },
+                    blockquote({ children }) {
+                      return <blockquote style={{ borderLeft: `3px solid ${palette.primary}`, paddingLeft: '12px', margin: '6px 0', color: palette.textMuted }}>{children}</blockquote>
+                    },
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
+              </div>
+            )}
           </div>
         )}
 
@@ -660,6 +718,7 @@ function FileAttachmentCard({ file, onRemove }) {
 }
 
 export default function Chat({ onNavigate }) {
+  const { palette, isDark, toggle } = useTheme()
   const [conversations, setConversations] = useState(() => {
     try {
       const saved = localStorage.getItem('mavis_conversations')
@@ -670,6 +729,7 @@ export default function Chat({ onNavigate }) {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [isTyping, setIsTyping] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
 const [pendingImage, setPendingImage] = useState(null)
@@ -883,6 +943,7 @@ const [pendingFiles, setPendingFiles] = useState([])
     }
     
     setLoading(true)
+    setIsTyping(true)
 
     let convId = activeConvId
     if (!convId) {
@@ -996,6 +1057,7 @@ const [pendingFiles, setPendingFiles] = useState([])
       }
     } finally {
       setLoading(false)
+      setIsTyping(false)
       abortRef.current = null
     }
   }, [input, loading, messages, activeConvId, guestId, pendingImage, pendingFiles])
@@ -1010,6 +1072,7 @@ const [pendingFiles, setPendingFiles] = useState([])
   const stopGeneration = useCallback(() => {
     abortRef.current?.abort()
     setLoading(false)
+    setIsTyping(false)
   }, [])
 
   const activeConv = conversations.find(c => c.id === activeConvId)
@@ -1234,6 +1297,10 @@ const [pendingFiles, setPendingFiles] = useState([])
             }}>
               Home
             </button>
+            <ConversationSearch conversations={conversations} onSelectConversation={selectConversation} />
+            <ExportChat messages={messages} conversationId={activeConvId} />
+            <FullscreenToggle />
+            <ThemeToggle />
           </div>
         </div>
 
@@ -1291,8 +1358,21 @@ const [pendingFiles, setPendingFiles] = useState([])
               </p>
             </div>
           ) : (
-            messages.map((msg, i) => <ARIAMessage key={i} msg={msg} onEdit={editMessage} onDelete={(id) => setMessages(prev => prev.filter(m => m.id !== id))} />)
+            messages.map((msg, i) => (
+              <div key={i}>
+                <ARIAMessage msg={msg} onEdit={editMessage} onDelete={(id) => setMessages(prev => prev.filter(m => m.id !== id))} palette={palette} />
+                {msg.role === 'assistant' && <EmojiReactions msg={msg} onReact={(msgId, emoji) => {
+                  setMessages(prev => prev.map(m => {
+                    if (m.id !== msgId) return m
+                    const reactions = { ...(m.reactions || {}) }
+                    reactions[emoji] = (reactions[emoji] || 0) + 1
+                    return { ...m, reactions }
+                  }))
+                }} />}
+              </div>
+            ))
           )}
+          {isTyping && <TypingIndicator palette={palette} />}
           <div ref={messagesEndRef} />
         </div>
 
@@ -1428,6 +1508,9 @@ const [pendingFiles, setPendingFiles] = useState([])
               {uploadError}
             </div>
           )}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+            <TokenCounter messages={messages} />
+          </div>
         </div>
       </div>
 
@@ -1439,6 +1522,10 @@ const [pendingFiles, setPendingFiles] = useState([])
         @keyframes pulse {
           0%, 100% { transform: scale(1); }
           50% { transform: scale(1.04); }
+        }
+        @keyframes typingBounce {
+          0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+          30% { transform: translateY(-6px); opacity: 1; }
         }
         .delete-btn { opacity: 0; }
         div:hover > .delete-btn { opacity: 1; }
