@@ -21,6 +21,7 @@ import memory
 from url_reader import is_safe_url
 from file_reader import process_file, get_file_type
 from web_search import web_search
+from tools import calculator, wikipedia_search, get_tool_definitions
 
 
 load_dotenv()
@@ -414,21 +415,98 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
             else:
                 sources = []
                 search_prompt = system_prompt
-            response = client.chat.completions.create(
+            # First call with tools — model may request a tool
+            tool_defs = get_tool_definitions()
+            first_response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "system", "content": search_prompt}] + history,
+                tools=tool_defs,
+                tool_choice="auto",
                 temperature=0.7,
                 max_tokens=1024,
             )
-            assistant_message = response.choices[0].message.content
+
+            # Check if model requested tools
+            if first_response.choices[0].message.tool_calls:
+                tool_msg = first_response.choices[0].message
+                tool_results = []
+
+                for tc in tool_msg.tool_calls:
+                    fn_name = tc.function.name
+                    import json as _json
+                    try:
+                        fn_args = _json.loads(tc.function.arguments)
+                    except Exception:
+                        fn_args = {}
+
+                    if fn_name == "calculator":
+                        result = calculator(fn_args.get("expression", "0"))
+                    elif fn_name == "wikipedia_search":
+                        result = wikipedia_search(fn_args.get("query", ""))
+                    else:
+                        result = "Unknown tool"
+
+                    tool_results.append({
+                        "role": "tool",
+                        "tool_call_id": tc.id,
+                        "content": result,
+                    })
+
+                # Second call: model reads tool results and answers
+                final_messages = [{"role": "system", "content": search_prompt}] + history + [
+                    tool_msg.model_dump()
+                ] + tool_results
+
+                final_response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=final_messages,
+                    temperature=0.7,
+                    max_tokens=1024,
+                )
+                assistant_message = final_response.choices[0].message.content
+            else:
+                assistant_message = first_response.choices[0].message.content
         else:
-            response = client.chat.completions.create(
+            tool_defs = get_tool_definitions()
+            first_response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "system", "content": system_prompt}] + history,
+                tools=tool_defs,
+                tool_choice="auto",
                 temperature=0.7,
                 max_tokens=1024,
             )
-            assistant_message = response.choices[0].message.content
+
+            if first_response.choices[0].message.tool_calls:
+                tool_msg = first_response.choices[0].message
+                tool_results = []
+                for tc in tool_msg.tool_calls:
+                    fn_name = tc.function.name
+                    import json as _json
+                    try:
+                        fn_args = _json.loads(tc.function.arguments)
+                    except Exception:
+                        fn_args = {}
+                    if fn_name == "calculator":
+                        result = calculator(fn_args.get("expression", "0"))
+                    elif fn_name == "wikipedia_search":
+                        result = wikipedia_search(fn_args.get("query", ""))
+                    else:
+                        result = "Unknown tool"
+                    tool_results.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+
+                final_messages = [{"role": "system", "content": system_prompt}] + history + [
+                    tool_msg.model_dump()
+                ] + tool_results
+                final_response = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=final_messages,
+                    temperature=0.7,
+                    max_tokens=1024,
+                )
+                assistant_message = final_response.choices[0].message.content
+            else:
+                assistant_message = first_response.choices[0].message.content
             sources = []
 
         if first_turn:
