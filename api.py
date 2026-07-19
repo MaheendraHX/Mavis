@@ -540,6 +540,103 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
     return {"response": assistant_message, "title": title, "conv_id": conv_id, "sources": sources}
 
 
+# ============================================================================
+# STREAMING CHAT ENDPOINT (SSE)
+# ============================================================================
+
+@app.post("/chat/stream")
+async def chat_stream(request: ChatRequest):
+    """
+    Server-Sent Events streaming endpoint.
+    Returns a stream of text chunks as the AI generates them.
+    """
+    from fastapi.responses import StreamingResponse
+
+    guest_id = request.session_id
+    is_owner = validate_owner_session(request.session_id)
+    conv_id = request.session_id if is_owner else f"guest_{guest_id}"
+
+    if not is_owner and check_guest_limit(guest_id):
+        async def limit_gen():
+            yield 'data: ' + json.dumps({"type": "text", "content": "You've hit the demo message limit. Thanks for trying MAVIS!"}) + '\n\n'
+            yield 'data: ' + json.dumps({"type": "done", "limit_reached": True}) + '\n\n'
+        return StreamingResponse(limit_gen(), media_type="text/event-stream")
+
+    if not request.incognito:
+        memory.create_conversation(conv_id, "New conversation", "guest", guest_id)
+
+    if is_owner:
+        system_prompt = MAVIS_SYSTEM_PROMPT
+        if PC_CONTROL_ENABLED:
+            system_prompt += "\n\nNote: PC control is enabled."
+    else:
+        system_prompt = GUEST_SYSTEM_PROMPT
+
+    persona_mod = PERSONA_MODIFIERS.get(request.persona, "")
+    if persona_mod:
+        system_prompt += persona_mod
+
+    history = memory.get_conversation_messages(conv_id) if not request.incognito else []
+
+    # Optional web search
+    sources = []
+    search_prompt = system_prompt
+    if request.web_search and not _is_greeting(request.message):
+        search_results = web_search(request.message)
+        if search_results:
+            sources = [{"title": r["title"], "url": r["url"]} for r in search_results]
+            search_context = "\n\n".join(
+                [f"[{r['title']}]({r['url']}): {r['snippet']}" for r in search_results]
+            )
+            search_prompt = system_prompt + f"\n\nSearch results for '{request.message}':\n{search_context}"
+
+    full_response = ""
+
+    async def generate():
+        nonlocal full_response
+        client = get_groq_client()
+        messages = [{"role": "system", "content": search_prompt}] + history + [
+            {"role": "user", "content": request.message}
+        ]
+
+        try:
+            stream = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=messages,
+                temperature=0.7,
+                max_tokens=1024,
+                stream=True,
+            )
+
+            for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    token = chunk.choices[0].delta.content
+                    full_response += token
+                    yield 'data: ' + json.dumps({"type": "text", "content": token}) + '\n\n'
+
+            # Send sources if any
+            if sources:
+                yield 'data: ' + json.dumps({"type": "sources", "content": sources}) + '\n\n'
+
+            # Save to memory
+            title = None
+            if not request.incognito:
+                title = _generate_title(request.message, full_response)
+                memory.update_conversation_title(conv_id, title)
+                memory.add_message(conv_id, "user", request.message)
+                memory.add_message(conv_id, "assistant", full_response)
+
+            increment_guest_count(guest_id)
+
+            yield 'data: ' + json.dumps({"type": "done", "title": title, "conv_id": conv_id}) + '\n\n'
+
+        except Exception as e:
+            traceback.print_exc()
+            yield 'data: ' + json.dumps({"type": "error", "content": str(e)}) + '\n\n'
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
 class CreateFileRequest(BaseModel):
     content: str
     filename: str = "document"
