@@ -224,12 +224,23 @@ Always stay in character as MAVIS.
 """
 
 
+PERSONA_MODIFIERS = {
+    "default": "",
+    "coder": "\n\nPersona: You are a senior software engineer. Be precise, give clean code examples, explain trade-offs. Use technical terms naturally. Format code with proper comments.",
+    "writer": "\n\nPersona: You are a creative writing expert. Use vivid language, metaphors, and storytelling. Help with essays, stories, and creative projects. Be eloquent but not pretentious.",
+    "analyst": "\n\nPersona: You are a data analyst and researcher. Be structured, data-driven, use bullet points and numbers. Cite sources when possible. Think critically.",
+    "tutor": "\n\nPersona: You are a patient, encouraging teacher. Break complex topics into simple steps. Use examples and analogies. Ask questions to check understanding. Never condescend.",
+    "casual": "\n\nPersona: You are a relaxed, friendly chat buddy. Use casual language, occasional slang. Be warm and fun. Keep it light unless the topic demands depth.",
+}
+
+
 class ChatRequest(BaseModel):
     message: str
     user_type: str
     session_id: str = "default"
     incognito: bool = False
     web_search: bool = True
+    persona: str = "default"
 
 
 class UrlRequest(BaseModel):
@@ -375,6 +386,11 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
             system_prompt += "\n\nNote: PC control is enabled. You can execute commands on the owner's machine when asked."
     else:
         system_prompt = GUEST_SYSTEM_PROMPT
+
+    # Apply persona modifier
+    persona_mod = PERSONA_MODIFIERS.get(request.persona, "")
+    if persona_mod:
+        system_prompt += persona_mod
 
     history = memory.get_conversation_messages(conv_id) if not request.incognito else []
     first_turn = len(history) == 0

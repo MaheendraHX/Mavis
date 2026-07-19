@@ -11,6 +11,7 @@ import ConversationSearch from './chat-features/ConversationSearch'
 import TokenCounter from './chat-features/TokenCounter'
 import TypingIndicator from './chat-features/TypingIndicator'
 import EmojiReactions from './chat-features/EmojiReactions'
+import PersonaSelector from './chat-features/PersonaSelector'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://aria-backend-b6qb.onrender.com'
 const DEMO_MESSAGE_LIMIT = 10
@@ -730,6 +731,8 @@ export default function Chat({ onNavigate }) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const [selectedPersona, setSelectedPersona] = useState(() => localStorage.getItem('mavis_persona') || 'default')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
 const [pendingImage, setPendingImage] = useState(null)
@@ -1016,6 +1019,7 @@ const [pendingFiles, setPendingFiles] = useState([])
             session_id: userSession,
             incognito: false,
             web_search: true,
+            persona: selectedPersona,
           }),
           signal: controller.signal,
         })
@@ -1060,7 +1064,7 @@ const [pendingFiles, setPendingFiles] = useState([])
       setIsTyping(false)
       abortRef.current = null
     }
-  }, [input, loading, messages, activeConvId, guestId, pendingImage, pendingFiles])
+  }, [input, loading, messages, activeConvId, guestId, pendingImage, pendingFiles, selectedPersona])
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1301,10 +1305,39 @@ const [pendingFiles, setPendingFiles] = useState([])
             <ExportChat messages={messages} conversationId={activeConvId} />
             <FullscreenToggle />
             <ThemeToggle />
+            <PersonaSelector selected={selectedPersona} onSelect={(id) => {
+              setSelectedPersona(id)
+              localStorage.setItem('mavis_persona', id)
+            }} />
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 1.25rem' }}>
+        <div
+          style={{ flex: 1, overflowY: 'auto', padding: '1.5rem 1.25rem', position: 'relative' }}
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault()
+            setIsDragging(false)
+            const files = Array.from(e.dataTransfer.files)
+            if (files.length > 0) {
+              files.forEach(f => handleFileUpload({ target: { files: [f] } }))
+            }
+          }}
+        >
+          {isDragging && (
+            <div style={{
+              position: 'absolute', inset: 0, background: 'rgba(212,165,116,0.08)',
+              border: `2px dashed ${palette.primary}`, borderRadius: '16px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              zIndex: 50, pointerEvents: 'none',
+            }}>
+              <div style={{ textAlign: 'center', color: palette.primary }}>
+                <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📎</div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>Drop files here</div>
+              </div>
+            </div>
+          )}
           {messages.length === 0 ? (
             <div style={{
               display: 'flex',
