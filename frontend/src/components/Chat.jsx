@@ -549,7 +549,7 @@ function ARIAMessage({ msg, onEdit, onDelete, palette: paletteProp }) {
                         <div style={{ margin: '8px 0', borderRadius: '10px', overflow: 'hidden' }}>
                           <div style={{
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                            padding: '6px 12px', background: '#2d2d2d', fontSize: '0.7rem', color: '#a1a1aa',
+                            padding: '6px 12px', background: palette.codeBlockHeader, fontSize: '0.7rem', color: '#a1a1aa',
                           }}>
                             <span>{match[1]}</span>
                             <button onClick={() => { navigator.clipboard.writeText(String(children)); }}
@@ -563,7 +563,7 @@ function ARIAMessage({ msg, onEdit, onDelete, palette: paletteProp }) {
                           </SyntaxHighlighter>
                         </div>
                       ) : (
-                        <code style={{ background: 'rgba(0,0,0,0.06)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.88em' }} {...props}>
+                        <code style={{ background: palette.inlineCode, padding: '2px 6px', borderRadius: '4px', fontSize: '0.88em', color: palette.text }} {...props}>
                           {children}
                         </code>
                       )
@@ -698,18 +698,18 @@ function FileAttachmentCard({ file, onRemove }) {
       <button
         onClick={onRemove}
         style={{
-          background: 'rgba(255,255,255,0.9)',
+          background: palette.hoverItem,
           border: 'none',
           borderRadius: '8px',
           width: '28px',
           height: '28px',
           cursor: 'pointer',
           fontSize: '0.9rem',
-          color: '#c0706b',
+          color: palette.danger,
           transition: 'all 0.2s',
         }}
-        onMouseEnter={e => { e.currentTarget.style.background = '#c0706b'; e.currentTarget.style.color = 'white' }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.9)'; e.currentTarget.style.color = '#c0706b' }}
+        onMouseEnter={e => { e.currentTarget.style.background = palette.danger; e.currentTarget.style.color = '#fff' }}
+        onMouseLeave={e => { e.currentTarget.style.background = palette.hoverItem; e.currentTarget.style.color = palette.danger }}
         title="Remove file"
       >
         ✕
@@ -1150,7 +1150,7 @@ const [pendingFiles, setPendingFiles] = useState([])
             textAlign: 'left',
             letterSpacing: '0.02em',
           }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#fff4e8'; e.currentTarget.style.borderColor = palette.primary }}
+          onMouseEnter={e => { e.currentTarget.style.background = palette.activeItem; e.currentTarget.style.borderColor = palette.primary }}
           onMouseLeave={e => { e.currentTarget.style.background = palette.surfaceWarm; e.currentTarget.style.borderColor = palette.borderStrong }}
         >
           + New Conversation
@@ -1170,7 +1170,7 @@ const [pendingFiles, setPendingFiles] = useState([])
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 transition: 'all 0.2s',
-                background: activeConvId === conv.id ? '#fff0df' : 'transparent',
+                background: activeConvId === conv.id ? palette.activeItem : 'transparent',
                 border: activeConvId === conv.id ? `1px solid ${palette.borderStrong}` : '1px solid transparent',
               }}
               onMouseEnter={e => { if (activeConvId !== conv.id) e.currentTarget.style.background = palette.bgSoft }}
@@ -1249,7 +1249,7 @@ const [pendingFiles, setPendingFiles] = useState([])
           alignItems: 'center',
           justifyContent: 'space-between',
           borderBottom: `1px solid ${palette.border}`,
-          background: 'rgba(255,255,255,0.78)',
+          background: palette.headerBg,
           backdropFilter: 'blur(12px)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -1301,14 +1301,14 @@ const [pendingFiles, setPendingFiles] = useState([])
             }}>
               Home
             </button>
-            <ConversationSearch conversations={conversations} onSelectConversation={selectConversation} />
-            <ExportChat messages={messages} conversationId={activeConvId} />
+            <ConversationSearch conversations={conversations} onSelectConversation={selectConversation} palette={palette} />
+            <ExportChat messages={messages} conversationId={activeConvId} palette={palette} />
             <FullscreenToggle />
             <ThemeToggle />
             <PersonaSelector selected={selectedPersona} onSelect={(id) => {
               setSelectedPersona(id)
               localStorage.setItem('mavis_persona', id)
-            }} />
+            }} palette={palette} />
           </div>
         </div>
 
@@ -1412,7 +1412,7 @@ const [pendingFiles, setPendingFiles] = useState([])
         <div style={{
           padding: '1rem 1.25rem 1.25rem',
           borderTop: `1px solid ${palette.border}`,
-          background: 'rgba(255,255,255,0.78)',
+          background: palette.headerBg,
           backdropFilter: 'blur(12px)',
         }}>
           <div style={{

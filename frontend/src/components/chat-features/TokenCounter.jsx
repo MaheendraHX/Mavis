@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 
-export default function TokenCounter({ messages }) {
+export default function TokenCounter({ messages, palette }) {
   const [tokens, setTokens] = useState(0)
   const MAX_TOKENS = 32000
 
@@ -14,7 +14,9 @@ export default function TokenCounter({ messages }) {
   const isWarning = percentage > 70
   const isCritical = percentage > 90
 
-  const color = isCritical ? '#c85850' : isWarning ? '#e89f71' : '#6b6b6b'
+  const p = palette || {}
+  const normalColor = p.textMuted || '#6b6b6b'
+  const color = isCritical ? (p.danger || '#c85850') : isWarning ? (p.secondary || '#e89f71') : normalColor
 
   return (
     <div style={{
@@ -28,7 +30,7 @@ export default function TokenCounter({ messages }) {
       <div style={{
         width: '40px',
         height: '3px',
-        background: 'rgba(0,0,0,0.08)',
+        background: p.hoverItem || 'rgba(0,0,0,0.08)',
         borderRadius: '2px',
         overflow: 'hidden',
       }}>

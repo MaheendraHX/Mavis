@@ -2,7 +2,7 @@ import React from 'react'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'https://aria-backend-b6qb.onrender.com'
 
-export default function ExportChat({ messages, conversationId }) {
+export default function ExportChat({ messages, conversationId, palette }) {
   const [showMenu, setShowMenu] = React.useState(false)
   const [exporting, setExporting] = React.useState(false)
 
@@ -87,6 +87,7 @@ export default function ExportChat({ messages, conversationId }) {
     URL.revokeObjectURL(url)
   }
 
+  const p = palette || {}
   const menuItems = [
     { icon: '📄', label: 'Word Document', action: exportWord },
     { icon: '📝', label: 'Plain Text', action: exportTXT },
@@ -121,15 +122,15 @@ export default function ExportChat({ messages, conversationId }) {
           top: '100%',
           right: 0,
           marginTop: '4px',
-          background: '#fff',
-          border: '1px solid rgba(0,0,0,0.1)',
+          background: p.popover || '#fff',
+          border: `1px solid ${p.popoverBorder || 'rgba(0,0,0,0.1)'}`,
           borderRadius: '12px',
           padding: '6px',
           boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
           zIndex: 100,
           minWidth: '180px',
         }}>
-          <div style={{ fontSize: '0.7rem', color: '#6b6b6b', padding: '4px 8px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+          <div style={{ fontSize: '0.7rem', color: p.textMuted || '#6b6b6b', padding: '4px 8px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
             Export as
           </div>
           {menuItems.map(item => (
@@ -144,10 +145,10 @@ export default function ExportChat({ messages, conversationId }) {
               cursor: 'pointer',
               borderRadius: '8px',
               fontSize: '0.85rem',
-              color: '#2d2d2d',
+              color: p.text || '#2d2d2d',
               transition: 'background 0.15s',
             }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
+            onMouseEnter={e => e.currentTarget.style.background = p.hoverItem || 'rgba(0,0,0,0.04)'}
             onMouseLeave={e => e.currentTarget.style.background = 'none'}
             >
               <span>{item.icon}</span>

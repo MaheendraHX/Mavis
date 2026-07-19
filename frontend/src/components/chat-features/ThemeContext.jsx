@@ -17,8 +17,16 @@ export const lightPalette = {
   shadow: 'rgba(62,42,28,0.08)',
   danger: '#c85850',
   sidebarBg: '#ffffff',
-  headerBg: 'rgba(255,255,255,0.78)',
+  headerBg: 'rgba(255,255,255,0.82)',
   codeBg: '#1e1e1e',
+  activeItem: 'rgba(212,165,116,0.12)',
+  hoverItem: 'rgba(0,0,0,0.04)',
+  inlineCode: 'rgba(0,0,0,0.06)',
+  codeBlockBg: '#282c34',
+  codeBlockHeader: '#21252b',
+  codeBlockText: '#abb2bf',
+  popover: '#ffffff',
+  popoverBorder: 'rgba(0,0,0,0.1)',
 }
 
 export const darkPalette = {
@@ -38,6 +46,14 @@ export const darkPalette = {
   sidebarBg: '#141414',
   headerBg: 'rgba(15,15,15,0.85)',
   codeBg: '#0d0d0d',
+  activeItem: 'rgba(212,165,116,0.12)',
+  hoverItem: 'rgba(255,255,255,0.04)',
+  inlineCode: 'rgba(255,255,255,0.08)',
+  codeBlockBg: '#282c34',
+  codeBlockHeader: '#21252b',
+  codeBlockText: '#abb2bf',
+  popover: '#2a2a2a',
+  popoverBorder: 'rgba(255,255,255,0.1)',
 }
 
 export function ThemeProvider({ children }) {

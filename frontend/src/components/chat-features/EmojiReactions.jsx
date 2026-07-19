@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 
 const EMOJIS = ['👍', '👎', '🔥', '❤️', '😂', '🤔', '✅', '💡']
 
-export default function EmojiReactions({ msg, onReact }) {
+export default function EmojiReactions({ msg, onReact, palette }) {
   const [showPicker, setShowPicker] = useState(false)
 
   return (
@@ -16,8 +16,8 @@ export default function EmojiReactions({ msg, onReact }) {
         }}>
           {Object.entries(msg.reactions).map(([emoji, count]) => (
             <button key={emoji} onClick={() => onReact(msg.id, emoji)} style={{
-              background: 'rgba(212,165,116,0.12)',
-              border: '1px solid rgba(212,165,116,0.2)',
+              background: palette.activeItem,
+              border: `1px solid ${palette.borderStrong}`,
               borderRadius: '12px',
               padding: '2px 8px',
               cursor: 'pointer',
@@ -25,18 +25,20 @@ export default function EmojiReactions({ msg, onReact }) {
               display: 'flex',
               alignItems: 'center',
               gap: '3px',
+              color: palette.text,
               transition: 'all 0.2s',
             }}>
-              {emoji} <span style={{ fontSize: '0.7rem', color: '#6b6b6b' }}>{count}</span>
+              {emoji} <span style={{ fontSize: '0.7rem', color: palette.textMuted }}>{count}</span>
             </button>
           ))}
           <button onClick={() => setShowPicker(!showPicker)} style={{
             background: 'none',
-            border: '1px dashed rgba(0,0,0,0.12)',
+            border: `1px dashed ${palette.border}`,
             borderRadius: '12px',
             padding: '2px 8px',
             cursor: 'pointer',
             fontSize: '0.8rem',
+            color: palette.textMuted,
             opacity: 0.5,
             transition: 'opacity 0.2s',
           }}
@@ -72,8 +74,8 @@ export default function EmojiReactions({ msg, onReact }) {
           position: 'absolute',
           bottom: '100%',
           left: 0,
-          background: '#fff',
-          border: '1px solid rgba(0,0,0,0.1)',
+          background: palette.popover,
+          border: `1px solid ${palette.popoverBorder}`,
           borderRadius: '12px',
           padding: '6px',
           display: 'flex',
@@ -91,7 +93,7 @@ export default function EmojiReactions({ msg, onReact }) {
               borderRadius: '6px',
               transition: 'background 0.15s',
             }}
-            onMouseEnter={ev => ev.currentTarget.style.background = 'rgba(0,0,0,0.06)'}
+            onMouseEnter={ev => ev.currentTarget.style.background = palette.hoverItem}
             onMouseLeave={ev => ev.currentTarget.style.background = 'none'}
             >
               {e}

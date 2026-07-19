@@ -9,7 +9,7 @@ const PERSONAS = [
   { id: 'casual', name: 'Casual', icon: '😎', description: 'Relaxed & friendly' },
 ]
 
-export default function PersonaSelector({ selected, onSelect }) {
+export default function PersonaSelector({ selected, onSelect, palette }) {
   const [isOpen, setIsOpen] = useState(false)
   const ref = useRef(null)
 
@@ -20,6 +20,7 @@ export default function PersonaSelector({ selected, onSelect }) {
   }, [])
 
   const current = PERSONAS.find(p => p.id === selected) || PERSONAS[0]
+  const p = palette || {}
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
@@ -49,39 +50,39 @@ export default function PersonaSelector({ selected, onSelect }) {
           top: '100%',
           right: 0,
           marginTop: '8px',
-          background: '#fff',
-          border: '1px solid rgba(0,0,0,0.1)',
+          background: p.popover || '#fff',
+          border: `1px solid ${p.popoverBorder || 'rgba(0,0,0,0.1)'}`,
           borderRadius: '12px',
           padding: '6px',
           boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
           zIndex: 100,
           minWidth: '200px',
         }}>
-          <div style={{ fontSize: '0.7rem', color: '#6b6b6b', padding: '4px 8px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+          <div style={{ fontSize: '0.7rem', color: p.textMuted || '#6b6b6b', padding: '4px 8px', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
             Persona
           </div>
-          {PERSONAS.map(p => (
-            <button key={p.id} onClick={() => { onSelect(p.id); setIsOpen(false) }} style={{
+          {PERSONAS.map(pers => (
+            <button key={pers.id} onClick={() => { onSelect(pers.id); setIsOpen(false) }} style={{
               display: 'flex',
               alignItems: 'center',
               gap: '10px',
               width: '100%',
-              background: selected === p.id ? 'rgba(212,165,116,0.1)' : 'none',
+              background: selected === pers.id ? (p.activeItem || 'rgba(212,165,116,0.12)') : 'none',
               border: 'none',
               padding: '8px 10px',
               cursor: 'pointer',
               borderRadius: '8px',
               fontSize: '0.85rem',
-              color: '#2d2d2d',
+              color: p.text || '#2d2d2d',
               transition: 'background 0.15s',
             }}
-            onMouseEnter={e => { if (selected !== p.id) e.currentTarget.style.background = 'rgba(0,0,0,0.04)' }}
-            onMouseLeave={e => { if (selected !== p.id) e.currentTarget.style.background = 'none' }}
+            onMouseEnter={e => { if (selected !== pers.id) e.currentTarget.style.background = p.hoverItem || 'rgba(0,0,0,0.04)' }}
+            onMouseLeave={e => { if (selected !== pers.id) e.currentTarget.style.background = 'none' }}
             >
-              <span style={{ fontSize: '1.1rem' }}>{p.icon}</span>
+              <span style={{ fontSize: '1.1rem' }}>{pers.icon}</span>
               <div style={{ textAlign: 'left' }}>
-                <div style={{ fontWeight: 500 }}>{p.name}</div>
-                <div style={{ fontSize: '0.72rem', color: '#999' }}>{p.description}</div>
+                <div style={{ fontWeight: 500 }}>{pers.name}</div>
+                <div style={{ fontSize: '0.72rem', color: p.textMuted || '#999' }}>{pers.description}</div>
               </div>
             </button>
           ))}
