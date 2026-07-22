@@ -987,8 +987,9 @@ const [pendingFiles, setPendingFiles] = useState([])
         formData.append('user_type', userType)
         formData.append('session_id', userSession)
         formData.append('incognito', 'false')
-        formData.append('base64_image', currentImage.base64)
-        formData.append('mime', currentImage.mime)
+formData.append('base64_image', currentImage.base64)
+formData.append('mime', currentImage.mime)
+formData.append('persona', selectedPersona || 'default')
 
         res = await fetch(`${API_BASE}/chat-with-image`, {
           method: 'POST',
@@ -1005,8 +1006,9 @@ const [pendingFiles, setPendingFiles] = useState([])
         // Send all file contents concatenated
         const allFileContent = pendingFiles.map(f => '[File: ' + f.filename + ']\n' + (f.content || '')).join('\n\n---\n\n')
         const allFilenames = pendingFiles.map(f => f.filename).join(', ')
-        formData.append('filename', allFilenames)
-        formData.append('file_content', allFileContent)
+formData.append('filename', allFilenames)
+formData.append('file_content', allFileContent)
+formData.append('persona', selectedPersona || 'default')
 
         res = await fetch(`${API_BASE}/chat-with-file`, {
           method: 'POST',

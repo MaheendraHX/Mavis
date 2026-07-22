@@ -703,6 +703,7 @@ async def chat_with_file(
     user_type: str = Form(...),
     session_id: str = Form("default"),
     incognito: bool = Form(False),
+    persona: str = Form("default"),
     filename: str = Form(...),
     file_content: str = Form(""),
     x_guest_id: str = Header(default="anonymous"),
@@ -730,6 +731,10 @@ async def chat_with_file(
             system_prompt += "\n\nNote: PC control is enabled. You can execute commands on the owner's machine when asked."
     else:
         system_prompt = GUEST_SYSTEM_PROMPT
+
+    # Apply persona modifier
+    if persona in PERSONA_MODIFIERS:
+        system_prompt += "\n\n" + PERSONA_MODIFIERS[persona]
 
     # Derive file type from filename extension
     file_ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "file"
@@ -784,6 +789,7 @@ async def chat_with_image(
     user_type: str = Form(...),
     session_id: str = Form("default"),
     incognito: bool = Form(False),
+    persona: str = Form("default"),
     base64_image: str = Form(...),
     mime: str = Form(...),
     x_guest_id: str = Header(default="anonymous"),
@@ -811,6 +817,10 @@ async def chat_with_image(
             system_prompt += "\n\nNote: PC control is enabled. You can execute commands on the owner's machine when asked."
     else:
         system_prompt = GUEST_SYSTEM_PROMPT
+
+    # Apply persona modifier
+    if persona in PERSONA_MODIFIERS:
+        system_prompt += "\n\n" + PERSONA_MODIFIERS[persona]
 
     if not incognito:
         memory.add_message(conv_id, "user", f"{message} [shared an image]")
