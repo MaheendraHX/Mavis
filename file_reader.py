@@ -66,6 +66,34 @@ def encode_image_base64(file_path):
     except Exception as e:
         return None
 
+# All common code/config/text extensions — treated as plain text
+CODE_EXTENSIONS = {
+    # General text
+    'txt', 'md', 'log', 'csv', 'tsv', 'rtf',
+    # Web
+    'html', 'htm', 'css', 'scss', 'less', 'svg',
+    # JavaScript / TypeScript
+    'js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs', 'vue', 'svelte',
+    # Python
+    'py', 'pyw', 'pyi', 'pyx', 'pxd',
+    # Java / JVM
+    'java', 'kt', 'kts', 'scala', 'groovy', 'gradle',
+    # C / C++
+    'c', 'h', 'cpp', 'hpp', 'cc', 'cxx', 'hxx', 'c++',
+    # Other languages
+    'cs', 'go', 'rs', 'rb', 'php', 'swift', 'm', 'r', 'lua',
+    'pl', 'sh', 'bash', 'zsh', 'fish', 'ps1', 'bat', 'cmd',
+    'sql', 'graphql', 'gql', 'proto',
+    # Data / config
+    'json', 'jsonc', 'json5', 'yaml', 'yml', 'toml', 'ini', 'cfg',
+    'conf', 'xml', 'env', 'properties',
+    # Build / infra
+    'makefile', 'cmake', 'dockerfile',
+}
+
+IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tiff', 'ico'}
+
+
 def get_file_type(filename):
     ext = filename.lower().split('.')[-1]
     if ext == 'pdf':
@@ -74,12 +102,13 @@ def get_file_type(filename):
         return 'docx'
     elif ext == 'pptx':
         return 'pptx'
-    elif ext in ['txt', 'md']:
+    elif ext in CODE_EXTENSIONS:
         return 'text'
-    elif ext in ['png', 'jpg', 'jpeg', 'webp']:
+    elif ext in IMAGE_EXTENSIONS:
         return 'image'
     else:
-        return 'unsupported'
+        # Unknown extension — try reading as text anyway
+        return 'text'
 
 def process_file(file_path, filename):
     file_type = get_file_type(filename)
