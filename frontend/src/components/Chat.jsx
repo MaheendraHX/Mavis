@@ -1312,11 +1312,48 @@ formData.append('persona', selectedPersona || 'default')
             <ExportChat messages={messages} conversationId={activeConvId} palette={palette} />
             <FullscreenToggle />
             <ThemeToggle />
-            <PersonaSelector selected={selectedPersona} onSelect={(id) => {
-              setSelectedPersona(id)
-              localStorage.setItem('mavis_persona', id)
-            }} palette={palette} />
           </div>
+        </div>
+
+        {/* Persona bar */}
+        <div style={{
+          padding: '0.4rem 1.25rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          borderBottom: `1px solid ${palette.border}`,
+          background: palette.surface || palette.headerBg,
+          overflowX: 'auto',
+          flexShrink: 0,
+        }}>
+          {[
+            { id: 'default', label: 'Default' },
+            { id: 'coder', label: 'Coder' },
+            { id: 'writer', label: 'Writer' },
+            { id: 'analyst', label: 'Analyst' },
+            { id: 'tutor', label: 'Tutor' },
+            { id: 'casual', label: 'Casual' },
+          ].map(p => (
+            <button key={p.id} onClick={() => { setSelectedPersona(p.id); localStorage.setItem('mavis_persona', p.id) }} style={{
+              padding: '0.3rem 0.7rem',
+              borderRadius: '20px',
+              border: `1px solid ${selectedPersona === p.id ? (palette.primary || '#6366f1') : palette.border}`,
+              background: selectedPersona === p.id ? (palette.primary || '#6366f1') : 'transparent',
+              color: selectedPersona === p.id ? '#fff' : (palette.textMuted || '#6b6b6b'),
+              fontSize: '0.75rem',
+              fontWeight: 500,
+              fontFamily: 'Inter, system-ui, sans-serif',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+            onMouseEnter={e => { if (selectedPersona !== p.id) { e.currentTarget.style.borderColor = palette.primary || '#6366f1'; e.currentTarget.style.color = palette.text || '#2d2d2d' }}}
+            onMouseLeave={e => { if (selectedPersona !== p.id) { e.currentTarget.style.borderColor = palette.border; e.currentTarget.style.color = palette.textMuted || '#6b6b6b' }}}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
 
         <div
