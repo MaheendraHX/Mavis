@@ -88,7 +88,6 @@ export default function ConversationSearch({ conversations, onSelectConversation
           borderBottom: `1px solid ${palette.border}`,
           gap: '8px',
         }}>
-          <span style={{ fontSize: '1rem', opacity: 0.5 }}>🔍</span>
           <input
             ref={inputRef}
             value={query}
