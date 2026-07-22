@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react'
 
 const PERSONAS = [
-  { id: 'default', name: 'Default', icon: '🤖', description: 'Helpful AI assistant' },
-  { id: 'coder', name: 'Coder', icon: '💻', description: 'Expert programmer' },
-  { id: 'writer', name: 'Writer', icon: '✍️', description: 'Creative writing expert' },
-  { id: 'analyst', name: 'Analyst', icon: '📊', description: 'Data & research analyst' },
-  { id: 'tutor', name: 'Tutor', icon: '🎓', description: 'Patient teacher' },
-  { id: 'casual', name: 'Casual', icon: '😎', description: 'Relaxed & friendly' },
+  { id: 'default', name: 'Default', description: 'Helpful AI assistant' },
+  { id: 'coder', name: 'Coder', description: 'Expert programmer' },
+  { id: 'writer', name: 'Writer', description: 'Creative writing expert' },
+  { id: 'analyst', name: 'Analyst', description: 'Data & research analyst' },
+  { id: 'tutor', name: 'Tutor', description: 'Patient teacher' },
+  { id: 'casual', name: 'Casual', description: 'Relaxed & friendly' },
 ]
 
 export default function PersonaSelector({ selected, onSelect, palette }) {
@@ -28,21 +28,26 @@ export default function PersonaSelector({ selected, onSelect, palette }) {
         onClick={() => setIsOpen(!isOpen)}
         title="Change persona"
         style={{
-          background: 'none',
+          background: selected !== 'default' ? (p.activeItem || 'rgba(212,165,116,0.12)') : 'none',
           border: 'none',
           cursor: 'pointer',
-          fontSize: '1rem',
-          padding: '0.3rem',
-          borderRadius: '8px',
-          transition: 'transform 0.2s',
+          fontSize: '0.75rem',
+          fontWeight: 500,
+          padding: '0.25rem 0.5rem',
+          borderRadius: '6px',
+          transition: 'all 0.2s',
           display: 'flex',
           alignItems: 'center',
           gap: '4px',
+          color: p.text || '#2d2d2d',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          letterSpacing: '0.02em',
         }}
-        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
-        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+        onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
+        onMouseLeave={e => e.currentTarget.style.opacity = '1'}
       >
-        <span>{current.icon}</span>
+        {current.name}
+        <span style={{ fontSize: '0.6rem', opacity: 0.5 }}>▾</span>
       </button>
       {isOpen && (
         <div style={{
@@ -63,27 +68,22 @@ export default function PersonaSelector({ selected, onSelect, palette }) {
           </div>
           {PERSONAS.map(pers => (
             <button key={pers.id} onClick={() => { onSelect(pers.id); setIsOpen(false) }} style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
+              display: 'block',
               width: '100%',
+              textAlign: 'left',
               background: selected === pers.id ? (p.activeItem || 'rgba(212,165,116,0.12)') : 'none',
               border: 'none',
               padding: '8px 10px',
               cursor: 'pointer',
               borderRadius: '8px',
-              fontSize: '0.85rem',
               color: p.text || '#2d2d2d',
               transition: 'background 0.15s',
             }}
             onMouseEnter={e => { if (selected !== pers.id) e.currentTarget.style.background = p.hoverItem || 'rgba(0,0,0,0.04)' }}
             onMouseLeave={e => { if (selected !== pers.id) e.currentTarget.style.background = 'none' }}
             >
-              <span style={{ fontSize: '1.1rem' }}>{pers.icon}</span>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontWeight: 500 }}>{pers.name}</div>
-                <div style={{ fontSize: '0.72rem', color: p.textMuted || '#999' }}>{pers.description}</div>
-              </div>
+              <div style={{ fontSize: '0.85rem', fontWeight: selected === pers.id ? 600 : 500, fontFamily: 'Inter, system-ui, sans-serif' }}>{pers.name}</div>
+              <div style={{ fontSize: '0.72rem', color: p.textMuted || '#999', marginTop: '1px', fontFamily: 'Inter, system-ui, sans-serif' }}>{pers.description}</div>
             </button>
           ))}
         </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React from 'react'
 import { useTheme } from './ThemeContext'
 
 export default function ThemeToggle() {
@@ -11,17 +11,20 @@ export default function ThemeToggle() {
         background: 'none',
         border: 'none',
         cursor: 'pointer',
-        fontSize: '1.1rem',
-        padding: '0.3rem',
-        borderRadius: '8px',
-        transition: 'transform 0.3s',
-        transform: isDark ? 'rotate(180deg)' : 'rotate(0deg)',
+        fontSize: '0.75rem',
+        fontWeight: 500,
+        padding: '0.25rem 0.5rem',
+        borderRadius: '6px',
+        transition: 'all 0.2s',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
+        gap: '4px',
+        color: 'var(--text)',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        letterSpacing: '0.02em',
       }}
     >
-      {isDark ? '☀️' : '🌙'}
+      {isDark ? 'Light' : 'Dark'}
     </button>
   )
 }

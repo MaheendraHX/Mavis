@@ -203,19 +203,13 @@ function FileCard({ data }) {
     URL.revokeObjectURL(url)
   }
 
-  const iconMap = {
-    docx: '📄',
-    pdf: '📕',
-    txt: '📝',
-    md: '📑',
-    html: '🌐',
-    py: '🐍',
-    js: '⚡',
-    css: '🎨',
+  const colorMap = {
+    docx: '#2563eb', pdf: '#dc2626', txt: '#6b7280', md: '#7c3aed',
+    html: '#ea580c', py: '#3572A5', js: '#f7df1e', css: '#264de4',
   }
 
   const ext = data.filename.split('.').pop().toUpperCase()
-  const icon = iconMap[data.filename.split('.').pop()] || '📄'
+  const badgeColor = colorMap[data.filename.split('.').pop()] || '#6b7280'
 
   return (
     <div style={{
@@ -231,18 +225,20 @@ function FileCard({ data }) {
       boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
     }}>
       <div style={{
-        width: '48px',
-        height: '48px',
-        borderRadius: '12px',
-        background: 'linear-gradient(135deg, #d4a574, #e89f71)',
+        width: '42px',
+        height: '42px',
+        borderRadius: '8px',
+        background: badgeColor,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: '1.5rem',
+        fontSize: '0.6rem',
         fontWeight: 700,
-        color: '#2d2d2d',
+        color: '#fff',
+        letterSpacing: '0.05em',
+        fontFamily: 'Inter, system-ui, sans-serif',
       }}>
-        {icon}
+        {ext}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
@@ -367,7 +363,7 @@ function DownloadButton({ content }) {
   }
 
   const bestType = getBestFileType(content)
-  const typeLabel = bestType === 'docx' ? '📄 Word' : bestType === 'py' ? '🐍 Python' : bestType === 'html' ? '🌐 HTML' : bestType === 'md' ? '📑 Markdown' : bestType === 'js' ? '⚡ JS' : bestType === 'css' ? '🎨 CSS' : '📄 Word'
+  const typeLabel = bestType === 'docx' ? 'DOCX' : bestType === 'py' ? 'Python' : bestType === 'html' ? 'HTML' : bestType === 'md' ? 'Markdown' : bestType === 'js' ? 'JavaScript' : bestType === 'css' ? 'CSS' : 'DOCX'
 
   return (
     <div style={{ maxWidth: '72%', marginTop: '0.25rem', position: 'relative' }}>
@@ -399,7 +395,7 @@ function DownloadButton({ content }) {
           e.currentTarget.style.boxShadow = '0 4px 12px rgba(212,165,116,0.25)'
         }}
       >
-        {downloading ? '⏳ Creating...' : `⬇ ${typeLabel}`}
+        {downloading ? 'Creating...' : 'Download'}
       </button>
       {showMenu && (
         <div style={{
@@ -416,13 +412,13 @@ function DownloadButton({ content }) {
           minWidth: '140px',
         }}>
           {[
-            { type: 'docx', label: '📄 Word Document' },
-            { type: 'txt', label: '📝 Plain Text' },
-            { type: 'md', label: '📑 Markdown' },
-            { type: 'html', label: '🌐 HTML' },
-            { type: 'py', label: '🐍 Python' },
-            { type: 'js', label: '⚡ JavaScript' },
-            { type: 'css', label: '🎨 CSS' },
+            { type: 'docx', label: 'Word Document' },
+            { type: 'txt', label: 'Plain Text' },
+            { type: 'md', label: 'Markdown' },
+            { type: 'html', label: 'HTML' },
+            { type: 'py', label: 'Python' },
+            { type: 'js', label: 'JavaScript' },
+            { type: 'css', label: 'CSS' },
           ].map(opt => (
             <button
               key={opt.type}
@@ -639,14 +635,8 @@ function ARIAMessage({ msg, onEdit, onDelete, palette: paletteProp }) {
 // File attachment card component
 function FileAttachmentCard({ file, onRemove }) {
   const getFileIcon = (type) => {
-    switch (type) {
-      case 'pdf': return '📄'
-      case 'image': return '🖼️'
-      case 'docx': return '📝'
-      case 'pptx': return '📊'
-      case 'text': return '📃'
-      default: return '📎'
-    }
+    const labels = { pdf: 'PDF', image: 'IMG', docx: 'DOC', pptx: 'PPT', text: 'TXT' }
+    return labels[type] || 'FILE'
   }
 
   const formatSize = (mb) => {
@@ -655,44 +645,59 @@ function FileAttachmentCard({ file, onRemove }) {
     return `${mb.toFixed(1)} MB`
   }
 
+  const getBadgeColor = (type) => {
+    const colors = { pdf: '#dc2626', image: '#7c3aed', docx: '#2563eb', pptx: '#ea580c', text: '#6b7280' }
+    return colors[type] || '#6b7280'
+  }
+
+  const iconLabel = getFileIcon(file.type || file.file_type || 'text')
+  const badgeColor = getBadgeColor(file.type || file.file_type || 'text')
+
   return (
     <div style={{
       display: 'flex',
       alignItems: 'center',
       gap: '0.75rem',
-      padding: '0.75rem 1rem',
-      borderRadius: '12px',
-      background: `linear-gradient(135deg, ${palette.surfaceWarm} 0%, ${palette.accent} 100%)`,
-      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+      padding: '0.65rem 0.85rem',
+      borderRadius: '10px',
+      background: palette.surface || palette.card || '#fff',
       border: `1px solid ${palette.border}`,
       marginBottom: '0.5rem',
     }}>
       <div style={{
-        fontSize: '2rem',
-        background: 'rgba(255,255,255,0.9)',
-        borderRadius: '10px',
-        padding: '0.5rem',
-        boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+        fontSize: '0.6rem',
+        fontWeight: 700,
+        color: '#fff',
+        background: badgeColor,
+        borderRadius: '5px',
+        padding: '0.25rem 0.4rem',
+        letterSpacing: '0.05em',
+        lineHeight: 1,
+        fontFamily: 'Inter, system-ui, sans-serif',
+        minWidth: '2.4rem',
+        textAlign: 'center',
       }}>
-        {getFileIcon(file.type || file.file_type || 'text')}
+        {iconLabel}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
-          fontSize: '0.85rem',
-          fontWeight: 600,
+          fontSize: '0.82rem',
+          fontWeight: 500,
           color: palette.text,
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
+          fontFamily: 'Inter, system-ui, sans-serif',
         }}>
           {file.filename}
         </div>
         <div style={{
           fontSize: '0.7rem',
           color: palette.textMuted,
-          marginTop: '0.15rem',
+          marginTop: '1px',
+          fontFamily: 'Inter, system-ui, sans-serif',
         }}>
-          {(file.type || file.file_type || 'FILE').toUpperCase()} • {formatSize(file.size_mb)}
+          {formatSize(file.size_mb)}
         </div>
       </div>
       <button
@@ -1204,7 +1209,7 @@ const [pendingFiles, setPendingFiles] = useState([])
                 onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(192,112,107,0.1)' }}
                 onMouseLeave={e => { e.currentTarget.style.opacity = '0.5'; e.currentTarget.style.background = 'none' }}
               >
-                🗑
+                ×
               </button>
             </div>
           ))}
@@ -1273,7 +1278,7 @@ const [pendingFiles, setPendingFiles] = useState([])
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             {isOwner ? (
               <button onClick={revokeOwnerAccess} title="Revoke owner access" style={{ fontSize: '0.7rem', fontWeight: 600, color: '#e74c3c', letterSpacing: '0.03em', fontFamily: 'Inter, system-ui, sans-serif', background: 'none', border: `1px solid #e74c3c`, borderRadius: '8px', padding: '0.2rem 0.6rem', cursor: 'pointer' }}>
-                🔓 Exit Owner
+                Exit Owner
               </button>
             ) : (
               <button onClick={authenticateOwner} style={{
@@ -1333,7 +1338,6 @@ const [pendingFiles, setPendingFiles] = useState([])
               zIndex: 50, pointerEvents: 'none',
             }}>
               <div style={{ textAlign: 'center', color: palette.primary }}>
-                <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📎</div>
                 <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>Drop files here</div>
               </div>
             </div>
@@ -1446,7 +1450,7 @@ const [pendingFiles, setPendingFiles] = useState([])
               onMouseEnter={e => { if (!uploading) e.currentTarget.style.color = palette.primary }}
               onMouseLeave={e => { if (!uploading) e.currentTarget.style.color = palette.textMuted }}
             >
-              {uploading ? '...' : '📎'}
+              {uploading ? '...' : '+'}
             </button>
             <input
               ref={fileInputRef}

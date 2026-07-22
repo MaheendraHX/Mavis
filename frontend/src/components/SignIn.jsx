@@ -121,7 +121,7 @@ export default function SignIn({ onOwnerAccess, onDemoAccess }) {
               e.target.style.boxShadow = `0 8px 24px rgba(212,165,116,0.2)`
             }}
           >
-            🔐 Owner Access
+            Owner Access
           </button>
 
           <button
@@ -147,7 +147,7 @@ export default function SignIn({ onOwnerAccess, onDemoAccess }) {
               e.target.style.boxShadow = 'none'
             }}
           >
-            💬 Try Demo
+            Try Demo
           </button>
 
           <p style={{

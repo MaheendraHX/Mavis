@@ -37,17 +37,21 @@ export default function ConversationSearch({ conversations, onSelectConversation
           background: 'none',
           border: 'none',
           cursor: 'pointer',
-          fontSize: '1rem',
-          padding: '0.3rem',
-          borderRadius: '8px',
-          transition: 'transform 0.2s',
+          fontSize: '0.75rem',
+          fontWeight: 500,
+          padding: '0.25rem 0.5rem',
+          borderRadius: '6px',
+          transition: 'all 0.2s',
           display: 'flex',
           alignItems: 'center',
+          color: 'var(--text)',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          letterSpacing: '0.02em',
         }}
-        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
-        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+        onMouseEnter={e => e.currentTarget.style.opacity = '0.7'}
+        onMouseLeave={e => e.currentTarget.style.opacity = '1'}
       >
-        🔍
+        Search
       </button>
     )
   }

@@ -89,9 +89,9 @@ export default function ExportChat({ messages, conversationId, palette }) {
 
   const p = palette || {}
   const menuItems = [
-    { icon: '📄', label: 'Word Document', action: exportWord },
-    { icon: '📝', label: 'Plain Text', action: exportTXT },
-    { icon: '📑', label: 'Markdown', action: exportMarkdown },
+            { icon: 'DOCX', label: 'Word Document', action: exportWord },
+            { icon: 'TXT', label: 'Plain Text', action: exportTXT },
+            { icon: 'MD', label: 'Markdown', action: exportMarkdown },
     { icon: '{ }', label: 'JSON', action: exportJSON },
   ]
 
@@ -104,17 +104,22 @@ export default function ExportChat({ messages, conversationId, palette }) {
           background: 'none',
           border: 'none',
           cursor: 'pointer',
-          fontSize: '1rem',
-          padding: '0.3rem',
-          borderRadius: '8px',
-          transition: 'transform 0.2s',
+          fontSize: '0.75rem',
+          fontWeight: 500,
+          padding: '0.25rem 0.5rem',
+          borderRadius: '6px',
+          transition: 'all 0.2s',
           display: 'flex',
           alignItems: 'center',
+          gap: '4px',
+          color: 'var(--text)',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          letterSpacing: '0.02em',
         }}
-        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.1)'}
-        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+        onMouseEnter={e => e.currentTarget.style.opacity = '0.7'}
+        onMouseLeave={e => e.currentTarget.style.opacity = '1'}
       >
-        ⬇️
+        Export
       </button>
       {showMenu && (
         <div style={{
