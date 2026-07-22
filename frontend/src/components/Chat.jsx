@@ -634,6 +634,7 @@ function ARIAMessage({ msg, onEdit, onDelete, palette: paletteProp }) {
 
 // File attachment card component
 function FileAttachmentCard({ file, onRemove }) {
+  const { palette } = useTheme()
   const getFileIcon = (type) => {
     const labels = { pdf: 'PDF', image: 'IMG', docx: 'DOC', pptx: 'PPT', text: 'TXT' }
     return labels[type] || 'FILE'
