@@ -756,6 +756,8 @@ export default function Chat({ onNavigate }) {
   const fileInputRef = useRef(null)
   const abortRef = useRef(null)
   const recognitionRef = useRef(null)
+  const agentMenuRef = useRef(null)
+  const roleMenuRef = useRef(null)
   const guestId = useRef(getOrCreateGuestId()).current
   const [isOwner, setIsOwner] = useState(false)
   const [ownerSessionId, setOwnerSessionId] = useState(null)
@@ -781,6 +783,32 @@ export default function Chat({ onNavigate }) {
   useEffect(() => {
     localStorage.setItem('mavis_voice_enabled', String(voiceEnabled))
   }, [voiceEnabled])
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (agentMenuRef.current && !agentMenuRef.current.contains(event.target)) {
+        setShowAgentMenu(false)
+      }
+      if (roleMenuRef.current && !roleMenuRef.current.contains(event.target)) {
+        setShowRoleMenu(false)
+      }
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setShowAgentMenu(false)
+        setShowRoleMenu(false)
+      }
+    }
+
+    window.addEventListener('mousedown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
 
   useEffect(() => {
     const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -1419,7 +1447,7 @@ formData.append('persona', selectedPersona || 'default')
           overflowX: 'auto',
           flexShrink: 0,
         }}>
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <div ref={agentMenuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <button onClick={() => { setShowAgentMenu(prev => !prev); setShowRoleMenu(false) }} style={{
               padding: '0.42rem 0.9rem',
               borderRadius: '999px',
@@ -1470,7 +1498,7 @@ formData.append('persona', selectedPersona || 'default')
             )}
           </div>
 
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <div ref={roleMenuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <button onClick={() => { setShowRoleMenu(prev => !prev); setShowAgentMenu(false) }} style={{
               padding: '0.42rem 0.9rem',
               borderRadius: '999px',
@@ -1607,7 +1635,7 @@ formData.append('persona', selectedPersona || 'default')
                   fontWeight: 500,
                   flex: 1,
                 }}>
-                  Ask {selectedProviderLabel === 'Gemini' ? 'Gemini' : 'Mavis'}
+                  Ask {modelProvider === 'gemini' ? 'Gemini' : 'Mavis'}
                 </span>
                 <div style={{
                   display: 'flex',
