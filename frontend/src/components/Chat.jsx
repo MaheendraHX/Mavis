@@ -741,13 +741,18 @@ export default function Chat({ onNavigate }) {
   const [selectedPersona, setSelectedPersona] = useState(() => localStorage.getItem('mavis_persona') || 'default')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
-const [pendingImage, setPendingImage] = useState(null)
-const [pendingFiles, setPendingFiles] = useState([])
+  const [pendingImage, setPendingImage] = useState(null)
+  const [pendingFiles, setPendingFiles] = useState([])
+  const [voiceEnabled, setVoiceEnabled] = useState(() => localStorage.getItem('mavis_voice_enabled') === 'true')
+  const [isListening, setIsListening] = useState(false)
+  const [voiceSupported, setVoiceSupported] = useState(false)
+  const [voiceStatus, setVoiceStatus] = useState('')
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 768)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
   const fileInputRef = useRef(null)
   const abortRef = useRef(null)
+  const recognitionRef = useRef(null)
   const guestId = useRef(getOrCreateGuestId()).current
   const [isOwner, setIsOwner] = useState(false)
   const [ownerSessionId, setOwnerSessionId] = useState(null)
@@ -765,6 +770,50 @@ const [pendingFiles, setPendingFiles] = useState([])
   useEffect(() => {
     localStorage.setItem('mavis_conversations', JSON.stringify(conversations))
   }, [conversations])
+
+  useEffect(() => {
+    localStorage.setItem('mavis_voice_enabled', String(voiceEnabled))
+  }, [voiceEnabled])
+
+  useEffect(() => {
+    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition
+    setVoiceSupported(Boolean(SpeechRecognitionCtor))
+
+    if (!SpeechRecognitionCtor) return
+
+    const recognition = new SpeechRecognitionCtor()
+    recognition.continuous = false
+    recognition.interimResults = true
+    recognition.lang = 'en-US'
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0]?.transcript || '')
+        .join(' ')
+        .trim()
+
+      if (transcript) {
+        setInput(transcript)
+        setVoiceStatus('Listening…')
+      }
+    }
+
+    recognition.onend = () => {
+      setIsListening(false)
+      setVoiceStatus('')
+    }
+
+    recognition.onerror = (event) => {
+      setIsListening(false)
+      setVoiceStatus(`Voice error: ${event.error}`)
+    }
+
+    recognitionRef.current = recognition
+
+    return () => {
+      recognition.stop()
+    }
+  }, [])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -1058,6 +1107,10 @@ formData.append('persona', selectedPersona || 'default')
         title: data.title || c.title,
       } : c))
       if (newConvId !== convId) setActiveConvId(newConvId)
+
+      if (voiceEnabled) {
+        speakText(assistantContent)
+      }
     } catch (err) {
       if (err.name !== 'AbortError') {
         const errorMsg = {
@@ -1073,6 +1126,34 @@ formData.append('persona', selectedPersona || 'default')
       abortRef.current = null
     }
   }, [input, loading, messages, activeConvId, guestId, pendingImage, pendingFiles, selectedPersona])
+
+  const speakText = useCallback((text) => {
+    if (!voiceEnabled || !text || !('speechSynthesis' in window)) return
+
+    window.speechSynthesis.cancel()
+    const utterance = new SpeechSynthesisUtterance(text)
+    utterance.lang = 'en-US'
+    utterance.rate = 1
+    utterance.pitch = 1
+    window.speechSynthesis.speak(utterance)
+  }, [voiceEnabled])
+
+  const startVoiceInput = useCallback(() => {
+    if (!recognitionRef.current) {
+      setVoiceStatus('Voice input is not supported in this browser.')
+      return
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop()
+      setIsListening(false)
+      return
+    }
+
+    setVoiceStatus('Listening…')
+    setIsListening(true)
+    recognitionRef.current.start()
+  }, [isListening])
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1531,6 +1612,58 @@ formData.append('persona', selectedPersona || 'default')
                 e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px'
               }}
             />
+            <button
+              onClick={startVoiceInput}
+              title={isListening ? 'Stop voice input' : 'Use voice input'}
+              disabled={!voiceSupported}
+              style={{
+                background: isListening ? 'rgba(220, 38, 38, 0.12)' : 'none',
+                border: 'none',
+                color: isListening ? '#e11d48' : (voiceSupported ? palette.textMuted : palette.textMuted),
+                cursor: voiceSupported ? 'pointer' : 'not-allowed',
+                fontSize: '1rem',
+                padding: '0.4rem 0.5rem',
+                transition: 'all 0.2s',
+                opacity: voiceSupported ? 1 : 0.55,
+              }}
+            >
+              🎙️
+            </button>
+            <button
+              onClick={() => speakText(messages.findLast(m => m.role === 'assistant')?.content || '')}
+              title="Read latest reply aloud"
+              disabled={!voiceEnabled}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: voiceEnabled ? palette.textMuted : palette.textMuted,
+                cursor: voiceEnabled ? 'pointer' : 'default',
+                fontSize: '1rem',
+                padding: '0.4rem 0.5rem',
+                opacity: voiceEnabled ? 1 : 0.45,
+              }}
+            >
+              🔊
+            </button>
+            <button
+              onClick={() => {
+                setVoiceEnabled(prev => !prev)
+                if (window.speechSynthesis) window.speechSynthesis.cancel()
+              }}
+              title={voiceEnabled ? 'Disable voice mode' : 'Enable voice mode'}
+              style={{
+                background: voiceEnabled ? 'rgba(34,197,94,0.12)' : 'none',
+                border: 'none',
+                color: voiceEnabled ? '#16a34a' : palette.textMuted,
+                cursor: 'pointer',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                padding: '0.35rem 0.55rem',
+                borderRadius: '999px',
+              }}
+            >
+              {voiceEnabled ? 'Voice On' : 'Voice Off'}
+            </button>
             {loading ? (
               <button onClick={stopGeneration} style={{
                 padding: '0.5rem 0.9rem',
@@ -1583,6 +1716,11 @@ formData.append('persona', selectedPersona || 'default')
           {uploadError && (
             <div style={{ color: palette.danger, fontSize: '0.75rem', marginTop: '0.5rem' }}>
               {uploadError}
+            </div>
+          )}
+          {voiceStatus && (
+            <div style={{ color: palette.textMuted, fontSize: '0.72rem', marginTop: '0.45rem' }}>
+              {voiceStatus}
             </div>
           )}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
