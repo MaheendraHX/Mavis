@@ -740,6 +740,8 @@ export default function Chat({ onNavigate }) {
   const [isDragging, setIsDragging] = useState(false)
   const [selectedPersona, setSelectedPersona] = useState(() => localStorage.getItem('mavis_persona') || 'default')
   const [modelProvider, setModelProvider] = useState(() => localStorage.getItem('mavis_model_provider') || 'groq')
+  const [showAgentMenu, setShowAgentMenu] = useState(false)
+  const [showRoleMenu, setShowRoleMenu] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [pendingImage, setPendingImage] = useState(null)
@@ -1176,6 +1178,8 @@ formData.append('persona', selectedPersona || 'default')
   }, [])
 
   const activeConv = conversations.find(c => c.id === activeConvId)
+  const selectedProviderLabel = modelProvider === 'groq' ? 'Groq' : 'Gemini'
+  const selectedPersonaLabel = selectedPersona.charAt(0).toUpperCase() + selectedPersona.slice(1)
 
   return (
     <div style={{
@@ -1406,63 +1410,122 @@ formData.append('persona', selectedPersona || 'default')
 
         {/* Persona bar */}
         <div style={{
-          padding: '0.4rem 1.25rem',
+          padding: '0.55rem 1.25rem',
           display: 'flex',
           alignItems: 'center',
-          gap: '0.5rem',
+          gap: '0.55rem',
           borderBottom: `1px solid ${palette.border}`,
           background: palette.surface || palette.headerBg,
           overflowX: 'auto',
           flexShrink: 0,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginRight: '0.5rem' }}>
-            {['groq', 'gemini'].map(provider => (
-              <button key={provider} onClick={() => setModelProvider(provider)} style={{
-                padding: '0.3rem 0.7rem',
-                borderRadius: '20px',
-                border: `1px solid ${modelProvider === provider ? (palette.primary || '#6366f1') : palette.border}`,
-                background: modelProvider === provider ? (palette.primary || '#6366f1') : 'transparent',
-                color: modelProvider === provider ? '#fff' : (palette.textMuted || '#6b6b6b'),
-                fontSize: '0.75rem',
-                fontWeight: 500,
-                fontFamily: 'Inter, system-ui, sans-serif',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-              }}>
-                {provider === 'groq' ? 'Groq' : 'Gemini'}
-              </button>
-            ))}
-          </div>
-          {[
-            { id: 'default', label: 'Default' },
-            { id: 'coder', label: 'Coder' },
-            { id: 'writer', label: 'Writer' },
-            { id: 'analyst', label: 'Analyst' },
-            { id: 'tutor', label: 'Tutor' },
-            { id: 'casual', label: 'Casual' },
-          ].map(p => (
-            <button key={p.id} onClick={() => { setSelectedPersona(p.id); localStorage.setItem('mavis_persona', p.id) }} style={{
-              padding: '0.3rem 0.7rem',
-              borderRadius: '20px',
-              border: `1px solid ${selectedPersona === p.id ? (palette.primary || '#6366f1') : palette.border}`,
-              background: selectedPersona === p.id ? (palette.primary || '#6366f1') : 'transparent',
-              color: selectedPersona === p.id ? '#fff' : (palette.textMuted || '#6b6b6b'),
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <button onClick={() => { setShowAgentMenu(prev => !prev); setShowRoleMenu(false) }} style={{
+              padding: '0.42rem 0.9rem',
+              borderRadius: '999px',
+              border: `1px solid ${palette.borderStrong}`,
+              background: palette.surfaceWarm,
+              color: palette.text,
               fontSize: '0.75rem',
-              fontWeight: 500,
+              fontWeight: 700,
               fontFamily: 'Inter, system-ui, sans-serif',
               cursor: 'pointer',
-              transition: 'all 0.15s',
-              whiteSpace: 'nowrap',
-              flexShrink: 0,
-            }}
-            onMouseEnter={e => { if (selectedPersona !== p.id) { e.currentTarget.style.borderColor = palette.primary || '#6366f1'; e.currentTarget.style.color = palette.text || '#2d2d2d' }}}
-            onMouseLeave={e => { if (selectedPersona !== p.id) { e.currentTarget.style.borderColor = palette.border; e.currentTarget.style.color = palette.textMuted || '#6b6b6b' }}}
-            >
-              {p.label}
+              letterSpacing: '0.02em',
+              boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.02)`
+            }}>
+              Agent · {selectedProviderLabel}
             </button>
-          ))}
+            {showAgentMenu && (
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 8px)',
+                left: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.45rem',
+                padding: '0.55rem',
+                borderRadius: '14px',
+                border: `1px solid ${palette.border}`,
+                background: palette.surface,
+                boxShadow: `0 14px 40px ${palette.shadow}`,
+                zIndex: 120,
+                minWidth: '155px',
+              }}>
+                {['groq', 'gemini'].map(provider => (
+                  <button key={provider} onClick={() => { setModelProvider(provider); setShowAgentMenu(false) }} style={{
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: '10px',
+                    border: `1px solid ${modelProvider === provider ? (palette.primary || '#6366f1') : palette.border}`,
+                    background: modelProvider === provider ? (palette.primary || '#6366f1') : 'transparent',
+                    color: modelProvider === provider ? '#fff' : palette.text,
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}>
+                    {provider === 'groq' ? 'Groq' : 'Gemini'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <button onClick={() => { setShowRoleMenu(prev => !prev); setShowAgentMenu(false) }} style={{
+              padding: '0.42rem 0.9rem',
+              borderRadius: '999px',
+              border: `1px solid ${palette.borderStrong}`,
+              background: 'transparent',
+              color: palette.textMuted,
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              fontFamily: 'Inter, system-ui, sans-serif',
+              cursor: 'pointer',
+              letterSpacing: '0.02em',
+            }}>
+              Auto · {selectedPersonaLabel}
+            </button>
+            {showRoleMenu && (
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 8px)',
+                left: 0,
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '0.45rem',
+                padding: '0.55rem',
+                borderRadius: '14px',
+                border: `1px solid ${palette.border}`,
+                background: palette.surface,
+                boxShadow: `0 14px 40px ${palette.shadow}`,
+                zIndex: 120,
+                minWidth: '270px',
+              }}>
+                {[
+                  { id: 'default', label: 'Default' },
+                  { id: 'coder', label: 'Coder' },
+                  { id: 'writer', label: 'Writer' },
+                  { id: 'analyst', label: 'Analyst' },
+                  { id: 'tutor', label: 'Tutor' },
+                  { id: 'casual', label: 'Casual' },
+                ].map(p => (
+                  <button key={p.id} onClick={() => { setSelectedPersona(p.id); localStorage.setItem('mavis_persona', p.id); setShowRoleMenu(false) }} style={{
+                    padding: '0.42rem 0.78rem',
+                    borderRadius: '999px',
+                    border: `1px solid ${selectedPersona === p.id ? (palette.primary || '#6366f1') : palette.border}`,
+                    background: selectedPersona === p.id ? (palette.primary || '#6366f1') : 'transparent',
+                    color: selectedPersona === p.id ? '#fff' : palette.text,
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div
@@ -1497,50 +1560,78 @@ formData.append('persona', selectedPersona || 'default')
               alignItems: 'center',
               justifyContent: 'center',
               height: '100%',
-              gap: '1rem',
+              gap: '1.75rem',
+              background: 'radial-gradient(circle at 50% 30%, rgba(56, 75, 143, 0.42), transparent 30%), radial-gradient(circle at 50% 50%, rgba(18, 25, 54, 0.55), transparent 60%)',
+              borderRadius: '24px',
             }}>
-              <div style={{
-                width: 72,
-                height: 72,
-                borderRadius: '50%',
-                background: `
-                  radial-gradient(circle at 40% 35%, rgba(255,255,255,0.85), transparent 38%),
-                  radial-gradient(circle at 55% 50%, rgba(232,159,113,0.32), transparent 45%),
-                  radial-gradient(circle at 50% 50%, rgba(212,165,116,0.28), transparent 62%)
-                `,
-                boxShadow: `0 12px 36px ${palette.shadow}`,
-                border: `1px solid ${palette.borderStrong}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '1.2rem',
-                fontWeight: 700,
-                color: palette.text,
-                marginBottom: '0.5rem',
-                animation: 'pulse 3s ease-in-out infinite',
-              }}>
-                M
-              </div>
-              <h2 style={{
-                fontSize: '1.5rem',
-                fontWeight: 600,
-                color: palette.text,
-                margin: 0,
-                fontFamily: 'Playfair Display, Georgia, serif',
-                letterSpacing: '-0.01em',
-              }}>
-                Hey! I'm Mavis
-              </h2>
-              <p style={{
-                fontSize: '0.9rem',
-                color: palette.textMuted,
+              <h1 style={{
+                fontSize: 'clamp(2rem, 3.8vw, 3.6rem)',
+                fontWeight: 500,
+                color: '#f7f7f7',
                 margin: 0,
                 textAlign: 'center',
-                maxWidth: 360,
-                lineHeight: 1.5,
+                letterSpacing: '-0.03em',
+                fontFamily: 'Inter, system-ui, sans-serif',
+                lineHeight: 1.15,
               }}>
-                Ask me anything - research, code, creative writing, or just a conversation.
-              </p>
+                Hi there, what's the plan?
+              </h1>
+
+              <div style={{
+                width: 'min(760px, 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.8rem',
+                borderRadius: '999px',
+                background: 'rgba(25, 29, 38, 0.92)',
+                border: '1px solid rgba(255,255,255,0.06)',
+                boxShadow: '0 18px 60px rgba(0, 0, 0, 0.45)',
+                padding: '0.95rem 1rem',
+                backdropFilter: 'blur(14px)',
+              }}>
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '28px',
+                  height: '28px',
+                  color: '#f7f7f7',
+                  fontSize: '1.05rem',
+                  fontWeight: 700,
+                }}>
+                  +
+                </span>
+                <span style={{
+                  color: '#f3f4f6',
+                  fontSize: '0.96rem',
+                  fontWeight: 500,
+                  flex: 1,
+                }}>
+                  Ask {selectedProviderLabel === 'Gemini' ? 'Gemini' : 'Mavis'}
+                </span>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.65rem',
+                  color: '#d4d4d8',
+                  fontSize: '0.86rem',
+                  fontWeight: 600,
+                }}>
+                  <span>Flash</span>
+                  <span style={{
+                    fontSize: '1rem',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '22px',
+                    height: '22px',
+                    borderRadius: '50%',
+                    background: 'rgba(255,255,255,0.06)',
+                  }}>
+                    ✦
+                  </span>
+                </div>
+              </div>
             </div>
           ) : (
             messages.map((msg, i) => (
@@ -1569,17 +1660,21 @@ formData.append('persona', selectedPersona || 'default')
         }}>
           <div style={{
             display: 'flex',
-            alignItems: 'flex-end',
+            alignItems: 'center',
             gap: '0.5rem',
-            background: palette.surface,
-            borderRadius: '16px',
-            border: `1px solid ${palette.border}`,
-            padding: '0.5rem 0.5rem 0.5rem 1rem',
-            transition: 'border-color 0.2s',
+            background: `linear-gradient(180deg, ${palette.surface}, ${palette.headerBg})`,
+            borderRadius: '18px',
+            border: `1px solid ${palette.borderStrong}`,
+            padding: '0.5rem 0.55rem 0.5rem 0.9rem',
+            transition: 'border-color 0.2s, box-shadow 0.2s',
             boxShadow: `0 12px 36px ${palette.shadow}`,
+            minHeight: '64px',
+            width: '100%',
+            maxWidth: '1160px',
+            margin: '0 auto',
           }}
-            onFocusCapture={e => { e.currentTarget.style.borderColor = palette.primary }}
-            onBlurCapture={e => { e.currentTarget.style.borderColor = palette.border }}
+            onFocusCapture={e => { e.currentTarget.style.borderColor = palette.primary; e.currentTarget.style.boxShadow = `0 0 0 1px ${palette.primary}22, 0 12px 36px ${palette.shadow}` }}
+            onBlurCapture={e => { e.currentTarget.style.borderColor = palette.borderStrong; e.currentTarget.style.boxShadow = `0 12px 36px ${palette.shadow}` }}
           >
             <button
               onClick={() => fileInputRef.current?.click()}
@@ -1590,10 +1685,11 @@ formData.append('persona', selectedPersona || 'default')
                 border: 'none',
                 color: uploading ? palette.primary : palette.textMuted,
                 cursor: uploading ? 'default' : 'pointer',
-                fontSize: '1.3rem',
+                fontSize: '1.25rem',
                 fontWeight: 600,
-                padding: '0.4rem 0.5rem',
+                padding: '0.4rem 0.4rem',
                 transition: 'color 0.2s',
+                lineHeight: 1,
               }}
               onMouseEnter={e => { if (!uploading) e.currentTarget.style.color = palette.primary }}
               onMouseLeave={e => { if (!uploading) e.currentTarget.style.color = palette.textMuted }}
@@ -1626,13 +1722,18 @@ formData.append('persona', selectedPersona || 'default')
                 border: 'none',
                 outline: 'none',
                 color: palette.text,
-                fontSize: '0.9rem',
+                fontSize: '0.92rem',
                 fontFamily: 'Inter, system-ui, sans-serif',
                 resize: 'none',
                 lineHeight: 1.5,
-                padding: '0.3rem 0',
+                padding: '0.35rem 0.1rem',
                 textAlign: 'left',
+                minHeight: '36px',
                 maxHeight: '150px',
+                alignItems: 'center',
+                boxSizing: 'border-box',
+                scrollbarWidth: 'thin',
+                WebkitOverflowScrolling: 'touch',
               }}
               onInput={e => {
                 e.target.style.height = 'auto'
@@ -1644,14 +1745,15 @@ formData.append('persona', selectedPersona || 'default')
               title={isListening ? 'Stop voice input' : 'Use voice input'}
               disabled={!voiceSupported}
               style={{
-                background: isListening ? 'rgba(220, 38, 38, 0.12)' : 'none',
-                border: 'none',
+                background: isListening ? 'rgba(220, 38, 38, 0.12)' : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${palette.border}`,
                 color: isListening ? '#e11d48' : (voiceSupported ? palette.textMuted : palette.textMuted),
                 cursor: voiceSupported ? 'pointer' : 'not-allowed',
-                fontSize: '1rem',
-                padding: '0.4rem 0.5rem',
+                fontSize: '0.95rem',
+                padding: '0.42rem 0.55rem',
                 transition: 'all 0.2s',
                 opacity: voiceSupported ? 1 : 0.55,
+                borderRadius: '10px',
               }}
             >
               🎙️
@@ -1661,13 +1763,14 @@ formData.append('persona', selectedPersona || 'default')
               title="Read latest reply aloud"
               disabled={!voiceEnabled}
               style={{
-                background: 'none',
-                border: 'none',
+                background: 'rgba(255,255,255,0.03)',
+                border: `1px solid ${palette.border}`,
                 color: voiceEnabled ? palette.textMuted : palette.textMuted,
                 cursor: voiceEnabled ? 'pointer' : 'default',
-                fontSize: '1rem',
-                padding: '0.4rem 0.5rem',
+                fontSize: '0.95rem',
+                padding: '0.42rem 0.55rem',
                 opacity: voiceEnabled ? 1 : 0.45,
+                borderRadius: '10px',
               }}
             >
               🔊
@@ -1679,13 +1782,13 @@ formData.append('persona', selectedPersona || 'default')
               }}
               title={voiceEnabled ? 'Disable voice mode' : 'Enable voice mode'}
               style={{
-                background: voiceEnabled ? 'rgba(34,197,94,0.12)' : 'none',
-                border: 'none',
+                background: voiceEnabled ? 'rgba(34,197,94,0.12)' : 'rgba(255,255,255,0.03)',
+                border: `1px solid ${palette.border}`,
                 color: voiceEnabled ? '#16a34a' : palette.textMuted,
                 cursor: 'pointer',
-                fontSize: '0.78rem',
+                fontSize: '0.75rem',
                 fontWeight: 700,
-                padding: '0.35rem 0.55rem',
+                padding: '0.42rem 0.7rem',
                 borderRadius: '999px',
               }}
             >
@@ -1709,23 +1812,24 @@ formData.append('persona', selectedPersona || 'default')
               </button>
             ) : (
               <button onClick={sendMessage} disabled={!input.trim()} style={{
-                padding: '0.5rem 0.9rem',
+                padding: '0.55rem 1rem',
                 borderRadius: '12px',
-                background: input.trim() ? palette.secondary : palette.bgSoft,
+                background: input.trim() ? 'linear-gradient(135deg, #e39a6c, #c6784d)' : palette.bgSoft,
                 border: 'none',
-                color: input.trim() ? '#fff' : palette.textMuted,
-                fontSize: '0.85rem',
-                fontWeight: 600,
+                color: input.trim() ? '#1c1a16' : palette.textMuted,
+                fontSize: '0.86rem',
+                fontWeight: 800,
                 cursor: input.trim() ? 'pointer' : 'default',
                 fontFamily: 'Inter, system-ui, sans-serif',
                 whiteSpace: 'nowrap',
                 transition: 'all 0.2s',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.3rem',
+                gap: '0.35rem',
+                boxShadow: input.trim() ? '0 10px 24px rgba(212,165,116,0.32)' : 'none',
               }}>
                 <span className="send-btn-text">Send</span>
-                <span className="send-btn-icon" style={{ display: 'none', fontSize: '1rem' }}>↑</span>
+                <span className="send-btn-icon" style={{ fontSize: '0.92rem' }}>↑</span>
               </button>
             )}
           </div>
