@@ -157,6 +157,82 @@ if not GROQ_API_KEY:
     print("ERROR: GROQ_API_KEY not set! Chat will fail with 500.")
 client = Groq(api_key=GROQ_API_KEY)
 
+DEFAULT_MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "groq").strip().lower()
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+
+
+def _resolve_model_provider(provider_name: str | None) -> str:
+    provider = (provider_name or DEFAULT_MODEL_PROVIDER or "groq").strip().lower()
+    if provider not in {"groq", "gemini"}:
+        return "groq"
+    return provider
+
+
+def _call_groq_model(messages, temperature=0.7, max_tokens=1024, tools=None, tool_choice=None, model_name="llama-3.3-70b-versatile"):
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    if tools is not None:
+        payload["tools"] = tools
+    if tool_choice is not None:
+        payload["tool_choice"] = tool_choice
+    return client.chat.completions.create(**payload)
+
+
+def _call_gemini_model(messages, system_prompt, temperature=0.7, max_tokens=1024):
+    if not GEMINI_API_KEY:
+        raise RuntimeError("GEMINI_API_KEY is not configured")
+
+    contents = []
+    for msg in messages:
+        if msg.get("role") == "system":
+            continue
+        role = "user" if msg.get("role") == "user" else "model"
+        contents.append({
+            "role": role,
+            "parts": [{"text": msg.get("content", "")}],
+        })
+
+    payload = {
+        "system_instruction": {
+            "parts": [{"text": system_prompt}]
+        },
+        "contents": contents,
+        "generationConfig": {
+            "temperature": temperature,
+            "maxOutputTokens": max_tokens,
+        },
+    }
+
+    response = requests.post(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}",
+        json=payload,
+        timeout=60,
+    )
+    response.raise_for_status()
+    data = response.json()
+    return data["candidates"][0]["content"]["parts"][0]["text"]
+
+
+def _call_model(messages, system_prompt, provider_name=None, temperature=0.7, max_tokens=1024, tools=None, tool_choice=None, model_name="llama-3.3-70b-versatile"):
+    provider = _resolve_model_provider(provider_name)
+
+    if provider == "gemini":
+        return _call_gemini_model(messages, system_prompt, temperature=temperature, max_tokens=max_tokens)
+
+    return _call_groq_model(
+        messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        tools=tools,
+        tool_choice=tool_choice,
+        model_name=model_name,
+    )
+
 
 def check_guest_limit(guest_id):
     count = _guest_message_counts.get(guest_id, 0)
@@ -242,6 +318,8 @@ class ChatRequest(BaseModel):
     incognito: bool = False
     web_search: bool = True
     persona: str = "default"
+    model_provider: str = "groq"
+    model_name: str = "llama-3.3-70b-versatile"
 
 
 class UrlRequest(BaseModel):
@@ -403,30 +481,46 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
     title = None
 
     try:
-        if request.web_search:
-            search_results = web_search(request.message, max_results=8)
-            sources = [{"title": r["title"], "url": r["url"]} for r in search_results]
-            if search_results:
-                results_text = "\n\n".join(
-                    f"Title: {r['title']}\nURL: {r['url']}\nSnippet: {r['snippet']}"
-                    for r in search_results
-                )
-                search_prompt = system_prompt + "\n\n[Live web results for the user's query: \"" + request.message + "\"]\n" + results_text + "\n[/End of web results]"
-            else:
-                sources = []
-                search_prompt = system_prompt
-            # First call with tools — model may request a tool
-            tool_defs = get_tool_definitions()
-            first_response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "system", "content": search_prompt}] + history,
-                tools=tool_defs,
-                tool_choice="auto",
+        search_results = web_search(request.message, max_results=8) if request.web_search else []
+        sources = [{"title": r["title"], "url": r["url"]} for r in search_results]
+
+        if request.web_search and search_results:
+            results_text = "\n\n".join(
+                f"Title: {r['title']}\nURL: {r['url']}\nSnippet: {r['snippet']}"
+                for r in search_results
+            )
+            search_prompt = system_prompt + "\n\n[Live web results for the user's query: \"" + request.message + "\"]\n" + results_text + "\n[/End of web results]"
+        else:
+            sources = []
+            search_prompt = system_prompt
+
+        provider_name = request.model_provider
+        provider = _resolve_model_provider(provider_name)
+
+        if provider == "gemini":
+            assistant_message = _call_model(
+                [{"role": "system", "content": search_prompt}] + history,
+                system_prompt=search_prompt,
+                provider_name=provider_name,
                 temperature=0.7,
                 max_tokens=1024,
+                model_name=request.model_name,
+            )
+            if not isinstance(assistant_message, str):
+                assistant_message = assistant_message.choices[0].message.content
+        else:
+            tool_defs = get_tool_definitions()
+            first_response = _call_model(
+                [{"role": "system", "content": search_prompt}] + history,
+                system_prompt=search_prompt,
+                provider_name=provider_name,
+                temperature=0.7,
+                max_tokens=1024,
+                tools=tool_defs,
+                tool_choice="auto",
+                model_name=request.model_name,
             )
 
-            # Check if model requested tools
             if first_response.choices[0].message.tool_calls:
                 tool_msg = first_response.choices[0].message
                 tool_results = []
@@ -452,62 +546,21 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
                         "content": result,
                     })
 
-                # Second call: model reads tool results and answers
                 final_messages = [{"role": "system", "content": search_prompt}] + history + [
                     tool_msg.model_dump()
                 ] + tool_results
 
-                final_response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=final_messages,
+                final_response = _call_model(
+                    final_messages,
+                    system_prompt=search_prompt,
+                    provider_name=provider_name,
                     temperature=0.7,
                     max_tokens=1024,
+                    model_name=request.model_name,
                 )
                 assistant_message = final_response.choices[0].message.content
             else:
                 assistant_message = first_response.choices[0].message.content
-        else:
-            tool_defs = get_tool_definitions()
-            first_response = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "system", "content": system_prompt}] + history,
-                tools=tool_defs,
-                tool_choice="auto",
-                temperature=0.7,
-                max_tokens=1024,
-            )
-
-            if first_response.choices[0].message.tool_calls:
-                tool_msg = first_response.choices[0].message
-                tool_results = []
-                for tc in tool_msg.tool_calls:
-                    fn_name = tc.function.name
-                    import json as _json
-                    try:
-                        fn_args = _json.loads(tc.function.arguments)
-                    except Exception:
-                        fn_args = {}
-                    if fn_name == "calculator":
-                        result = calculator(fn_args.get("expression", "0"))
-                    elif fn_name == "wikipedia_search":
-                        result = wikipedia_search(fn_args.get("query", ""))
-                    else:
-                        result = "Unknown tool"
-                    tool_results.append({"role": "tool", "tool_call_id": tc.id, "content": result})
-
-                final_messages = [{"role": "system", "content": system_prompt}] + history + [
-                    tool_msg.model_dump()
-                ] + tool_results
-                final_response = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=final_messages,
-                    temperature=0.7,
-                    max_tokens=1024,
-                )
-                assistant_message = final_response.choices[0].message.content
-            else:
-                assistant_message = first_response.choices[0].message.content
-            sources = []
 
         if first_turn:
             title = _generate_title(request.message, assistant_message)

@@ -739,6 +739,7 @@ export default function Chat({ onNavigate }) {
   const [isTyping, setIsTyping] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [selectedPersona, setSelectedPersona] = useState(() => localStorage.getItem('mavis_persona') || 'default')
+  const [modelProvider, setModelProvider] = useState(() => localStorage.getItem('mavis_model_provider') || 'groq')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [pendingImage, setPendingImage] = useState(null)
@@ -770,6 +771,10 @@ export default function Chat({ onNavigate }) {
   useEffect(() => {
     localStorage.setItem('mavis_conversations', JSON.stringify(conversations))
   }, [conversations])
+
+  useEffect(() => {
+    localStorage.setItem('mavis_model_provider', modelProvider)
+  }, [modelProvider])
 
   useEffect(() => {
     localStorage.setItem('mavis_voice_enabled', String(voiceEnabled))
@@ -1077,6 +1082,8 @@ formData.append('persona', selectedPersona || 'default')
             incognito: false,
             web_search: true,
             persona: selectedPersona,
+            model_provider: modelProvider,
+            model_name: modelProvider === 'gemini' ? 'gemini-2.0-flash' : 'llama-3.3-70b-versatile',
           }),
           signal: controller.signal,
         })
@@ -1125,7 +1132,7 @@ formData.append('persona', selectedPersona || 'default')
       setIsTyping(false)
       abortRef.current = null
     }
-  }, [input, loading, messages, activeConvId, guestId, pendingImage, pendingFiles, selectedPersona])
+  }, [input, loading, messages, activeConvId, guestId, pendingImage, pendingFiles, selectedPersona, modelProvider, voiceEnabled])
 
   const speakText = useCallback((text) => {
     if (!voiceEnabled || !text || !('speechSynthesis' in window)) return
@@ -1408,6 +1415,26 @@ formData.append('persona', selectedPersona || 'default')
           overflowX: 'auto',
           flexShrink: 0,
         }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginRight: '0.5rem' }}>
+            {['groq', 'gemini'].map(provider => (
+              <button key={provider} onClick={() => setModelProvider(provider)} style={{
+                padding: '0.3rem 0.7rem',
+                borderRadius: '20px',
+                border: `1px solid ${modelProvider === provider ? (palette.primary || '#6366f1') : palette.border}`,
+                background: modelProvider === provider ? (palette.primary || '#6366f1') : 'transparent',
+                color: modelProvider === provider ? '#fff' : (palette.textMuted || '#6b6b6b'),
+                fontSize: '0.75rem',
+                fontWeight: 500,
+                fontFamily: 'Inter, system-ui, sans-serif',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}>
+                {provider === 'groq' ? 'Groq' : 'Gemini'}
+              </button>
+            ))}
+          </div>
           {[
             { id: 'default', label: 'Default' },
             { id: 'coder', label: 'Coder' },
