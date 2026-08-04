@@ -1441,7 +1441,7 @@ formData.append('persona', selectedPersona || 'default')
           padding: '0.55rem 1.25rem',
           display: 'flex',
           alignItems: 'center',
-          gap: '0.55rem',
+          gap: '0.5rem',
           borderBottom: `1px solid ${palette.border}`,
           background: palette.surface || palette.headerBg,
           overflowX: 'auto',
@@ -1449,7 +1449,7 @@ formData.append('persona', selectedPersona || 'default')
         }}>
           <div ref={agentMenuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <button onClick={() => { setShowAgentMenu(prev => !prev); setShowRoleMenu(false) }} style={{
-              padding: '0.42rem 0.9rem',
+              padding: '0.38rem 0.85rem',
               borderRadius: '999px',
               border: `1px solid ${palette.borderStrong}`,
               background: palette.surfaceWarm,
@@ -1459,9 +1459,8 @@ formData.append('persona', selectedPersona || 'default')
               fontFamily: 'Inter, system-ui, sans-serif',
               cursor: 'pointer',
               letterSpacing: '0.02em',
-              boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.02)`
             }}>
-              Agent · {selectedProviderLabel}
+              Agent
             </button>
             {showAgentMenu && (
               <div style={{
@@ -1477,11 +1476,11 @@ formData.append('persona', selectedPersona || 'default')
                 background: palette.surface,
                 boxShadow: `0 14px 40px ${palette.shadow}`,
                 zIndex: 120,
-                minWidth: '155px',
+                minWidth: '150px',
               }}>
                 {['groq', 'gemini'].map(provider => (
                   <button key={provider} onClick={() => { setModelProvider(provider); setShowAgentMenu(false) }} style={{
-                    padding: '0.5rem 0.75rem',
+                    padding: '0.45rem 0.7rem',
                     borderRadius: '10px',
                     border: `1px solid ${modelProvider === provider ? (palette.primary || '#6366f1') : palette.border}`,
                     background: modelProvider === provider ? (palette.primary || '#6366f1') : 'transparent',
@@ -1500,7 +1499,7 @@ formData.append('persona', selectedPersona || 'default')
 
           <div ref={roleMenuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <button onClick={() => { setShowRoleMenu(prev => !prev); setShowAgentMenu(false) }} style={{
-              padding: '0.42rem 0.9rem',
+              padding: '0.38rem 0.85rem',
               borderRadius: '999px',
               border: `1px solid ${palette.borderStrong}`,
               background: 'transparent',
@@ -1511,7 +1510,7 @@ formData.append('persona', selectedPersona || 'default')
               cursor: 'pointer',
               letterSpacing: '0.02em',
             }}>
-              Auto · {selectedPersonaLabel}
+              Auto
             </button>
             {showRoleMenu && (
               <div style={{
@@ -1527,7 +1526,7 @@ formData.append('persona', selectedPersona || 'default')
                 background: palette.surface,
                 boxShadow: `0 14px 40px ${palette.shadow}`,
                 zIndex: 120,
-                minWidth: '270px',
+                minWidth: '260px',
               }}>
                 {[
                   { id: 'default', label: 'Default' },
@@ -1538,7 +1537,7 @@ formData.append('persona', selectedPersona || 'default')
                   { id: 'casual', label: 'Casual' },
                 ].map(p => (
                   <button key={p.id} onClick={() => { setSelectedPersona(p.id); localStorage.setItem('mavis_persona', p.id); setShowRoleMenu(false) }} style={{
-                    padding: '0.42rem 0.78rem',
+                    padding: '0.38rem 0.72rem',
                     borderRadius: '999px',
                     border: `1px solid ${selectedPersona === p.id ? (palette.primary || '#6366f1') : palette.border}`,
                     background: selectedPersona === p.id ? (palette.primary || '#6366f1') : 'transparent',
@@ -1588,78 +1587,50 @@ formData.append('persona', selectedPersona || 'default')
               alignItems: 'center',
               justifyContent: 'center',
               height: '100%',
-              gap: '1.75rem',
-              background: 'radial-gradient(circle at 50% 30%, rgba(56, 75, 143, 0.42), transparent 30%), radial-gradient(circle at 50% 50%, rgba(18, 25, 54, 0.55), transparent 60%)',
-              borderRadius: '24px',
+              gap: '1rem',
             }}>
-              <h1 style={{
-                fontSize: 'clamp(2rem, 3.8vw, 3.6rem)',
-                fontWeight: 500,
-                color: '#f7f7f7',
-                margin: 0,
-                textAlign: 'center',
-                letterSpacing: '-0.03em',
-                fontFamily: 'Inter, system-ui, sans-serif',
-                lineHeight: 1.15,
-              }}>
-                Hi there, what's the plan?
-              </h1>
-
               <div style={{
-                width: 'min(760px, 100%)',
+                width: 72,
+                height: 72,
+                borderRadius: '50%',
+                background: `
+                  radial-gradient(circle at 40% 35%, rgba(255,255,255,0.85), transparent 38%),
+                  radial-gradient(circle at 55% 50%, rgba(232,159,113,0.32), transparent 45%),
+                  radial-gradient(circle at 50% 50%, rgba(212,165,116,0.28), transparent 62%)
+                `,
+                boxShadow: `0 12px 36px ${palette.shadow}`,
+                border: `1px solid ${palette.borderStrong}`,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.8rem',
-                borderRadius: '999px',
-                background: 'rgba(25, 29, 38, 0.92)',
-                border: '1px solid rgba(255,255,255,0.06)',
-                boxShadow: '0 18px 60px rgba(0, 0, 0, 0.45)',
-                padding: '0.95rem 1rem',
-                backdropFilter: 'blur(14px)',
+                justifyContent: 'center',
+                fontSize: '1.2rem',
+                fontWeight: 700,
+                color: palette.text,
+                marginBottom: '0.5rem',
+                animation: 'pulse 3s ease-in-out infinite',
               }}>
-                <span style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '28px',
-                  height: '28px',
-                  color: '#f7f7f7',
-                  fontSize: '1.05rem',
-                  fontWeight: 700,
-                }}>
-                  +
-                </span>
-                <span style={{
-                  color: '#f3f4f6',
-                  fontSize: '0.96rem',
-                  fontWeight: 500,
-                  flex: 1,
-                }}>
-                  Ask {modelProvider === 'gemini' ? 'Gemini' : 'Mavis'}
-                </span>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.65rem',
-                  color: '#d4d4d8',
-                  fontSize: '0.86rem',
-                  fontWeight: 600,
-                }}>
-                  <span>Flash</span>
-                  <span style={{
-                    fontSize: '1rem',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '22px',
-                    height: '22px',
-                    borderRadius: '50%',
-                    background: 'rgba(255,255,255,0.06)',
-                  }}>
-                    ✦
-                  </span>
-                </div>
+                M
               </div>
+              <h2 style={{
+                fontSize: '1.5rem',
+                fontWeight: 600,
+                color: palette.text,
+                margin: 0,
+                fontFamily: 'Playfair Display, Georgia, serif',
+                letterSpacing: '-0.01em',
+              }}>
+                Hey! I'm Mavis
+              </h2>
+              <p style={{
+                fontSize: '0.9rem',
+                color: palette.textMuted,
+                margin: 0,
+                textAlign: 'center',
+                maxWidth: 360,
+                lineHeight: 1.5,
+              }}>
+                Ask me anything - research, code, creative writing, or just a conversation.
+              </p>
             </div>
           ) : (
             messages.map((msg, i) => (
@@ -1690,19 +1661,16 @@ formData.append('persona', selectedPersona || 'default')
             display: 'flex',
             alignItems: 'center',
             gap: '0.5rem',
-            background: `linear-gradient(180deg, ${palette.surface}, ${palette.headerBg})`,
-            borderRadius: '18px',
-            border: `1px solid ${palette.borderStrong}`,
+            background: palette.surface,
+            borderRadius: '16px',
+            border: `1px solid ${palette.border}`,
             padding: '0.5rem 0.55rem 0.5rem 0.9rem',
-            transition: 'border-color 0.2s, box-shadow 0.2s',
+            transition: 'border-color 0.2s',
             boxShadow: `0 12px 36px ${palette.shadow}`,
-            minHeight: '64px',
-            width: '100%',
-            maxWidth: '1160px',
-            margin: '0 auto',
+            minHeight: '62px',
           }}
-            onFocusCapture={e => { e.currentTarget.style.borderColor = palette.primary; e.currentTarget.style.boxShadow = `0 0 0 1px ${palette.primary}22, 0 12px 36px ${palette.shadow}` }}
-            onBlurCapture={e => { e.currentTarget.style.borderColor = palette.borderStrong; e.currentTarget.style.boxShadow = `0 12px 36px ${palette.shadow}` }}
+            onFocusCapture={e => { e.currentTarget.style.borderColor = palette.primary }}
+            onBlurCapture={e => { e.currentTarget.style.borderColor = palette.border }}
           >
             <button
               onClick={() => fileInputRef.current?.click()}
