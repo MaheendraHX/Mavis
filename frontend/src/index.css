@@ -1,258 +1,51 @@
-@import "tailwindcss";
+/* @import url() FONT IMPORTS MUST ALWAYS BE AT THE VERY TOP OF THIS FILE, ABOVE THE TAILWIND IMPORTS — DO NOT DELETE THIS COMMENT */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..800;1,400..700&family=Inter:wght@300..700&family=JetBrains+Mono:wght@400;500&display=swap');
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+/* CRITICAL: THE FOLLOWING TAILWIND IMPORTS MUST NEVER BE DELETED OR REORDERED — DO NOT DELETE THIS COMMENT */
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* END TAILWIND IMPORTS — ALL OTHER CSS MUST GO BELOW THIS LINE */
+
+html,
+body,
+#root {
+  min-height: 100%;
+  width: 100%;
 }
-
-html {
-  scroll-behavior: smooth;
-}
-
 body {
-  background: #faf9f7;
-  color: #2d2d2d;
-  font-family: 'Inter', sans-serif;
-  overflow-x: hidden;
+  background-color: #faf9f7;
+  color: #1f1d1a;
+  font-family: Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
-
-h1, h2, h3, .playfair {
-  font-family: 'Playfair Display', serif;
+::selection {
+  background: #e89f71;
+  color: #fff;
 }
-
-::-webkit-scrollbar {
-  width: 3px;
+.grain::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
 }
-
-::-webkit-scrollbar-track {
-  background: #f0eee9;
+.hairline-grid {
+  background-image: linear-gradient(to right, #e6ded4 1px, transparent 1px);
+  background-size: 25% 100%;
 }
-
-::-webkit-scrollbar-thumb {
+.scroll-slim::-webkit-scrollbar {
+  width: 8px;
+}
+.scroll-slim::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-slim::-webkit-scrollbar-thumb {
+  background: #e0d6ca;
+  border-radius: 999px;
+}
+.scroll-slim::-webkit-scrollbar-thumb:hover {
   background: #d4a574;
-  border-radius: 2px;
 }
-
-.glass {
-  background: rgba(255,255,255,0.7);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(0,0,0,0.06);
-}
-
-.reveal {
-  opacity: 0;
-  transform: translateY(50px);
-  transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1), transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.reveal.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-/* Scroll indicator bounce */
-.scroll-mouse {
-  animation: scrollBounce 2s ease-in-out infinite;
-}
-
-.scroll-dot {
-  animation: scrollDot 2s ease-in-out infinite;
-}
-
-@keyframes scrollBounce {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(5px); }
-}
-
-@keyframes scrollDot {
-  0% { opacity: 1; transform: translateY(0); }
-  50% { opacity: 0.3; transform: translateY(8px); }
-  100% { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
-  to { opacity: 0.5; transform: translateX(-50%) translateY(0); }
-}
-
-/* ======================== */
-/*  RESPONSIVE              */
-/* ======================== */
-
-/* Mobile menu button - hidden on desktop, visible on mobile */
-.mobile-menu-btn {
-  display: none !important;
-}
-@media (max-width: 768px) {
-  .mobile-menu-btn {
-    display: flex !important;
-    align-items: center;
-    justify-content: center;
-    min-width: 44px;
-    min-height: 44px;
-  }
-  /* Desktop nav links hidden on mobile */
-  .desktop-nav {
-    display: none !important;
-  }
-
-  /* Global section padding reduction */
-  section {
-    padding-top: 3rem !important;
-    padding-bottom: 3rem !important;
-    padding-left: 1.25rem !important;
-    padding-right: 1.25rem !important;
-  }
-
-  /* Hero stacking */
-  .hero-inner {
-    flex-direction: column !important;
-    text-align: center !important;
-    gap: 2rem !important;
-  }
-  .hero-inner > div {
-    flex-basis: 100% !important;
-    max-width: 100% !important;
-  }
-  .hero-inner > div p {
-    margin-left: auto !important;
-    margin-right: auto !important;
-  }
-  .hero-btns {
-    justify-content: center !important;
-  }
-  .hero-btns button {
-    flex: 1 1 auto !important;
-    min-width: 140px !important;
-  }
-  .hero-title {
-    font-size: clamp(1.8rem, 6vw, 2.5rem) !important;
-    line-height: 1.15 !important;
-  }
-  .hero-sub {
-    font-size: 0.95rem !important;
-    line-height: 1.6 !important;
-  }
-
-  /* Orb shrinks */
-  .orb {
-    width: 180px !important;
-    height: 180px !important;
-    margin: 0 auto !important;
-    flex: 0 0 180px !important;
-  }
-
-  /* Demo notice stacks */
-  .demo-notice {
-    flex-direction: column !important;
-    align-items: center !important;
-    text-align: center !important;
-    padding: 1rem !important;
-    gap: 0.75rem !important;
-  }
-
-  /* Section titles smaller */
-  .section-title h2 {
-    font-size: clamp(1.6rem, 5vw, 2.2rem) !important;
-  }
-
-  /* Feature cards less padding */
-  .feature-card {
-    padding: 1.5rem 1.25rem !important;
-  }
-
-  /* Step cards less padding */
-  .step-card {
-    padding: 1.5rem 1rem !important;
-  }
-
-  /* Tech pills tighter */
-  .tech-pills {
-    gap: 0.4rem !important;
-  }
-  .tech-pills span {
-    padding: 0.35rem 0.7rem !important;
-    font-size: 0.7rem !important;
-  }
-
-  /* Scroll indicator smaller or hidden */
-  .scroll-indicator-wrap {
-    bottom: 1rem !important;
-  }
-
-  /* CTA footer */
-  .cta-footer h2 {
-    font-size: clamp(1.6rem, 5vw, 2.2rem) !important;
-  }
-  .cta-footer p {
-    font-size: 0.9rem !important;
-  }
-
-  /* Mobile dropdown menu full-screen */
-  .mobile-dropdown {
-    width: 100% !important;
-    padding: 5rem 1.5rem 3rem !important;
-  }
-  .mobile-dropdown a {
-    font-size: 1.15rem !important;
-    padding: 0.9rem 0 !important;
-  }
-}
-
-/* Very small phones */
-@media (max-width: 480px) {
-  .hero-title {
-    font-size: 1.8rem !important;
-  }
-  .hero-sub {
-    font-size: 0.88rem !important;
-  }
-  .hero-btns button {
-    min-width: 120px !important;
-    font-size: 0.82rem !important;
-    padding: 0.65rem 1rem !important;
-  }
-  .orb {
-    width: 140px !important;
-    height: 140px !important;
-    flex: 0 0 140px !important;
-  }
-  .scroll-indicator-wrap {
-    display: none !important;
-  }
-  .feature-card {
-    padding: 1.25rem 1rem !important;
-  }
-  .tech-pills span {
-    font-size: 0.65rem !important;
-    padding: 0.3rem 0.55rem !important;
-  }
-}
-
-/* ======================== */
-/*  CHAT RESPONSIVE          */
-/* ======================== */
-
-@media (max-width: 768px) {
-  .sidebar-open {
-    position: fixed !important;
-    top: 0;
-    left: 0;
-    height: 100vh !important;
-    width: 100% !important;
-    min-width: 100% !important;
-    z-index: 100;
-    box-shadow: 4px 0 20px rgba(0,0,0,0.15);
-  }
-  .send-btn-text { display: none !important; }
-  .send-btn-icon { display: inline !important; }
-}
-
-@media (min-width: 769px) {
-  .send-btn-text { display: inline !important; }
-  .send-btn-icon { display: none !important; }
-}
-
-/* (msg-actions removed — buttons now inline below messages) */
