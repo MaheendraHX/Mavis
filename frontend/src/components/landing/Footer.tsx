@@ -1,7 +1,7 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { Wordmark } from '../Wordmark';
-import { navLinks } from '../../data/landing';
+import { Link } from "@tanstack/react-router";
+
+import { Wordmark } from "@/components/mavis/Wordmark";
+import { navLinks } from "@/data/landing";
 
 export function Footer() {
   return (
@@ -12,24 +12,24 @@ export function Footer() {
         </Link>
 
         <nav aria-label="Footer" className="flex flex-wrap items-center gap-6">
-          {navLinks.map((link) =>
-          <a
-            key={link.href}
-            href={link.href}
-            className="text-xs text-muted transition-colors hover:text-ink">
-            
+          {navLinks.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="text-xs text-muted-ink transition-colors hover:text-ink"
+            >
               {link.label}
             </a>
-          )}
-          <Link to="/chat" className="text-xs text-muted transition-colors hover:text-ink">
+          ))}
+          <Link to="/chat" className="text-xs text-muted-ink transition-colors hover:text-ink">
             Demo
           </Link>
         </nav>
 
-        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
+        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-ink">
           © {new Date().getFullYear()} Mavis
         </p>
       </div>
-    </footer>);
-
+    </footer>
+  );
 }

@@ -1,27 +1,28 @@
-import React from 'react';
 import {
   BrainIcon,
   CodeIcon,
   LayersIcon,
   SearchIcon,
   ShieldCheckIcon,
-  ZapIcon } from
-'lucide-react';
-import { Reveal } from '../Reveal';
-import { features, type Feature } from '../../data/landing';
+  ZapIcon,
+} from "lucide-react";
+import type { ComponentType } from "react";
 
-const icons: Record<Feature['icon'], React.ComponentType<{className?: string;}>> = {
+import { Reveal } from "@/components/mavis/Reveal";
+import { features, type Feature } from "@/data/landing";
+
+const icons: Record<Feature["icon"], ComponentType<{ className?: string }>> = {
   layers: LayersIcon,
   search: SearchIcon,
   brain: BrainIcon,
   code: CodeIcon,
   shield: ShieldCheckIcon,
-  zap: ZapIcon
+  zap: ZapIcon,
 };
 
 export function Features() {
   return (
-    <section id="features" className="border-b border-line bg-cream py-24 sm:py-32">
+    <section id="features" className="scroll-mt-24 border-b border-line bg-cream py-24 sm:py-32">
       <div className="mx-auto max-w-6xl px-6">
         <Reveal className="max-w-2xl">
           <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-peach">Features</p>
@@ -45,13 +46,15 @@ export function Features() {
                     </span>
                   </div>
                   <h3 className="mt-6 font-display text-xl text-ink">{feature.title}</h3>
-                  <p className="mt-3 text-sm leading-relaxed text-muted">{feature.description}</p>
+                  <p className="mt-3 text-sm leading-relaxed text-muted-ink">
+                    {feature.description}
+                  </p>
                 </article>
-              </Reveal>);
-
+              </Reveal>
+            );
           })}
         </div>
       </div>
-    </section>);
-
+    </section>
+  );
 }
