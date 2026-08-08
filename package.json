@@ -1,4 +1,10 @@
 {
+  "name": "mavis-root",
+  "private": true,
+  "scripts": {
+    "install-frontend": "npm install --prefix frontend",
+    "build-frontend": "npm run build --prefix frontend"
+  },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
