@@ -385,20 +385,38 @@ def _system_prompt_for(request: ChatRequest, is_owner: bool) -> str:
     return prompt + PERSONA_MODIFIERS.get(request.persona, "")
 
 
+def _is_greeting(message: str) -> bool:
+    """Avoid unnecessary external searches for short conversational greetings."""
+    normalized = re.sub(r"[^a-z ]", "", message.lower()).strip()
+    return normalized in {"hi", "hello", "hey", "good morning", "good afternoon", "good evening", "thanks", "thank you"}
+
+
 def _search_context_for(request: ChatRequest, system_prompt: str) -> tuple[str, list[dict[str, str]]]:
+    """Return safe optional search context without allowing search failures to block chat."""
     if not request.web_search or _is_greeting(request.message):
         return system_prompt, []
     try:
-        results = web_search(request.message, max_results=6)
+        raw_results = web_search(request.message, max_results=6)
+        results: list[dict[str, str]] = []
+        for raw_result in raw_results or []:
+            if not isinstance(raw_result, dict):
+                continue
+            title = str(raw_result.get("title") or "").strip()
+            url = str(raw_result.get("url") or "").strip()
+            snippet = str(raw_result.get("snippet") or "").strip()
+            if not title or not url:
+                continue
+            results.append({"title": title, "url": url, "snippet": snippet})
+        sources = [{"title": result["title"], "url": result["url"]} for result in results]
+        if not results:
+            return system_prompt, sources
+        context = "\n\n".join(
+            f"Title: {result['title']}\nURL: {result['url']}\nSnippet: {result['snippet']}" for result in results
+        )
+        return f"{system_prompt}\n\nLive web results for the user's query:\n{context}", sources
     except Exception:
+        traceback.print_exc()
         return system_prompt, []
-    sources = [{"title": result["title"], "url": result["url"]} for result in results]
-    if not results:
-        return system_prompt, sources
-    context = "\n\n".join(
-        f"Title: {result['title']}\nURL: {result['url']}\nSnippet: {result['snippet']}" for result in results
-    )
-    return f"{system_prompt}\n\nLive web results for the user's query:\n{context}", sources
 
 
 class UrlRequest(BaseModel):

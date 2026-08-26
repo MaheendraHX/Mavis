@@ -90,6 +90,27 @@ def run() -> None:
         assert preflight.status_code == 200
         assert preflight.headers["access-control-allow-origin"] == "https://mavis.example.com"
 
+        assert api._is_greeting("Hello!")
+        assert not api._is_greeting("What changed recently?")
+
+        original_web_search = api.web_search
+        try:
+            api.web_search = lambda *_args, **_kwargs: [
+                None,
+                {"title": "", "url": "https://invalid.example", "snippet": "Skip this."},
+                {"title": "Current result", "url": "https://example.com/current", "snippet": "Usable context."},
+            ]
+            web_request = api.ChatRequest(
+                message="What changed recently?",
+                session_id=SESSION_ID,
+                web_search=True,
+            )
+            search_prompt, sources = api._search_context_for(web_request, "System prompt")
+            assert "Current result" in search_prompt
+            assert sources == [{"title": "Current result", "url": "https://example.com/current"}]
+        finally:
+            api.web_search = original_web_search
+
         api.requests.post = lambda *args, **kwargs: FakeResponse()
         gemini_stream = test_client.post(
             "/chat/stream",
