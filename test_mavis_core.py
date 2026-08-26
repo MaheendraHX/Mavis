@@ -99,6 +99,16 @@ def run() -> None:
         assert "Groq fallback is ready." in fallback_stream.text
         assert '"provider": "groq"' in fallback_stream.text
 
+        api.requests.post = lambda *args, **kwargs: FakeResponse(status_code=400)
+        invalid_primary_stream = test_client.post(
+            "/chat/stream",
+            json=stream_payload("Exercise invalid-primary fallback."),
+            headers={"X-Guest-ID": "c1d2e3f4-a5b6-7788-9900-112233445566"},
+        )
+        assert invalid_primary_stream.status_code == 200
+        assert "Groq fallback is ready." in invalid_primary_stream.text
+        assert '"provider": "groq"' in invalid_primary_stream.text
+
         for _ in range(8):
             usage_store.increment(GUEST_ID)
         limit_stream = test_client.post(

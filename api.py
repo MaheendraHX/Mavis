@@ -219,12 +219,13 @@ def _call_text_with_fallback(messages, system_prompt, temperature=0.7, max_token
         except Exception as error:
             failures.append(f"{provider}: {error}")
             _provider_metrics[f"errors_{provider}"] += 1
-            if provider == "gemini" and _is_retryable_provider_error(error):
+            # Gemini is always attempted first. Any Gemini request failure—including an
+            # invalid model or credential—should leave the public demo available through
+            # the configured Groq fallback instead of failing the visitor's conversation.
+            if provider == "gemini":
                 _provider_metrics["gemini_fallbacks"] += 1
                 continue
-            if provider == "gemini" and not GEMINI_API_KEY:
-                continue
-            raise RuntimeError("Mavis could not contact its primary model provider.") from error
+            raise RuntimeError("Mavis could not contact its fallback model provider.") from error
     raise RuntimeError("No Mavis model provider is configured. Add GEMINI_API_KEY or GROQ_API_KEY.")
 
 
