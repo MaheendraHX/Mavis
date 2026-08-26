@@ -1,6 +1,6 @@
 # Deploying Mavis
 
-Mavis consists of a FastAPI backend on Render and a TypeScript frontend. The frontend calls the Render API directly. The backend uses **Gemini 2.5 Flash** as its primary provider and automatically falls back to **Groq** if Gemini is not configured or returns a retryable rate-limit or transient-service error. Gemini 2.0 Flash is no longer an appropriate default because Google lists it as shut down; Gemini 2.5 Flash is a current low-latency, high-volume option.[1]
+Mavis consists of a FastAPI backend on Render and a TypeScript frontend. The frontend calls the Render API directly. The backend uses **Gemini 2.5 Flash** as its primary provider and automatically falls back to **Groq** whenever Gemini cannot complete a request. Groq uses the maintained `groq/compound-mini` production system and will automatically retry it if a previously configured Groq model is retired or unavailable. Gemini 2.0 Flash is no longer an appropriate default because Google lists it as shut down; Gemini 2.5 Flash is a current low-latency, high-volume option.[1]
 
 ## The public-demo cold start
 
@@ -15,7 +15,8 @@ Render reads `render.yaml` from the repository root. It pins Python to `3.12.3`,
 | `GEMINI_API_KEY` | Required primary provider key. |
 | `GEMINI_MODEL` | Defaults to `gemini-2.5-flash`. Change only to a supported Gemini model. |
 | `GROQ_API_KEY` | Required fallback provider key. |
-| `GROQ_MODEL` | Defaults to `llama-3.3-70b-versatile`. |
+| `GROQ_MODEL` | Defaults to `groq/compound-mini`, a current Groq production system. |
+| `GROQ_BACKUP_MODEL` | Defaults to `groq/compound-mini`; it is retried automatically only when `GROQ_MODEL` is unavailable or retired. |
 | `ALLOWED_ORIGINS` | Comma-separated frontend origins, including the exact production frontend URL. |
 | `DATABASE_URL` | The **internal** connection URL of a Render Postgres database. This makes the public demo quota survive web-service sleeps, deploys, and restarts. |
 | `GUEST_MESSAGE_LIMIT` | `10` for the portfolio demo. |
@@ -28,7 +29,7 @@ Render reads `render.yaml` from the repository root. It pins Python to `3.12.3`,
 The frontend needs this build variable:
 
 ```text
-VITE_API_URL=https://aria-backend.onrender.com
+VITE_API_URL=https://aria-backend-b6qb.onrender.com
 ```
 
 Deploy the backend after setting the variables, then redeploy the frontend after setting `VITE_API_URL`.
@@ -46,14 +47,17 @@ For durable quota tracking, create a Render Postgres database in the **same regi
 After Render finishes deploying, open:
 
 ```text
-https://aria-backend.onrender.com/health
+https://aria-backend-b6qb.onrender.com/health
 ```
 
 The response should identify Mavis, report `model_provider: "gemini"`, and show whether both providers are configured. Test a normal message first, then test owner access. To test fallback deliberately, temporarily unset `GEMINI_API_KEY` in a non-production environment and verify that Mavis still replies through Groq.
 
-> Gemini’s official troubleshooting guidance identifies `429 RESOURCE_EXHAUSTED` and `503 UNAVAILABLE` as retryable transient conditions. Mavis uses those conditions to trigger provider fallback rather than exposing them as a visitor-facing failure.[2]
+> Groq lists `groq/compound-mini` as a production system that uses the same API interface as its other chat systems.[5] Mavis retries that model only when the configured Groq text model is unavailable, preventing a legacy model identifier from taking the public chatbot offline.
+
+> Gemini’s official troubleshooting guidance identifies `429 RESOURCE_EXHAUSTED` and `503 UNAVAILABLE` as retryable transient conditions. Mavis keeps Gemini as the first attempt and then uses its Groq fallback whenever Gemini fails, rather than exposing a provider failure to visitors.[2]
 
 [1]: https://ai.google.dev/gemini-api/docs/models "Google Gemini API models"
 [2]: https://ai.google.dev/gemini-api/docs/troubleshooting "Google Gemini API troubleshooting"
 [3]: https://render.com/docs/free "Render Free-tier documentation"
 [4]: https://render.com/docs/postgresql-creating-connecting "Render Postgres connections"
+[5]: https://console.groq.com/docs/models "Groq supported models"

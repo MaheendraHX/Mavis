@@ -134,7 +134,10 @@ def get_groq_client() -> Groq:
 DEFAULT_MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "gemini").strip().lower()
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+# Groq Compound Mini is a current production system with a standard Chat Completions interface.
+# Keep a separate backup so deployments carrying a retired GROQ_MODEL can self-recover.
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "groq/compound-mini")
+GROQ_BACKUP_MODEL = os.environ.get("GROQ_BACKUP_MODEL", "groq/compound-mini")
 
 
 def _resolve_model_provider(provider_name: str | None) -> str:
@@ -155,14 +158,31 @@ def _is_retryable_provider_error(error: Exception) -> bool:
     return any(token in message for token in ("resource_exhausted", "rate limit", "quota", "timeout", "temporarily", "unavailable"))
 
 
+def _is_groq_model_unavailable_error(error: Exception) -> bool:
+    response = getattr(error, "response", None)
+    status_code = getattr(response, "status_code", None) or getattr(error, "status_code", None)
+    if status_code == 404:
+        return True
+    message = str(error).lower()
+    return "model_not_found" in message or "model" in message and "does not exist" in message
+
+
 def _call_groq_model(messages, temperature=0.7, max_tokens=1024, model_name=GROQ_MODEL):
-    response = get_groq_client().chat.completions.create(
-        model=model_name,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
-    return response.choices[0].message.content or ""
+    candidate_models = list(dict.fromkeys(model for model in (model_name, GROQ_BACKUP_MODEL) if model))
+    for index, candidate_model in enumerate(candidate_models):
+        try:
+            response = get_groq_client().chat.completions.create(
+                model=candidate_model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            return response.choices[0].message.content or ""
+        except Exception as error:
+            if index < len(candidate_models) - 1 and _is_groq_model_unavailable_error(error):
+                continue
+            raise
+    raise RuntimeError("No Groq text model is configured.")
 
 
 def _call_gemini_model(messages, system_prompt, temperature=0.7, max_tokens=1024):

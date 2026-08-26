@@ -42,6 +42,21 @@ class FakeCompletions:
         )
 
 
+class RetiredModelFallbackCompletions:
+    def __init__(self):
+        self.models = []
+
+    def create(self, **kwargs):
+        self.models.append(kwargs["model"])
+        if kwargs["model"] == "llama-3.3-70b-versatile":
+            error = RuntimeError("model_not_found")
+            error.status_code = 404
+            raise error
+        return SimpleNamespace(
+            choices=[SimpleNamespace(message=SimpleNamespace(content="Current Groq model is ready."))]
+        )
+
+
 def stream_payload(message: str, owner_session: str = "") -> dict:
     return {
         "message": message,
@@ -87,6 +102,15 @@ def run() -> None:
         assert "\\n\\n" not in gemini_stream.text
         assert '"provider": "gemini"' in gemini_stream.text
         assert '"remaining": 9' in gemini_stream.text
+
+        retired_model_completions = RetiredModelFallbackCompletions()
+        api.client = SimpleNamespace(chat=SimpleNamespace(completions=retired_model_completions))
+        groq_model_answer = api._call_groq_model(
+            [{"role": "user", "content": "Verify model fallback."}],
+            model_name="llama-3.3-70b-versatile",
+        )
+        assert groq_model_answer == "Current Groq model is ready."
+        assert retired_model_completions.models == ["llama-3.3-70b-versatile", api.GROQ_BACKUP_MODEL]
 
         api.requests.post = lambda *args, **kwargs: FakeResponse(status_code=429)
         api.client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
