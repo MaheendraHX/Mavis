@@ -3,11 +3,12 @@ import { motion } from "motion/react";
 import {
   CheckIcon,
   CopyIcon,
+  DownloadIcon,
   LinkIcon,
   PaperclipIcon,
   RefreshCwIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { Streamdown } from "streamdown";
 
 import mavisOrb from "@/assets/mavis-orb.jpg";
@@ -20,6 +21,31 @@ type MessageItemProps = {
   canRegenerate?: boolean;
 };
 
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* use the compatibility path below */
+  }
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand("copy");
+    textarea.remove();
+    return copied;
+  } catch {
+    return false;
+  }
+}
+
 function CopyButton({
   text,
   label = "Copy",
@@ -27,28 +53,78 @@ function CopyButton({
   text: string;
   label?: string;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   return (
     <button
       type="button"
       onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text);
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1500);
-        } catch {
-          /* clipboard blocked */
-        }
+        const copied = await copyText(text);
+        setState(copied ? "copied" : "failed");
+        setTimeout(() => setState("idle"), 1800);
       }}
       className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-ink transition-colors hover:text-ink"
+      title={state === "failed" ? "Clipboard access was blocked" : label}
     >
-      {copied ? (
+      {state === "copied" ? (
         <CheckIcon className="h-3 w-3" />
       ) : (
         <CopyIcon className="h-3 w-3" />
       )}
-      {copied ? "Copied" : label}
+      {state === "copied" ? "Copied" : state === "failed" ? "Copy failed" : label}
     </button>
+  );
+}
+
+function DownloadButton({ text, language }: { text: string; language: string }) {
+  const [downloaded, setDownloaded] = useState(false);
+  const extension = ({ html: "html", css: "css", javascript: "js", js: "js", typescript: "ts", ts: "ts", python: "py", json: "json", markdown: "md", md: "md" } as Record<string, string>)[language.toLowerCase()] ?? "txt";
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = url;
+        anchor.download = `mavis-code.${extension}`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        setDownloaded(true);
+        window.setTimeout(() => setDownloaded(false), 1800);
+      }}
+      className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-ink transition-colors hover:text-ink"
+      title={`Download ${extension.toUpperCase()} file`}
+    >
+      <DownloadIcon className="h-3 w-3" />
+      {downloaded ? "Saved" : "Download"}
+    </button>
+  );
+}
+
+function CodeRenderer({
+  className,
+  children,
+  inline,
+  ...props
+}: ComponentProps<"code"> & { inline?: boolean; node?: unknown }) {
+  const code = String(children ?? "").replace(/\n$/, "");
+  const language = className?.match(/language-([\\w-]+)/)?.[1] ?? "code";
+  if (inline || (!className && !code.includes("\n"))) {
+    return <code className={className} {...props}>{children}</code>;
+  }
+  return (
+    <div className="my-4 overflow-hidden rounded-2xl border border-line bg-night/95 text-cream shadow-soft">
+      <div className="flex items-center justify-between border-b border-cream/10 px-3 py-2">
+        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-cream/60">{language}</span>
+        <div className="flex items-center gap-3">
+          <CopyButton text={code} label="Copy code" />
+          <DownloadButton text={code} language={language} />
+        </div>
+      </div>
+      <pre className="overflow-x-auto p-4 text-left text-[13px] leading-relaxed"><code className={className}>{children}</code></pre>
+    </div>
   );
 }
 
@@ -148,7 +224,11 @@ export function MessageItem({
             {isUser ? (
               <p className="whitespace-pre-wrap">{text}</p>
             ) : (
-              <Streamdown className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+              <Streamdown
+                className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                components={{ code: CodeRenderer }}
+                controls={{ table: { copy: true, download: true }, mermaid: { copy: true, download: true, fullscreen: true } }}
+              >
                 {text}
               </Streamdown>
             )}
