@@ -1,5 +1,6 @@
 {
   "framework": null,
+  "alias": ["aria-alpha-two.vercel.app"],
   "installCommand": "npm run setup",
   "buildCommand": "npm run build",
   "outputDirectory": "frontend/.output/public"
