@@ -22,6 +22,7 @@ import {
   loadThreads,
   newId,
   saveThreads,
+  toModelHistory,
   type Thread,
 } from "@/lib/mavis/threads";
 
@@ -122,7 +123,10 @@ function ChatPage() {
   const [serviceStatus, setServiceStatus] = useState<ServiceStatus>("checking");
 
   useEffect(() => {
-    const stored = loadThreads();
+    const stored = loadThreads().map((thread) => ({
+      ...thread,
+      title: deriveTitle(thread.messages, thread.title),
+    }));
     const initial = stored.length > 0 ? stored : [createThread()];
     setThreads(initial);
     setActiveId(initial[0].id);
@@ -430,7 +434,11 @@ function ChatSurface({
     );
   };
 
-  const sendAttachment = async (text: string, file: FileUIPart) => {
+  const sendAttachment = async (
+    text: string,
+    file: FileUIPart,
+    history: { role: "user" | "assistant"; content: string }[],
+  ) => {
     const dataUrl = typeof file.url === "string" ? file.url : "";
     const form = new FormData();
     form.set(
@@ -441,6 +449,7 @@ function ChatSurface({
     form.set("owner_session", ownerSession);
     form.set("incognito", String(incognito));
     form.set("persona", persona);
+    form.set("history", JSON.stringify(history));
 
     const headers = { "X-Guest-ID": guestId() };
     if (file.mediaType?.startsWith("image/")) {
@@ -474,6 +483,7 @@ function ChatSurface({
 
   const streamText = async (
     text: string,
+    history: { role: "user" | "assistant"; content: string }[],
     onText: (content: string) => void,
   ) => {
     const response = await fetch(renderApiUrl("/chat/stream"), {
@@ -486,6 +496,7 @@ function ChatSurface({
         incognito,
         web_search: webSearch,
         persona,
+        history,
       }),
     });
     if (!response.ok) throw new Error(await toErrorMessage(response));
@@ -548,6 +559,7 @@ function ChatSurface({
     setError(null);
     setStatus("submitted");
 
+    const history = toModelHistory(messagesRef.current);
     const userMessage = createMessage("user", text, files);
     const assistantId = newId();
     updateMessages((current) => [
@@ -562,14 +574,14 @@ function ChatSurface({
 
     try {
       if (files[0]) {
-        const result = await sendAttachment(text, files[0]);
+        const result = await sendAttachment(text, files[0], history);
         appendAssistantText(
           assistantId,
           result.response || "Mavis could not read that attachment.",
         );
         if (result.usage) onUsage(result.usage);
       } else {
-        await streamText(text, (content) =>
+        await streamText(text, history, (content) =>
           appendAssistantText(assistantId, content),
         );
       }

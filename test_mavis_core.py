@@ -57,14 +57,21 @@ class RetiredModelFallbackCompletions:
         )
 
 
-def stream_payload(message: str, owner_session: str = "") -> dict:
+def stream_payload(
+    message: str,
+    owner_session: str = "",
+    *,
+    incognito: bool = True,
+    history: list[dict[str, str]] | None = None,
+) -> dict:
     return {
         "message": message,
         "session_id": SESSION_ID,
         "owner_session": owner_session,
         "web_search": False,
-        "incognito": True,
+        "incognito": incognito,
         "persona": "default",
+        "history": history or [],
     }
 
 
@@ -111,10 +118,16 @@ def run() -> None:
         finally:
             api.web_search = original_web_search
 
-        api.requests.post = lambda *args, **kwargs: FakeResponse()
+        captured_gemini_payloads = []
+        api.requests.post = lambda *args, **kwargs: (
+            captured_gemini_payloads.append(kwargs.get("json")) or FakeResponse()
+        )
         gemini_stream = test_client.post(
             "/chat/stream",
-            json=stream_payload("Hello from the Gemini test."),
+            json=stream_payload(
+                "Hello from the Gemini test.",
+                history=[{"role": "user", "content": "Remember this preference."}],
+            ),
             headers={"X-Guest-ID": GUEST_ID},
         )
         assert gemini_stream.status_code == 200
@@ -123,6 +136,18 @@ def run() -> None:
         assert "\\n\\n" not in gemini_stream.text
         assert '"provider": "gemini"' in gemini_stream.text
         assert '"remaining": 9' in gemini_stream.text
+        assert "Remember this preference." in str(captured_gemini_payloads[0])
+
+        titled_guest_id = "12345678-1234-5678-1234-567812345678"
+        title_text = "hi"
+        titled_stream = test_client.post(
+            "/chat/stream",
+            json=stream_payload(title_text, incognito=False),
+            headers={"X-Guest-ID": titled_guest_id},
+        )
+        assert titled_stream.status_code == 200
+        titled_conversations = memory.get_all_conversations_for_guest(titled_guest_id)
+        assert titled_conversations[0]["title"] == title_text
 
         retired_model_completions = RetiredModelFallbackCompletions()
         api.client = SimpleNamespace(chat=SimpleNamespace(completions=retired_model_completions))

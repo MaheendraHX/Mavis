@@ -132,7 +132,7 @@ export function MessageItem({
           <div
             className={
               isUser
-                ? "rounded-2xl rounded-br-md bg-gradient-to-br from-violet/90 to-[#6579d7] px-4 py-3 text-left text-[15px] leading-relaxed text-white shadow-soft"
+                ? "rounded-2xl rounded-br-md bg-gradient-to-br from-tan/95 to-peach/95 px-4 py-3 text-left text-[15px] leading-relaxed text-night shadow-soft"
                 : "mavis-glass rounded-2xl rounded-tl-md px-4 py-3 text-[15px] leading-relaxed text-ink"
             }
           >

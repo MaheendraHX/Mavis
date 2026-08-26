@@ -17,7 +17,7 @@ from docx import Document as DocxDocument
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl
 from groq import Groq
 from dotenv import load_dotenv
 
@@ -350,6 +350,7 @@ class ChatRequest(BaseModel):
     incognito: bool = False
     web_search: bool = True
     persona: str = "default"
+    history: list[dict[str, str]] = Field(default_factory=list)
 
 
 def _validate_guest_id(guest_id: str) -> str:
@@ -376,6 +377,29 @@ def _conversation_identity(request: ChatRequest, guest_id: str) -> tuple[str, bo
     if is_owner:
         return f"owner_{request.session_id}", True
     return f"guest_{guest_id}_{request.session_id}", False
+
+
+def _client_history(request: ChatRequest) -> list[dict[str, str]]:
+    """Normalize browser-supplied history for continuity after a Render restart."""
+    history: list[dict[str, str]] = []
+    for item in request.history[-MAX_HISTORY_MESSAGES:]:
+        if not isinstance(item, dict):
+            continue
+        role = item.get("role")
+        content = item.get("content")
+        if role in {"user", "assistant"} and isinstance(content, str) and content.strip():
+            history.append({"role": role, "content": content.strip()[:MAX_MESSAGE_CHARACTERS]})
+    return history
+
+
+def _conversation_history(request: ChatRequest, conv_id: str) -> list[dict[str, str]]:
+    """Use the browser thread as the continuity source, with server storage as backup."""
+    client_history = _client_history(request)
+    if client_history:
+        return client_history
+    if request.incognito:
+        return []
+    return memory.get_conversation_messages(conv_id, MAX_HISTORY_MESSAGES)
 
 
 def _system_prompt_for(request: ChatRequest, is_owner: bool) -> str:
@@ -580,7 +604,7 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="")):
 
     if not request.incognito:
         memory.create_conversation(conv_id, "New conversation", "owner" if is_owner else "guest", guest_id)
-    history = memory.get_conversation_messages(conv_id, MAX_HISTORY_MESSAGES) if not request.incognito else []
+    history = _conversation_history(request, conv_id)
     system_prompt = _system_prompt_for(request, is_owner)
     search_prompt, sources = _search_context_for(request, system_prompt)
     try:
@@ -598,7 +622,7 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="")):
         memory.add_message(conv_id, "user", request.message)
         memory.add_message(conv_id, "assistant", assistant_message)
         if first_turn:
-            title = _generate_title(request.message, assistant_message)
+            title = request.message
             memory.update_conversation_title(conv_id, title)
 
     usage_data = None if is_owner else _guest_usage(guest_id)
@@ -632,7 +656,7 @@ async def chat_stream(request: ChatRequest, x_guest_id: str = Header(default="")
 
         if not request.incognito:
             memory.create_conversation(conv_id, "New conversation", "owner" if is_owner else "guest", guest_id)
-        history = memory.get_conversation_messages(conv_id, MAX_HISTORY_MESSAGES) if not request.incognito else []
+        history = _conversation_history(request, conv_id)
         system_prompt = _system_prompt_for(request, is_owner)
         search_prompt, sources = _search_context_for(request, system_prompt)
         try:
@@ -656,7 +680,7 @@ async def chat_stream(request: ChatRequest, x_guest_id: str = Header(default="")
             memory.add_message(conv_id, "user", request.message)
             memory.add_message(conv_id, "assistant", response)
             if first_turn:
-                title = _generate_title(request.message, response)
+                title = request.message
                 memory.update_conversation_title(conv_id, title)
 
         usage_data = None
@@ -732,7 +756,25 @@ async def create_file(req: CreateFileRequest):
     }
 
 
-def _attachment_request(message: str, session_id: str, owner_session: str, incognito: bool, persona: str) -> ChatRequest:
+def _attachment_request(
+    message: str,
+    session_id: str,
+    owner_session: str,
+    incognito: bool,
+    persona: str,
+    history_json: str,
+) -> ChatRequest:
+    try:
+        parsed_history = json.loads(history_json or "[]")
+    except (TypeError, ValueError):
+        parsed_history = []
+    safe_history = [
+        item
+        for item in parsed_history
+        if isinstance(item, dict)
+        and isinstance(item.get("role"), str)
+        and isinstance(item.get("content"), str)
+    ]
     request = ChatRequest(
         message=message or "Please analyze this attachment.",
         session_id=session_id,
@@ -740,6 +782,7 @@ def _attachment_request(message: str, session_id: str, owner_session: str, incog
         incognito=incognito,
         persona=persona,
         web_search=False,
+        history=safe_history,
     )
     _validate_chat_request(request)
     return request
@@ -752,11 +795,12 @@ async def chat_with_file(
     owner_session: str = Form(""),
     incognito: bool = Form(False),
     persona: str = Form("default"),
+    history: str = Form("[]"),
     filename: str = Form(...),
     file_content: str = Form(""),
     x_guest_id: str = Header(default=""),
 ):
-    request = _attachment_request(message, session_id, owner_session, incognito, persona)
+    request = _attachment_request(message, session_id, owner_session, incognito, persona, history)
     guest_id = _validate_guest_id(x_guest_id)
     if not filename or len(filename) > 200 or len(file_content) > 50_000:
         raise HTTPException(status_code=400, detail="The attachment is invalid or too large to analyze.")
@@ -767,7 +811,7 @@ async def chat_with_file(
 
     if not request.incognito:
         memory.create_conversation(conv_id, "New conversation", "owner" if is_owner else "guest", guest_id)
-    history = memory.get_conversation_messages(conv_id, MAX_HISTORY_MESSAGES) if not request.incognito else []
+    history = _conversation_history(request, conv_id)
     system_prompt = _system_prompt_for(request, is_owner)
     prompt = f"{request.message}\n\nAttached file ({filename}):\n{file_content}"
     try:
@@ -785,7 +829,7 @@ async def chat_with_file(
         memory.add_message(conv_id, "user", f"{request.message} [attached {filename}]")
         memory.add_message(conv_id, "assistant", response)
         if first_turn:
-            title = _generate_title(request.message, response)
+            title = request.message
             memory.update_conversation_title(conv_id, title)
     usage_data = None
     if not is_owner:
@@ -838,11 +882,12 @@ async def chat_with_image(
     owner_session: str = Form(""),
     incognito: bool = Form(False),
     persona: str = Form("default"),
+    history: str = Form("[]"),
     base64_image: str = Form(...),
     mime: str = Form(...),
     x_guest_id: str = Header(default=""),
 ):
-    request = _attachment_request(message, session_id, owner_session, incognito, persona)
+    request = _attachment_request(message, session_id, owner_session, incognito, persona, history)
     guest_id = _validate_guest_id(x_guest_id)
     if mime not in {"image/jpeg", "image/png", "image/webp", "image/gif"}:
         raise HTTPException(status_code=400, detail="Unsupported image type.")
@@ -853,7 +898,7 @@ async def chat_with_image(
 
     if not request.incognito:
         memory.create_conversation(conv_id, "New conversation", "owner" if is_owner else "guest", guest_id)
-    history = memory.get_conversation_messages(conv_id, MAX_HISTORY_MESSAGES) if not request.incognito else []
+    history = _conversation_history(request, conv_id)
     system_prompt = _system_prompt_for(request, is_owner)
     response, provider = _call_image_with_fallback(request.message, system_prompt, base64_image, mime)
     title = None
@@ -862,7 +907,7 @@ async def chat_with_image(
         memory.add_message(conv_id, "user", f"{request.message} [shared an image]")
         memory.add_message(conv_id, "assistant", response)
         if first_turn:
-            title = _generate_title(request.message, response)
+            title = request.message
             memory.update_conversation_title(conv_id, title)
     usage_data = None
     if not is_owner:

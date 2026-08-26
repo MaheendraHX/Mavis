@@ -55,8 +55,19 @@ export function deriveTitle(messages: UIMessage[], fallback = "New chat"): strin
   const first = messages.find((m) => m.role === "user");
   if (!first) return fallback;
   const text = messageText(first);
-  if (!text) return fallback;
-  return text.length > 42 ? `${text.slice(0, 42)}…` : text;
+  return text || fallback;
+}
+
+export function toModelHistory(
+  messages: UIMessage[],
+): { role: "user" | "assistant"; content: string }[] {
+  return messages
+    .filter((message) => message.role === "user" || message.role === "assistant")
+    .map((message) => ({
+      role: message.role as "user" | "assistant",
+      content: messageText(message),
+    }))
+    .filter((message) => message.content.length > 0);
 }
 
 export function relativeDay(timestamp: number): string {
