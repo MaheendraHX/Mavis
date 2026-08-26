@@ -29,7 +29,25 @@ export function loadThreads(): Thread[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Thread[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((t) => t && typeof t.id === "string" && Array.isArray(t.messages));
+    return parsed
+      .filter((t) => t && typeof t.id === "string" && Array.isArray(t.messages))
+      .map((thread) => ({
+        ...thread,
+        messages: thread.messages.map((message) => {
+          if (message.role !== "assistant") return message;
+          const text = messageText(message);
+          const sourceMarker = text.search(/\n(?:---\s*\n)?\s*\*{0,2}sources?(?: used)?\s*:/i);
+          if (sourceMarker < 0) return message;
+          return {
+            ...message,
+            parts: message.parts.map((part) =>
+              part.type === "text"
+                ? { ...part, text: text.slice(0, sourceMarker).trimEnd() }
+                : part,
+            ),
+          } as UIMessage;
+        }),
+      }));
   } catch {
     return [];
   }
