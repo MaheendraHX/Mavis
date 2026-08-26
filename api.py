@@ -1,4 +1,5 @@
 import os
+import json
 import uuid
 import traceback
 import base64
@@ -12,7 +13,7 @@ from bs4 import BeautifulSoup
 from docx import Document as DocxDocument
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Request
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, HttpUrl
 from groq import Groq
 from dotenv import load_dotenv
@@ -37,9 +38,14 @@ GUEST_MESSAGE_LIMIT = 10
 _guest_message_counts = {}
 
 PC_CONTROL_ENABLED = os.environ.get("PC_CONTROL_ENABLED", "false").lower() == "true"
-OWNER_PASSKEY = os.environ.get("OWNER_PASSKEY", "24130636")
+OWNER_PASSKEY = os.environ.get("OWNER_PASSKEY")
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+    if origin.strip()
+]
 
-# Session secret for HMAC signing (survives server restarts)
+# Render generates this value in production. A local fallback keeps development usable.
 _SESSION_SECRET = os.environ.get("SESSION_SECRET", os.urandom(32).hex())
 
 def _sign_session(session_id: str) -> str:
@@ -69,12 +75,19 @@ def validate_owner_session(session_id: str) -> bool:
     return _verify_session(raw_id, signature)
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-Guest-ID"],
+)
 
 
 def _generate_title(message: str, assistant_message: str) -> str:
     """Generate a short conversation title from the first exchange."""
     try:
-        response = client.chat.completions.create(
+        response = get_groq_client().chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
                 {
@@ -96,66 +109,26 @@ def _generate_title(message: str, assistant_message: str) -> str:
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    origin = request.headers.get("origin", "*")
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail},
-        headers={
-            "access-control-allow-origin": origin,
-            "access-control-allow-credentials": "true",
-            "access-control-allow-methods": "*",
-            "access-control-allow-headers": "*",
-        },
-    )
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     traceback.print_exc()
-    origin = request.headers.get("origin", "*")
-    return JSONResponse(
-        status_code=500,
-        content={"detail": f"Internal server error: {type(exc).__name__}: {str(exc)}"},
-        headers={
-            "access-control-allow-origin": origin,
-            "access-control-allow-credentials": "true",
-            "access-control-allow-methods": "*",
-            "access-control-allow-headers": "*",
-        },
-    )
-
-# CORS headers — always added to every response via middleware
-class ForceCORSMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        origin = request.headers.get("origin", "")
-        if request.method == "OPTIONS":
-            return JSONResponse(
-                content="OK",
-                status_code=200,
-                headers={
-                    "access-control-allow-origin": origin or "*",
-                    "access-control-allow-credentials": "true",
-                    "access-control-allow-methods": "*",
-                    "access-control-allow-headers": "*",
-                    "access-control-max-age": "600",
-                },
-            )
-        response = await call_next(request)
-        response.headers["access-control-allow-origin"] = origin or "*"
-        response.headers["access-control-allow-credentials"] = "true"
-        response.headers["access-control-allow-methods"] = "*"
-        response.headers["access-control-allow-headers"] = "*"
-        response.headers["access-control-max-age"] = "600"
-        return response
-
-app.add_middleware(ForceCORSMiddleware)  # CORS enabled for all origins - v2
-
-
+    return JSONResponse(status_code=500, content={"detail": "Internal server error."})
 
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
-if not GROQ_API_KEY:
-    print("ERROR: GROQ_API_KEY not set! Chat will fail with 500.")
-client = Groq(api_key=GROQ_API_KEY)
+client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+if client is None:
+    print("WARNING: GROQ_API_KEY is not configured. The API will start, but chat requests will return a configuration error.")
+
+
+def get_groq_client() -> Groq:
+    if client is None:
+        raise RuntimeError("GROQ_API_KEY is not configured. Add it to the Render service environment variables.")
+    return client
+
 
 DEFAULT_MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "groq").strip().lower()
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -180,7 +153,7 @@ def _call_groq_model(messages, temperature=0.7, max_tokens=1024, tools=None, too
         payload["tools"] = tools
     if tool_choice is not None:
         payload["tool_choice"] = tool_choice
-    return client.chat.completions.create(**payload)
+    return get_groq_client().chat.completions.create(**payload)
 
 
 def _call_gemini_model(messages, system_prompt, temperature=0.7, max_tokens=1024):
@@ -336,7 +309,9 @@ class OwnerAuthResponse(BaseModel):
 @app.post("/auth/owner", response_model=OwnerAuthResponse)
 async def auth_owner(req: OwnerAuthRequest):
     """Validate owner passkey. Returns a signed session token on success."""
-    if req.passkey == OWNER_PASSKEY:
+    if not OWNER_PASSKEY:
+        raise HTTPException(status_code=503, detail="Owner access is not configured.")
+    if hmac.compare_digest(req.passkey, OWNER_PASSKEY):
         session_id = create_owner_session()
         return OwnerAuthResponse(authenticated=True, session_id=session_id)
     raise HTTPException(status_code=403, detail="Invalid passkey")
@@ -569,7 +544,7 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
 
     except Exception:
         try:
-            response = client.chat.completions.create(
+            response = get_groq_client().chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "system", "content": system_prompt}] + history,
                 temperature=0.7,
@@ -647,14 +622,13 @@ async def chat_stream(request: ChatRequest):
 
     async def generate():
         nonlocal full_response
-        client = get_groq_client()
         messages = [{"role": "system", "content": search_prompt}] + history + [
             {"role": "user", "content": request.message}
         ]
 
         try:
-            stream = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+            stream = get_groq_client().chat.completions.create(
+                model=request.model_name,
                 messages=messages,
                 temperature=0.7,
                 max_tokens=1024,
@@ -810,7 +784,7 @@ async def chat_with_file(
             else:
                 history.append({"role": "user", "content": f"{message}\n\nFile content:\n{file_content}"})
 
-            response = client.chat.completions.create(
+            response = get_groq_client().chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "system", "content": system_prompt}] + history,
                 temperature=0.7,
@@ -901,7 +875,7 @@ async def chat_with_image(
         else:
             history.append(image_content)
 
-        response = client.chat.completions.create(
+        response = get_groq_client().chat.completions.create(
             model="meta-llama/llama-4-scout-17b-16e-instruct",
             messages=[{"role": "system", "content": system_prompt}] + history,
             max_tokens=1024,
@@ -953,4 +927,9 @@ async def delete_conv(conv_id: str, x_guest_id: str = Header(default="anonymous"
 
 @app.get("/health")
 async def health():
-    return {"status": "ARIA is online"}
+    return {
+        "status": "MAVIS is online",
+        "model_provider": DEFAULT_MODEL_PROVIDER,
+        "groq_configured": client is not None,
+        "gemini_configured": bool(GEMINI_API_KEY),
+    }

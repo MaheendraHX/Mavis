@@ -1,9 +1,16 @@
 import type { UIMessage } from "ai";
 import { motion } from "motion/react";
-import { CheckIcon, CopyIcon, LinkIcon, PaperclipIcon, RefreshCwIcon } from "lucide-react";
+import {
+  CheckIcon,
+  CopyIcon,
+  LinkIcon,
+  PaperclipIcon,
+  RefreshCwIcon,
+} from "lucide-react";
 import { useState } from "react";
 import { Streamdown } from "streamdown";
 
+import mavisOrb from "@/assets/mavis-orb.jpg";
 import type { SearchResult } from "@/lib/mavis/search-types";
 
 type MessageItemProps = {
@@ -12,7 +19,13 @@ type MessageItemProps = {
   canRegenerate?: boolean;
 };
 
-function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+function CopyButton({
+  text,
+  label = "Copy",
+}: {
+  text: string;
+  label?: string;
+}) {
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -28,13 +41,21 @@ function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) 
       }}
       className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-ink transition-colors hover:text-ink"
     >
-      {copied ? <CheckIcon className="h-3 w-3" /> : <CopyIcon className="h-3 w-3" />}
+      {copied ? (
+        <CheckIcon className="h-3 w-3" />
+      ) : (
+        <CopyIcon className="h-3 w-3" />
+      )}
       {copied ? "Copied" : label}
     </button>
   );
 }
 
-export function MessageItem({ message, onRegenerate, canRegenerate }: MessageItemProps) {
+export function MessageItem({
+  message,
+  onRegenerate,
+  canRegenerate,
+}: MessageItemProps) {
   const isUser = message.role === "user";
 
   const text = message.parts
@@ -52,7 +73,8 @@ export function MessageItem({ message, onRegenerate, canRegenerate }: MessageIte
       typeof part.output === "object" &&
       "results" in part.output
     ) {
-      return ((part.output as { results?: SearchResult[] }).results ?? []) as SearchResult[];
+      return ((part.output as { results?: SearchResult[] }).results ??
+        []) as SearchResult[];
     }
     return [];
   });
@@ -73,28 +95,30 @@ export function MessageItem({ message, onRegenerate, canRegenerate }: MessageIte
       {!isUser && (
         <span
           aria-hidden="true"
-          className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line bg-white font-display text-sm text-peach"
+          className="mavis-orb mt-1 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-violet/40 bg-panel"
         >
-          M
+          <img src={mavisOrb} alt="" className="h-full w-full object-cover" />
         </span>
       )}
 
       <div className={`max-w-[min(42rem,85%)] ${isUser ? "text-right" : ""}`}>
         {files.length > 0 && (
-          <ul className={`mb-2 flex flex-wrap gap-2 ${isUser ? "justify-end" : ""}`}>
+          <ul
+            className={`mb-2 flex flex-wrap gap-2 ${isUser ? "justify-end" : ""}`}
+          >
             {files.map((file, index) =>
               file.mediaType?.startsWith("image/") ? (
                 <li key={index}>
                   <img
                     src={file.url}
                     alt={file.filename ?? "Attached image"}
-                    className="max-h-44 rounded-xl border border-line object-cover"
+                    className="max-h-44 rounded-2xl border border-violet/30 object-cover shadow-soft"
                   />
                 </li>
               ) : (
                 <li
                   key={index}
-                  className="inline-flex items-center gap-2 rounded-full border border-line bg-white px-3 py-1 text-xs text-muted-ink"
+                  className="inline-flex items-center gap-2 rounded-full border border-line bg-panel px-3 py-1.5 text-xs text-muted-ink"
                 >
                   <PaperclipIcon className="h-3 w-3" />
                   {file.filename ?? "Attachment"}
@@ -108,13 +132,13 @@ export function MessageItem({ message, onRegenerate, canRegenerate }: MessageIte
           <div
             className={
               isUser
-                ? "rounded-2xl rounded-br-md bg-ink px-4 py-3 text-left text-[15px] leading-relaxed text-cream"
-                : "rounded-2xl rounded-tl-md border border-line bg-white px-4 py-3 text-[15px] leading-relaxed text-ink shadow-soft"
+                ? "rounded-2xl rounded-br-md bg-gradient-to-br from-violet/90 to-[#6579d7] px-4 py-3 text-left text-[15px] leading-relaxed text-white shadow-soft"
+                : "mavis-glass rounded-2xl rounded-tl-md px-4 py-3 text-[15px] leading-relaxed text-ink"
             }
           >
             {searching && !text && (
-              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-muted-ink">
-                Searching the web…
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-sage">
+                Mavis is searching the web…
               </p>
             )}
             {isUser ? (
@@ -126,15 +150,18 @@ export function MessageItem({ message, onRegenerate, canRegenerate }: MessageIte
             )}
 
             {sources.length > 0 && (
-              <ul className="mt-4 space-y-1.5 border-t border-line pt-3">
+              <ul className="mt-4 space-y-1.5 border-t border-line/70 pt-3">
                 {sources.map((source) => (
-                  <li key={source.url} className="flex items-start gap-2 text-left">
+                  <li
+                    key={source.url}
+                    className="flex items-start gap-2 text-left"
+                  >
                     <LinkIcon className="mt-0.5 h-3 w-3 shrink-0 text-tan" />
                     <a
                       href={source.url}
                       target="_blank"
                       rel="noreferrer noopener"
-                      className="text-xs text-muted-ink transition-colors hover:text-ink"
+                      className="text-xs text-muted-ink transition-colors hover:text-sage"
                     >
                       {source.title}
                       <span className="ml-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-tan">

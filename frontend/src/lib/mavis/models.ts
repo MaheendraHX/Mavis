@@ -1,12 +1,20 @@
-export type ModelId = "google/gemini-3.6-flash" | "google/gemini-3.1-pro-preview";
+export type ModelId = "llama-3.1-8b-instant" | "llama-3.3-70b-versatile";
 
 export const MODELS: { id: ModelId; label: string; hint: string }[] = [
-  { id: "google/gemini-3.6-flash", label: "Fast", hint: "Quick everyday answers" },
-  { id: "google/gemini-3.1-pro-preview", label: "Deep", hint: "Harder reasoning, slower" },
+  {
+    id: "llama-3.1-8b-instant",
+    label: "Swift",
+    hint: "Fast, lightweight responses",
+  },
+  {
+    id: "llama-3.3-70b-versatile",
+    label: "Deep",
+    hint: "More considered reasoning",
+  },
 ];
 
-export const DEFAULT_MODEL: ModelId = "google/gemini-3.6-flash";
+export const DEFAULT_MODEL: ModelId = "llama-3.3-70b-versatile";
 
 export function isModelId(value: unknown): value is ModelId {
-  return MODELS.some((m) => m.id === value);
+  return MODELS.some((model) => model.id === value);
 }

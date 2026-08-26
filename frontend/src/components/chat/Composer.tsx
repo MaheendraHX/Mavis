@@ -54,7 +54,9 @@ export function Composer({
           url: await readAsDataUrl(file),
         });
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not read that file");
+        toast.error(
+          error instanceof Error ? error.message : "Could not read that file",
+        );
       }
     }
     if (accepted.length) setAttachments((prev) => [...prev, ...accepted]);
@@ -70,17 +72,17 @@ export function Composer({
   };
 
   return (
-    <div className="border-t border-line bg-cream px-4 py-4 sm:px-8 sm:py-6">
+    <div className="border-t border-line/70 bg-cream/80 px-4 py-4 backdrop-blur-xl sm:px-8 sm:py-6">
       <form
         onSubmit={submit}
-        className="mx-auto max-w-3xl rounded-2xl border border-line bg-white p-2 shadow-soft focus-within:border-tan"
+        className="mavis-glass mx-auto max-w-3xl rounded-[1.5rem] p-2.5 transition-colors focus-within:border-violet/70"
       >
         {attachments.length > 0 && (
           <ul className="flex flex-wrap gap-2 px-2 pb-1 pt-1">
             {attachments.map((file, index) => (
               <li
                 key={`${file.filename}-${index}`}
-                className="inline-flex items-center gap-2 rounded-full border border-line bg-sand px-3 py-1 text-xs text-ink"
+                className="inline-flex items-center gap-2 rounded-full border border-line bg-night/70 px-3 py-1.5 text-xs text-ink"
               >
                 <PaperclipIcon className="h-3 w-3 text-muted-ink" />
                 <span className="max-w-[12rem] truncate">{file.filename}</span>
@@ -114,7 +116,7 @@ export function Composer({
             }
           }}
           placeholder="Ask anything, paste a link, or attach a file…"
-          className="scroll-slim w-full resize-none bg-transparent px-3 py-2 text-[15px] leading-relaxed text-ink outline-none placeholder:text-muted-ink/70"
+          className="scroll-slim w-full resize-none bg-transparent px-3 py-2.5 text-[15px] leading-relaxed text-ink outline-none placeholder:text-muted-ink/70"
         />
 
         <div className="flex items-center justify-between gap-2 px-1 pt-1">
@@ -131,7 +133,7 @@ export function Composer({
               type="button"
               aria-label="Attach a file"
               onClick={() => fileInputRef.current?.click()}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-ink transition-colors hover:bg-sand hover:text-ink"
+              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-ink transition-colors hover:bg-panel-raised hover:text-sage"
             >
               <PaperclipIcon className="h-4 w-4" />
             </button>
@@ -141,8 +143,8 @@ export function Composer({
               aria-pressed={webSearch}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors ${
                 webSearch
-                  ? "border-sage bg-sage/20 text-ink"
-                  : "border-line text-muted-ink hover:text-ink"
+                  ? "border-sage/50 bg-sage/15 text-sage"
+                  : "border-line bg-night/30 text-muted-ink hover:border-violet/60 hover:text-ink"
               }`}
             >
               <GlobeIcon className="h-3 w-3" /> Web
@@ -153,8 +155,10 @@ export function Composer({
             <select
               id="persona"
               value={persona}
-              onChange={(event) => onPersonaChange(event.target.value as PersonaId)}
-              className="rounded-full border border-line bg-white px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-ink outline-none transition-colors hover:text-ink"
+              onChange={(event) =>
+                onPersonaChange(event.target.value as PersonaId)
+              }
+              className="rounded-full border border-line bg-night/30 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-ink outline-none transition-colors hover:border-violet/60 hover:text-ink"
             >
               {PERSONA_IDS.map((id) => (
                 <option key={id} value={id}>
@@ -168,14 +172,14 @@ export function Composer({
             type="submit"
             disabled={disabled || (!value.trim() && attachments.length === 0)}
             aria-label="Send message"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-ink text-cream transition-colors hover:bg-peach disabled:cursor-not-allowed disabled:bg-line disabled:text-muted-ink"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-violet to-tan text-night shadow-soft transition-all hover:scale-105 hover:brightness-110 disabled:cursor-not-allowed disabled:bg-line disabled:text-muted-ink disabled:shadow-none"
           >
             <ArrowUpIcon className="h-4 w-4" />
           </button>
         </div>
       </form>
-      <p className="mx-auto mt-3 max-w-3xl text-center font-mono text-[10px] uppercase tracking-[0.14em] text-muted-ink">
-        Enter to send · Shift + Enter for a new line
+      <p className="mx-auto mt-3 max-w-3xl text-center font-mono text-[9px] uppercase tracking-[0.18em] text-muted-ink">
+        Mavis can make mistakes · Enter to send · Shift + Enter for a new line
       </p>
     </div>
   );
