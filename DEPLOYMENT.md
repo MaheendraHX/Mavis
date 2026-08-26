@@ -2,6 +2,10 @@
 
 Mavis consists of a FastAPI backend on Render and a TypeScript frontend. The frontend calls the Render API directly. The backend uses **Gemini 2.5 Flash** as its primary provider and automatically falls back to **Groq** if Gemini is not configured or returns a retryable rate-limit or transient-service error. Gemini 2.0 Flash is no longer an appropriate default because Google lists it as shut down; Gemini 2.5 Flash is a current low-latency, high-volume option.[1]
 
+## The public-demo cold start
+
+Render spins down a Free web service after **15 minutes** without inbound traffic. The next request wakes it, which Render says takes about **one minute** and displays a loading screen in the meantime.[3] Mavis now starts a health check as soon as a visitor opens Chat and visibly explains that a first connection may take a minute, so visitors know the demo is waking rather than broken.
+
 ## Render environment
 
 Render reads `render.yaml` from the repository root. It pins Python to `3.12.3`, uses `/health` as the health check, and deploys on every commit to `master`.
@@ -13,7 +17,9 @@ Render reads `render.yaml` from the repository root. It pins Python to `3.12.3`,
 | `GROQ_API_KEY` | Required fallback provider key. |
 | `GROQ_MODEL` | Defaults to `llama-3.3-70b-versatile`. |
 | `ALLOWED_ORIGINS` | Comma-separated frontend origins, including the exact production frontend URL. |
+| `DATABASE_URL` | The **internal** connection URL of a Render Postgres database. This makes the public demo quota survive web-service sleeps, deploys, and restarts. |
 | `GUEST_MESSAGE_LIMIT` | `10` for the portfolio demo. |
+| `PUBLIC_REQUESTS_PER_MINUTE` | `12` per public browser identity, limiting rapid automated use. |
 | `OWNER_PASSKEY` | A long, private owner passkey. Do not expose it to the frontend. |
 | `OWNER_SESSION_TTL_SECONDS` | `43200` for a 12-hour owner browser session. |
 | `PC_CONTROL_ENABLED` | Keep `false` for a cloud deployment. |
@@ -33,6 +39,8 @@ Visitors receive **10 completed Mavis responses** per persistent browser identit
 
 The **Owner access** button opens a passkey dialog. A successful server-side verification creates an expiring signed token in browser session storage; it unlocks unlimited messages until the session expires or the owner leaves owner mode. Failed owner attempts are rate-limited by the backend.
 
+For durable quota tracking, create a Render Postgres database in the **same region** as the web service and put its internal connection URL in `DATABASE_URL`. Render recommends internal URLs for same-region services.[4] The application automatically creates its quota table when it connects. A Free Render Postgres database is suitable for the portfolio demo, but Render documents that it expires after 30 days; upgrade it before expiry if you need ongoing persistent quotas.[3]
+
 ## Verification
 
 After Render finishes deploying, open:
@@ -47,3 +55,5 @@ The response should identify Mavis, report `model_provider: "gemini"`, and show 
 
 [1]: https://ai.google.dev/gemini-api/docs/models "Google Gemini API models"
 [2]: https://ai.google.dev/gemini-api/docs/troubleshooting "Google Gemini API troubleshooting"
+[3]: https://render.com/docs/free "Render Free-tier documentation"
+[4]: https://render.com/docs/postgresql-creating-connecting "Render Postgres connections"

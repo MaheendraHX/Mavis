@@ -23,8 +23,13 @@ services:
         value: "llama-3.3-70b-versatile"
       - key: ALLOWED_ORIGINS
         sync: false
+      # Set this to a Render Postgres internal connection URL for durable public-demo quotas.
+      - key: DATABASE_URL
+        sync: false
       - key: GUEST_MESSAGE_LIMIT
         value: "10"
+      - key: PUBLIC_REQUESTS_PER_MINUTE
+        value: "12"
       - key: PC_CONTROL_ENABLED
         value: "false"
       - key: SERPER_API_KEY

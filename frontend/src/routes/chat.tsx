@@ -56,6 +56,8 @@ type Usage = {
   remaining: number | null;
 };
 
+type ServiceStatus = "checking" | "ready" | "waking" | "unconfigured";
+
 const prompts = [
   "Summarize this PDF into five bullets",
   "What shipped in React this month?",
@@ -117,6 +119,7 @@ function ChatPage() {
   const [ownerSession, setOwnerSession] = useState("");
   const [usage, setUsage] = useState<Usage | null>(null);
   const [ownerDialogOpen, setOwnerDialogOpen] = useState(false);
+  const [serviceStatus, setServiceStatus] = useState<ServiceStatus>("checking");
 
   useEffect(() => {
     const stored = loadThreads();
@@ -143,6 +146,24 @@ function ChatPage() {
     void refreshUsage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownerSession]);
+
+  useEffect(() => {
+    const base = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
+    if (!base) {
+      setServiceStatus("unconfigured");
+      return;
+    }
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 12_000);
+    fetch(`${base}/health`, { signal: controller.signal })
+      .then((response) => setServiceStatus(response.ok ? "ready" : "waking"))
+      .catch(() => setServiceStatus("waking"))
+      .finally(() => window.clearTimeout(timeout));
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, []);
 
   const active =
     threads.find((thread) => thread.id === activeId) ?? threads[0] ?? null;
@@ -312,6 +333,26 @@ function ChatPage() {
             </button>
           </div>
         </header>
+
+        {serviceStatus !== "ready" && (
+          <div
+            className={`mx-4 mt-4 rounded-2xl border px-4 py-3 text-sm sm:mx-8 ${serviceStatus === "unconfigured" ? "border-peach/35 bg-peach/10 text-peach" : "border-violet/35 bg-violet/10 text-ink"}`}
+            role="status"
+          >
+            <p className="font-medium">
+              {serviceStatus === "unconfigured"
+                ? "Mavis is not connected yet."
+                : serviceStatus === "checking"
+                  ? "Checking whether Mavis is ready…"
+                  : "Mavis is waking up."}
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-ink">
+              {serviceStatus === "unconfigured"
+                ? "This deployment is missing its API address. Please try again after the site owner completes setup."
+                : "This free portfolio demo pauses after quiet periods. The first connection can take about a minute; you can start writing while she wakes."}
+            </p>
+          </div>
+        )}
 
         {active ? (
           <ChatSurface
@@ -597,6 +638,11 @@ function ChatSurface({
               Mavis can reason through an idea, explore the web, or make sense
               of a file — all in one focused space.
             </p>
+            <p className="mt-4 inline-flex max-w-md items-center rounded-full border border-line bg-panel/60 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.13em] text-muted-ink">
+              Free demo note · first connection after quiet time can take about
+              a minute
+            </p>
+
             <ul className="mt-8 grid w-full gap-2 sm:grid-cols-2">
               {prompts.map((prompt) => (
                 <li key={prompt}>

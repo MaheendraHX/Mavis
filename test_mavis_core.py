@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 import api
 import memory
+import usage_store
 
 
 GUEST_ID = "f1e2d3c4-b5a6-7788-9900-aabbccddeeff"
@@ -55,7 +56,9 @@ def stream_payload(message: str, owner_session: str = "") -> dict:
 def run() -> None:
     with tempfile.TemporaryDirectory() as directory:
         memory.DB_PATH = Path(directory) / "mavis-test.db"
+        usage_store.SQLITE_PATH = Path(directory) / "mavis-usage-test.db"
         memory.init_db()
+        usage_store.init()
         api.GEMINI_API_KEY = "test-gemini-key"
         api.OWNER_PASSKEY = "test-owner-passkey"
         api.client = None
@@ -95,13 +98,32 @@ def run() -> None:
         assert '"provider": "groq"' in fallback_stream.text
 
         for _ in range(8):
-            memory.increment_guest_message_count(GUEST_ID)
+            usage_store.increment(GUEST_ID)
         limit_stream = test_client.post(
             "/chat/stream",
             json=stream_payload("This should be limited."),
             headers={"X-Guest-ID": GUEST_ID},
         )
         assert '"limit_reached": true' in limit_stream.text
+
+        rate_guest_id = "a1b2c3d4-e5f6-7788-9900-112233445566"
+        original_rate = api.PUBLIC_REQUESTS_PER_MINUTE
+        try:
+            api.PUBLIC_REQUESTS_PER_MINUTE = 1
+            first_rate_request = test_client.post(
+                "/chat/stream",
+                json=stream_payload("First rate test."),
+                headers={"X-Guest-ID": rate_guest_id},
+            )
+            assert first_rate_request.status_code == 200
+            second_rate_request = test_client.post(
+                "/chat/stream",
+                json=stream_payload("Second rate test."),
+                headers={"X-Guest-ID": rate_guest_id},
+            )
+            assert second_rate_request.status_code == 429
+        finally:
+            api.PUBLIC_REQUESTS_PER_MINUTE = original_rate
 
         auth = test_client.post("/auth/owner", json={"passkey": "test-owner-passkey"})
         assert auth.status_code == 200

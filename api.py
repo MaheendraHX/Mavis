@@ -2,6 +2,7 @@ import os
 import json
 import time
 import re
+from collections import defaultdict, deque
 import uuid
 import traceback
 import base64
@@ -21,6 +22,7 @@ from groq import Groq
 from dotenv import load_dotenv
 
 import memory
+import usage_store
 from url_reader import is_safe_url
 from file_reader import process_file, get_file_type
 from web_search import web_search
@@ -29,6 +31,7 @@ from tools import calculator, wikipedia_search, get_tool_definitions
 
 load_dotenv()
 memory.init_db()
+usage_store.init()
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -40,7 +43,10 @@ GUEST_MESSAGE_LIMIT = max(1, int(os.environ.get("GUEST_MESSAGE_LIMIT", "10")))
 OWNER_SESSION_TTL_SECONDS = max(900, int(os.environ.get("OWNER_SESSION_TTL_SECONDS", "43200")))
 OWNER_AUTH_MAX_ATTEMPTS = max(1, int(os.environ.get("OWNER_AUTH_MAX_ATTEMPTS", "5")))
 OWNER_AUTH_WINDOW_SECONDS = max(60, int(os.environ.get("OWNER_AUTH_WINDOW_SECONDS", "900")))
+PUBLIC_REQUESTS_PER_MINUTE = max(1, int(os.environ.get("PUBLIC_REQUESTS_PER_MINUTE", "12")))
 _owner_auth_failures: dict[str, list[float]] = {}
+_public_request_windows: dict[str, deque[float]] = defaultdict(deque)
+_provider_metrics: dict[str, int] = defaultdict(int)
 
 PC_CONTROL_ENABLED = os.environ.get("PC_CONTROL_ENABLED", "false").lower() == "true"
 OWNER_PASSKEY = os.environ.get("OWNER_PASSKEY")
@@ -83,13 +89,6 @@ app.add_middleware(
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "X-Guest-ID", "X-Mavis-Session"],
 )
-
-
-@app.middleware("http")
-async def retire_legacy_routes(request: Request, call_next):
-    if request.url.path.endswith("/legacy"):
-        return JSONResponse(status_code=410, content={"detail": "This Mavis endpoint has been retired."})
-    return await call_next(request)
 
 
 def _generate_title(message: str, assistant_message: str) -> str:
@@ -212,11 +211,16 @@ def _call_text_with_fallback(messages, system_prompt, temperature=0.7, max_token
             continue
         try:
             if provider == "gemini":
-                return _call_gemini_model(messages, system_prompt, temperature, max_tokens), provider
-            return _call_groq_model(messages, temperature, max_tokens), provider
+                answer = _call_gemini_model(messages, system_prompt, temperature, max_tokens)
+            else:
+                answer = _call_groq_model(messages, temperature, max_tokens)
+            _provider_metrics[f"responses_{provider}"] += 1
+            return answer, provider
         except Exception as error:
             failures.append(f"{provider}: {error}")
+            _provider_metrics[f"errors_{provider}"] += 1
             if provider == "gemini" and _is_retryable_provider_error(error):
+                _provider_metrics["gemini_fallbacks"] += 1
                 continue
             if provider == "gemini" and not GEMINI_API_KEY:
                 continue
@@ -224,17 +228,29 @@ def _call_text_with_fallback(messages, system_prompt, temperature=0.7, max_token
     raise RuntimeError("No Mavis model provider is configured. Add GEMINI_API_KEY or GROQ_API_KEY.")
 
 
+def _enforce_public_rate_limit(guest_id: str, is_owner: bool) -> None:
+    if is_owner:
+        return
+    now = time.time()
+    window = _public_request_windows[guest_id]
+    while window and now - window[0] >= 60:
+        window.popleft()
+    if len(window) >= PUBLIC_REQUESTS_PER_MINUTE:
+        raise HTTPException(status_code=429, detail="Please wait a moment before sending another Mavis request.")
+    window.append(now)
+
+
 def _guest_usage(guest_id: str) -> dict[str, int]:
-    used = memory.get_guest_message_count(guest_id)
+    used = usage_store.get_count(guest_id)
     return {"used": used, "limit": GUEST_MESSAGE_LIMIT, "remaining": max(0, GUEST_MESSAGE_LIMIT - used)}
 
 
 def check_guest_limit(guest_id: str) -> bool:
-    return memory.get_guest_message_count(guest_id) >= GUEST_MESSAGE_LIMIT
+    return usage_store.get_count(guest_id) >= GUEST_MESSAGE_LIMIT
 
 
 def increment_guest_count(guest_id: str) -> int:
-    return memory.increment_guest_message_count(guest_id)
+    return usage_store.increment(guest_id)
 
 
 MAVIS_SYSTEM_PROMPT = """
@@ -500,256 +516,6 @@ async def upload_file(file: UploadFile = File(...)):
             os.remove(file_path)
 
 
-@app.post("/chat/legacy")
-async def legacy_chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous")):
-    conv_id = request.session_id
-    guest_id = x_guest_id or "anonymous"
-
-    # Determine user type: validate owner session server-side, don't trust client
-    is_owner = validate_owner_session(request.session_id)
-
-    # Owner bypasses guest limit
-    if not is_owner and check_guest_limit(guest_id):
-        return {
-            "response": "You've hit the demo message limit. Thanks for trying MAVIS!",
-            "title": None,
-            "conv_id": conv_id,
-            "limit_reached": True,
-        }
-
-    if not request.incognito:
-        memory.create_conversation(conv_id, "New conversation", "guest", guest_id)
-
-    if is_owner:
-        system_prompt = MAVIS_SYSTEM_PROMPT
-        if PC_CONTROL_ENABLED:
-            system_prompt += "\n\nNote: PC control is enabled. You can execute commands on the owner's machine when asked."
-    else:
-        system_prompt = GUEST_SYSTEM_PROMPT
-
-    # Apply persona modifier
-    persona_mod = PERSONA_MODIFIERS.get(request.persona, "")
-    if persona_mod:
-        system_prompt += persona_mod
-
-    history = memory.get_conversation_messages(conv_id) if not request.incognito else []
-    first_turn = len(history) == 0
-
-    if not request.incognito:
-        memory.add_message(conv_id, "user", request.message)
-    history.append({"role": "user", "content": request.message})
-
-    title = None
-
-    try:
-        search_results = web_search(request.message, max_results=8) if request.web_search else []
-        sources = [{"title": r["title"], "url": r["url"]} for r in search_results]
-
-        if request.web_search and search_results:
-            results_text = "\n\n".join(
-                f"Title: {r['title']}\nURL: {r['url']}\nSnippet: {r['snippet']}"
-                for r in search_results
-            )
-            search_prompt = system_prompt + "\n\n[Live web results for the user's query: \"" + request.message + "\"]\n" + results_text + "\n[/End of web results]"
-        else:
-            sources = []
-            search_prompt = system_prompt
-
-        provider_name = request.model_provider
-        provider = _resolve_model_provider(provider_name)
-
-        if provider == "gemini":
-            assistant_message = _call_model(
-                [{"role": "system", "content": search_prompt}] + history,
-                system_prompt=search_prompt,
-                provider_name=provider_name,
-                temperature=0.7,
-                max_tokens=1024,
-                model_name=request.model_name,
-            )
-            if not isinstance(assistant_message, str):
-                assistant_message = assistant_message.choices[0].message.content
-        else:
-            tool_defs = get_tool_definitions()
-            first_response = _call_model(
-                [{"role": "system", "content": search_prompt}] + history,
-                system_prompt=search_prompt,
-                provider_name=provider_name,
-                temperature=0.7,
-                max_tokens=1024,
-                tools=tool_defs,
-                tool_choice="auto",
-                model_name=request.model_name,
-            )
-
-            if first_response.choices[0].message.tool_calls:
-                tool_msg = first_response.choices[0].message
-                tool_results = []
-
-                for tc in tool_msg.tool_calls:
-                    fn_name = tc.function.name
-                    import json as _json
-                    try:
-                        fn_args = _json.loads(tc.function.arguments)
-                    except Exception:
-                        fn_args = {}
-
-                    if fn_name == "calculator":
-                        result = calculator(fn_args.get("expression", "0"))
-                    elif fn_name == "wikipedia_search":
-                        result = wikipedia_search(fn_args.get("query", ""))
-                    else:
-                        result = "Unknown tool"
-
-                    tool_results.append({
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": result,
-                    })
-
-                final_messages = [{"role": "system", "content": search_prompt}] + history + [
-                    tool_msg.model_dump()
-                ] + tool_results
-
-                final_response = _call_model(
-                    final_messages,
-                    system_prompt=search_prompt,
-                    provider_name=provider_name,
-                    temperature=0.7,
-                    max_tokens=1024,
-                    model_name=request.model_name,
-                )
-                assistant_message = final_response.choices[0].message.content
-            else:
-                assistant_message = first_response.choices[0].message.content
-
-        if first_turn:
-            title = _generate_title(request.message, assistant_message)
-            if not request.incognito:
-                memory.update_conversation_title(conv_id, title)
-
-    except Exception:
-        try:
-            response = get_groq_client().chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "system", "content": system_prompt}] + history,
-                temperature=0.7,
-                max_tokens=1024,
-            )
-            assistant_message = response.choices[0].message.content
-        except Exception:
-            assistant_message = "Something went wrong on my end. Try again?"
-        sources = []
-
-        if first_turn and title is None:
-            title = _generate_title(request.message, assistant_message)
-            if not request.incognito:
-                memory.update_conversation_title(conv_id, title)
-
-    if not request.incognito:
-        memory.add_message(conv_id, "assistant", assistant_message)
-
-    increment_guest_count(guest_id)
-
-    return {"response": assistant_message, "title": title, "conv_id": conv_id, "sources": sources}
-
-
-# ============================================================================
-# STREAMING CHAT ENDPOINT (SSE)
-# ============================================================================
-
-@app.post("/chat/stream/legacy")
-async def legacy_chat_stream(request: ChatRequest):
-    """
-    Server-Sent Events streaming endpoint.
-    Returns a stream of text chunks as the AI generates them.
-    """
-    from fastapi.responses import StreamingResponse
-
-    guest_id = request.session_id
-    is_owner = validate_owner_session(request.session_id)
-    conv_id = request.session_id if is_owner else f"guest_{guest_id}"
-
-    if not is_owner and check_guest_limit(guest_id):
-        async def limit_gen():
-            yield 'data: ' + json.dumps({"type": "text", "content": "You've hit the demo message limit. Thanks for trying MAVIS!"}) + '\n\n'
-            yield 'data: ' + json.dumps({"type": "done", "limit_reached": True}) + '\n\n'
-        return StreamingResponse(limit_gen(), media_type="text/event-stream")
-
-    if not request.incognito:
-        memory.create_conversation(conv_id, "New conversation", "guest", guest_id)
-
-    if is_owner:
-        system_prompt = MAVIS_SYSTEM_PROMPT
-        if PC_CONTROL_ENABLED:
-            system_prompt += "\n\nNote: PC control is enabled."
-    else:
-        system_prompt = GUEST_SYSTEM_PROMPT
-
-    persona_mod = PERSONA_MODIFIERS.get(request.persona, "")
-    if persona_mod:
-        system_prompt += persona_mod
-
-    history = memory.get_conversation_messages(conv_id) if not request.incognito else []
-
-    # Optional web search
-    sources = []
-    search_prompt = system_prompt
-    if request.web_search and not _is_greeting(request.message):
-        search_results = web_search(request.message)
-        if search_results:
-            sources = [{"title": r["title"], "url": r["url"]} for r in search_results]
-            search_context = "\n\n".join(
-                [f"[{r['title']}]({r['url']}): {r['snippet']}" for r in search_results]
-            )
-            search_prompt = system_prompt + f"\n\nSearch results for '{request.message}':\n{search_context}"
-
-    full_response = ""
-
-    async def generate():
-        nonlocal full_response
-        messages = [{"role": "system", "content": search_prompt}] + history + [
-            {"role": "user", "content": request.message}
-        ]
-
-        try:
-            stream = get_groq_client().chat.completions.create(
-                model=request.model_name,
-                messages=messages,
-                temperature=0.7,
-                max_tokens=1024,
-                stream=True,
-            )
-
-            for chunk in stream:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    token = chunk.choices[0].delta.content
-                    full_response += token
-                    yield 'data: ' + json.dumps({"type": "text", "content": token}) + '\n\n'
-
-            # Send sources if any
-            if sources:
-                yield 'data: ' + json.dumps({"type": "sources", "content": sources}) + '\n\n'
-
-            # Save to memory
-            title = None
-            if not request.incognito:
-                title = _generate_title(request.message, full_response)
-                memory.update_conversation_title(conv_id, title)
-                memory.add_message(conv_id, "user", request.message)
-                memory.add_message(conv_id, "assistant", full_response)
-
-            increment_guest_count(guest_id)
-
-            yield 'data: ' + json.dumps({"type": "done", "title": title, "conv_id": conv_id}) + '\n\n'
-
-        except Exception as e:
-            traceback.print_exc()
-            yield 'data: ' + json.dumps({"type": "error", "content": str(e)}) + '\n\n'
-
-    return StreamingResponse(generate(), media_type="text/event-stream")
-
-
 @app.get("/usage")
 async def usage(x_guest_id: str = Header(default=""), x_mavis_session: str = Header(default="")):
     if validate_owner_session(x_mavis_session):
@@ -763,6 +529,7 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="")):
     _validate_chat_request(request)
     guest_id = _validate_guest_id(x_guest_id)
     conv_id, is_owner = _conversation_identity(request, guest_id)
+    _enforce_public_rate_limit(guest_id, is_owner)
     if not is_owner and check_guest_limit(guest_id):
         return {
             "response": "You have reached the 10-message Mavis demo limit. Thanks for trying her.",
@@ -816,6 +583,7 @@ async def chat_stream(request: ChatRequest, x_guest_id: str = Header(default="")
     _validate_chat_request(request)
     guest_id = _validate_guest_id(x_guest_id)
     conv_id, is_owner = _conversation_identity(request, guest_id)
+    _enforce_public_rate_limit(guest_id, is_owner)
 
     async def event_stream():
         if not is_owner and check_guest_limit(guest_id):
@@ -925,179 +693,6 @@ async def create_file(req: CreateFileRequest):
     }
 
 
-@app.post("/chat-with-file/legacy")
-async def legacy_chat_with_file(
-    message: str = Form(...),
-    user_type: str = Form(...),
-    session_id: str = Form("default"),
-    incognito: bool = Form(False),
-    persona: str = Form("default"),
-    filename: str = Form(...),
-    file_content: str = Form(""),
-    x_guest_id: str = Header(default="anonymous"),
-):
-    conv_id = session_id
-    guest_id = x_guest_id or "anonymous"
-
-    # Determine user type: validate owner session server-side, don't trust client
-    is_owner = validate_owner_session(session_id)
-
-    # Owner bypasses guest limit
-    if not is_owner and check_guest_limit(guest_id):
-        return {
-            "response": "You've hit the demo message limit. Thanks for trying MAVIS!",
-            "conv_id": conv_id,
-            "limit_reached": True,
-        }
-
-    if not incognito:
-        memory.create_conversation(conv_id, "New conversation", "guest", guest_id)
-
-    if is_owner:
-        system_prompt = MAVIS_SYSTEM_PROMPT
-        if PC_CONTROL_ENABLED:
-            system_prompt += "\n\nNote: PC control is enabled. You can execute commands on the owner's machine when asked."
-    else:
-        system_prompt = GUEST_SYSTEM_PROMPT
-
-    # Apply persona modifier
-    if persona in PERSONA_MODIFIERS:
-        system_prompt += "\n\n" + PERSONA_MODIFIERS[persona]
-
-    # Derive file type from filename extension
-    file_ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "file"
-
-    # Use the pre-read file content
-    title = None
-    first_turn = False
-    if not incognito:
-        first_turn = not memory.has_messages(conv_id)
-
-    try:
-        if file_content:
-            if not incognito:
-                memory.add_message(conv_id, "user", f"{message} [attached a {file_ext} file: {filename}]")
-
-            history = memory.get_conversation_messages(conv_id) if not incognito else []
-            # Replace the last user message (simplified DB version) with full content
-            if history and history[-1]["role"] == "user":
-                history[-1] = {"role": "user", "content": f"{message}\n\nFile content:\n{file_content}"}
-            else:
-                history.append({"role": "user", "content": f"{message}\n\nFile content:\n{file_content}"})
-
-            response = get_groq_client().chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[{"role": "system", "content": system_prompt}] + history,
-                temperature=0.7,
-                max_tokens=1024,
-            )
-            assistant_message = response.choices[0].message.content
-        else:
-            assistant_message = f"I had trouble reading that file. Please try again."
-
-        if first_turn:
-            title = _generate_title(message, assistant_message)
-            if not incognito:
-                memory.update_conversation_title(conv_id, title)
-
-    except Exception as e:
-        assistant_message = f"I had trouble reading that file. Try again? ({str(e)})"
-
-    if not incognito:
-        memory.add_message(conv_id, "assistant", assistant_message)
-
-    increment_guest_count(guest_id)
-
-    return {"response": assistant_message, "title": title, "conv_id": conv_id}
-
-
-@app.post("/chat-with-image/legacy")
-async def legacy_chat_with_image(
-    message: str = Form(...),
-    user_type: str = Form(...),
-    session_id: str = Form("default"),
-    incognito: bool = Form(False),
-    persona: str = Form("default"),
-    base64_image: str = Form(...),
-    mime: str = Form(...),
-    x_guest_id: str = Header(default="anonymous"),
-):
-    conv_id = session_id
-    guest_id = x_guest_id or "anonymous"
-
-    # Determine user type: validate owner session server-side, don't trust client
-    is_owner = validate_owner_session(session_id)
-
-    # Owner bypasses guest limit
-    if not is_owner and check_guest_limit(guest_id):
-        return {
-            "response": "You've hit the demo message limit. Thanks for trying MAVIS!",
-            "conv_id": conv_id,
-            "limit_reached": True,
-        }
-
-    if not incognito:
-        memory.create_conversation(conv_id, "New conversation", "guest", guest_id)
-
-    if is_owner:
-        system_prompt = MAVIS_SYSTEM_PROMPT
-        if PC_CONTROL_ENABLED:
-            system_prompt += "\n\nNote: PC control is enabled. You can execute commands on the owner's machine when asked."
-    else:
-        system_prompt = GUEST_SYSTEM_PROMPT
-
-    # Apply persona modifier
-    if persona in PERSONA_MODIFIERS:
-        system_prompt += "\n\n" + PERSONA_MODIFIERS[persona]
-
-    if not incognito:
-        memory.add_message(conv_id, "user", f"{message} [shared an image]")
-
-    title = None
-    first_turn = False
-    if not incognito:
-        first_turn = not memory.has_messages(conv_id)
-
-    try:
-        history = memory.get_conversation_messages(conv_id) if not incognito else []
-        # Replace the last user message (simplified DB version) with full multimodal content
-        image_content = {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": message},
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{mime};base64,{base64_image}"}
-                }
-            ]
-        }
-        if history and history[-1]["role"] == "user":
-            history[-1] = image_content
-        else:
-            history.append(image_content)
-
-        response = get_groq_client().chat.completions.create(
-            model="meta-llama/llama-4-scout-17b-16e-instruct",
-            messages=[{"role": "system", "content": system_prompt}] + history,
-            max_tokens=1024,
-        )
-        assistant_message = response.choices[0].message.content
-
-        if first_turn:
-            title = _generate_title(message, assistant_message)
-            if not incognito:
-                memory.update_conversation_title(conv_id, title)
-    except Exception as e:
-        assistant_message = f"I had trouble seeing that image. Try again? ({str(e)})"
-
-    if not incognito:
-        memory.add_message(conv_id, "assistant", assistant_message)
-
-    increment_guest_count(guest_id)
-
-    return {"response": assistant_message, "title": title, "conv_id": conv_id}
-
-
 def _attachment_request(message: str, session_id: str, owner_session: str, incognito: bool, persona: str) -> ChatRequest:
     request = ChatRequest(
         message=message or "Please analyze this attachment.",
@@ -1127,6 +722,7 @@ async def chat_with_file(
     if not filename or len(filename) > 200 or len(file_content) > 50_000:
         raise HTTPException(status_code=400, detail="The attachment is invalid or too large to analyze.")
     conv_id, is_owner = _conversation_identity(request, guest_id)
+    _enforce_public_rate_limit(guest_id, is_owner)
     if not is_owner and check_guest_limit(guest_id):
         return {"response": "You have reached the 10-message Mavis demo limit. Thanks for trying her.", "limit_reached": True, "usage": _guest_usage(guest_id)}
 
@@ -1212,6 +808,7 @@ async def chat_with_image(
     if mime not in {"image/jpeg", "image/png", "image/webp", "image/gif"}:
         raise HTTPException(status_code=400, detail="Unsupported image type.")
     conv_id, is_owner = _conversation_identity(request, guest_id)
+    _enforce_public_rate_limit(guest_id, is_owner)
     if not is_owner and check_guest_limit(guest_id):
         return {"response": "You have reached the 10-message Mavis demo limit. Thanks for trying her.", "limit_reached": True, "usage": _guest_usage(guest_id)}
 
@@ -1269,4 +866,7 @@ async def health():
         "groq_configured": client is not None,
         "gemini_configured": bool(GEMINI_API_KEY),
         "guest_message_limit": GUEST_MESSAGE_LIMIT,
+        "public_requests_per_minute": PUBLIC_REQUESTS_PER_MINUTE,
+        "quota_storage": usage_store.backend_name(),
+        "provider_metrics": dict(_provider_metrics),
     }

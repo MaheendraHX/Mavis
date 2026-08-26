@@ -6,14 +6,11 @@ node_modules/
 frontend/node_modules/
 dist/
 frontend/dist/
+frontend/.output/
+frontend/.wrangler/
 .vercel
 uploads/
 aria_memory.db
+mavis_usage.db
 frontend/.vercel
 frontend/.env.local
-
-# Stray terminal artifacts
-hell
-t
-ersmaheeARIA
-ARIA
