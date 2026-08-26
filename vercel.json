@@ -1,7 +1,5 @@
 {
-  "framework": null,
-  "alias": ["aria-alpha-two.vercel.app"],
-  "installCommand": "npm run setup",
-  "buildCommand": "npm run build",
-  "outputDirectory": "frontend/.output/public"
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "tanstack-start",
+  "installCommand": "npm ci"
 }
