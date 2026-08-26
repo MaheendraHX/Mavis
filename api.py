@@ -435,6 +435,11 @@ def _is_greeting(message: str) -> bool:
     return normalized in {"hi", "hello", "hey", "good morning", "good afternoon", "good evening", "thanks", "thank you"}
 
 
+def _clean_assistant_response(text: str) -> str:
+    source_marker = re.search(r"\n(?:---\s*\n)?\s*\*{0,2}sources?(?: used)?\s*:", text, re.IGNORECASE)
+    return text[:source_marker.start()].rstrip() if source_marker else text.strip()
+
+
 def _search_context_for(request: ChatRequest, system_prompt: str) -> tuple[str, list[dict[str, str]]]:
     """Return safe optional search context without allowing search failures to block chat."""
     if not request.web_search or _is_greeting(request.message):
@@ -641,6 +646,7 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="")):
             [{"role": "system", "content": search_prompt}] + history + [{"role": "user", "content": request.message}],
             search_prompt,
         )
+        assistant_message = _clean_assistant_response(assistant_message)
     except Exception:
         traceback.print_exc()
         raise HTTPException(status_code=503, detail="Mavis is temporarily unavailable. Please try again shortly.")
@@ -693,6 +699,7 @@ async def chat_stream(request: ChatRequest, x_guest_id: str = Header(default="")
                 [{"role": "system", "content": search_prompt}] + history + [{"role": "user", "content": request.message}],
                 search_prompt,
             )
+            response = _clean_assistant_response(response)
         except Exception:
             traceback.print_exc()
             yield "data: " + json.dumps({"type": "error", "content": "Mavis is temporarily unavailable. Please try again shortly."}) + "\n\n"
@@ -930,6 +937,7 @@ async def chat_with_image(
     history = _conversation_history(request, conv_id)
     system_prompt = _system_prompt_for(request, is_owner)
     response, provider = _call_image_with_fallback(request.message, system_prompt, base64_image, mime)
+    response = _clean_assistant_response(response)
     title = None
     if not request.incognito:
         first_turn = not history

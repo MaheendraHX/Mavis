@@ -50,7 +50,12 @@ export const Route = createFileRoute("/chat")({
   component: ChatPage,
 });
 
-const OWNER_SESSION_KEY = "mavis.owner-session";
+const OWNER_SESSION_KEY = "mavis.owner.session";
+
+function cleanAssistantText(text: string): string {
+  const sourceMarker = text.search(/\n(?:---\s*\n)?\s*\*{0,2}sources?(?: used)?\s*:/i);
+  return sourceMarker >= 0 ? text.slice(0, sourceMarker).trimEnd() : text;
+}
 
 type Usage = {
   mode: "demo" | "owner";
@@ -538,7 +543,7 @@ function ChatSurface({
       };
       if (data.type === "text" && typeof data.content === "string") {
         answer += data.content;
-        onText(answer);
+        onText(cleanAssistantText(answer));
       }
       if (data.type === "sources" && Array.isArray(data.content)) {
         const unique = new Map<string, SearchResult>();
