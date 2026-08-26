@@ -1,15 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type { FileUIPart, UIMessage } from "ai";
 import { AnimatePresence, motion } from "motion/react";
-import { EyeOffIcon, PanelLeftOpenIcon, SparklesIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import {
+  EyeOffIcon,
+  KeyRoundIcon,
+  PanelLeftOpenIcon,
+  ShieldCheckIcon,
+  XIcon,
+} from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
 import mavisOrb from "@/assets/mavis-orb.jpg";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { Composer } from "@/components/chat/Composer";
 import { MessageItem } from "@/components/chat/MessageItem";
-import { DEFAULT_MODEL, MODELS, type ModelId } from "@/lib/mavis/models";
 import type { PersonaId } from "@/lib/mavis/personas";
 import {
   createThread,
@@ -41,6 +46,15 @@ export const Route = createFileRoute("/chat")({
   }),
   component: ChatPage,
 });
+
+const OWNER_SESSION_KEY = "mavis.owner-session";
+
+type Usage = {
+  mode: "demo" | "owner";
+  used: number;
+  limit: number | null;
+  remaining: number | null;
+};
 
 const prompts = [
   "Summarize this PDF into five bullets",
@@ -99,15 +113,36 @@ function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [incognito, setIncognito] = useState(false);
   const [persona, setPersona] = useState<PersonaId>("default");
-  const [model, setModel] = useState<ModelId>(DEFAULT_MODEL);
   const [webSearch, setWebSearch] = useState(true);
+  const [ownerSession, setOwnerSession] = useState("");
+  const [usage, setUsage] = useState<Usage | null>(null);
+  const [ownerDialogOpen, setOwnerDialogOpen] = useState(false);
 
   useEffect(() => {
     const stored = loadThreads();
     const initial = stored.length > 0 ? stored : [createThread()];
     setThreads(initial);
     setActiveId(initial[0].id);
+    setOwnerSession(window.sessionStorage.getItem(OWNER_SESSION_KEY) ?? "");
   }, []);
+
+  const refreshUsage = async (session = ownerSession) => {
+    const base = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
+    if (!base) return;
+    try {
+      const response = await fetch(`${base}/usage`, {
+        headers: { "X-Guest-ID": guestId(), "X-Mavis-Session": session },
+      });
+      if (response.ok) setUsage((await response.json()) as Usage);
+    } catch {
+      /* The composer provides the actionable connection error. */
+    }
+  };
+
+  useEffect(() => {
+    void refreshUsage();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownerSession]);
 
   const active =
     threads.find((thread) => thread.id === activeId) ?? threads[0] ?? null;
@@ -160,6 +195,32 @@ function ChatPage() {
     });
   };
 
+  const activateOwner = async (passkey: string) => {
+    const response = await fetch(renderApiUrl("/auth/owner"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ passkey }),
+    });
+    if (!response.ok) throw new Error(await toErrorMessage(response));
+    const result = (await response.json()) as {
+      session_id: string;
+      expires_in_seconds: number;
+    };
+    window.sessionStorage.setItem(OWNER_SESSION_KEY, result.session_id);
+    setOwnerSession(result.session_id);
+    setOwnerDialogOpen(false);
+    toast.success(
+      `Owner access enabled for ${Math.round(result.expires_in_seconds / 3600)} hours.`,
+    );
+    await refreshUsage(result.session_id);
+  };
+
+  const leaveOwner = () => {
+    window.sessionStorage.removeItem(OWNER_SESSION_KEY);
+    setOwnerSession("");
+    toast("Returned to demo access.");
+  };
+
   return (
     <div className="mavis-shell grain flex h-screen w-full overflow-hidden bg-cream">
       <AnimatePresence initial={false}>
@@ -206,21 +267,36 @@ function ChatPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <label className="hidden items-center gap-2 rounded-full border border-line bg-panel/80 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-ink sm:inline-flex">
-              <span className="hidden sm:inline">Mode</span>
-              <select
-                value={model}
-                onChange={(event) => setModel(event.target.value as ModelId)}
-                aria-label="Model mode"
-                className="rounded-full border border-line bg-night px-2 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-ink outline-none transition-colors hover:border-tan"
-              >
-                {MODELS.map((option) => (
-                  <option key={option.id} value={option.id} title={option.hint}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <span className="hidden rounded-full border border-sage/30 bg-sage/10 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-sage lg:inline-flex">
+              Gemini primary · Groq fallback
+            </span>
+            <span
+              className={`hidden rounded-full border px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.14em] md:inline-flex ${ownerSession ? "border-sage/30 bg-sage/10 text-sage" : "border-violet/30 bg-violet/10 text-violet"}`}
+            >
+              {ownerSession
+                ? "Unlimited owner session"
+                : usage
+                  ? `${usage.remaining ?? 0} demo messages left`
+                  : "10-message demo"}
+            </span>
+            <button
+              type="button"
+              onClick={
+                ownerSession ? leaveOwner : () => setOwnerDialogOpen(true)
+              }
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors ${
+                ownerSession
+                  ? "border-sage/50 bg-sage/15 text-sage"
+                  : "border-line bg-panel/80 text-muted-ink hover:border-violet/60 hover:text-ink"
+              }`}
+            >
+              {ownerSession ? (
+                <ShieldCheckIcon className="h-3 w-3" />
+              ) : (
+                <KeyRoundIcon className="h-3 w-3" />
+              )}
+              {ownerSession ? "Owner active" : "Owner access"}
+            </button>
             <button
               type="button"
               onClick={toggleIncognito}
@@ -246,13 +322,19 @@ function ChatPage() {
             onPersonaChange={setPersona}
             webSearch={webSearch}
             onWebSearchChange={setWebSearch}
-            model={model}
+            ownerSession={ownerSession}
+            onUsage={setUsage}
             incognito={incognito}
           />
         ) : (
           <div className="flex-1" />
         )}
       </div>
+      <OwnerAccessDialog
+        open={ownerDialogOpen}
+        onClose={() => setOwnerDialogOpen(false)}
+        onSubmit={activateOwner}
+      />
     </div>
   );
 }
@@ -264,7 +346,8 @@ type ChatSurfaceProps = {
   onPersonaChange: (value: PersonaId) => void;
   webSearch: boolean;
   onWebSearchChange: (value: boolean) => void;
-  model: ModelId;
+  ownerSession: string;
+  onUsage: (usage: Usage | null) => void;
   incognito: boolean;
 };
 
@@ -275,7 +358,8 @@ function ChatSurface({
   onPersonaChange,
   webSearch,
   onWebSearchChange,
-  model,
+  ownerSession,
+  onUsage,
   incognito,
 }: ChatSurfaceProps) {
   const [messages, setMessages] = useState(thread.messages);
@@ -312,8 +396,8 @@ function ChatSurface({
       "message",
       text || `Please analyze ${file.filename ?? "this attachment"}.`,
     );
-    form.set("user_type", "guest");
     form.set("session_id", thread.id);
+    form.set("owner_session", ownerSession);
     form.set("incognito", String(incognito));
     form.set("persona", persona);
 
@@ -329,7 +413,10 @@ function ChatSurface({
         body: form,
       });
       if (!response.ok) throw new Error(await toErrorMessage(response));
-      return (await response.json()) as { response?: string };
+      return (await response.json()) as {
+        response?: string;
+        usage?: Usage | null;
+      };
     }
 
     const content = await fetch(dataUrl).then((response) => response.text());
@@ -353,12 +440,11 @@ function ChatSurface({
       headers: { "Content-Type": "application/json", "X-Guest-ID": guestId() },
       body: JSON.stringify({
         message: text,
-        user_type: "guest",
         session_id: thread.id,
+        owner_session: ownerSession,
         incognito,
         web_search: webSearch,
         persona,
-        model_name: model,
       }),
     });
     if (!response.ok) throw new Error(await toErrorMessage(response));
@@ -376,6 +462,7 @@ function ChatSurface({
       const data = JSON.parse(line.slice(6)) as {
         type?: string;
         content?: string | { title?: string; url?: string }[];
+        usage?: Usage | null;
       };
       if (data.type === "text" && typeof data.content === "string") {
         answer += data.content;
@@ -390,6 +477,9 @@ function ChatSurface({
           answer += `${answer ? "\n\n" : ""}Sources:\n${citations}`;
           onText(answer);
         }
+      }
+      if (data.type === "done" && data.usage) {
+        onUsage(data.usage);
       }
       if (data.type === "error") {
         throw new Error(
@@ -436,6 +526,7 @@ function ChatSurface({
           assistantId,
           result.response || "Mavis could not read that attachment.",
         );
+        if (result.usage) onUsage(result.usage);
       } else {
         await streamText(text, (content) =>
           appendAssistantText(assistantId, content),
@@ -569,5 +660,98 @@ function ChatSurface({
         onWebSearchChange={onWebSearchChange}
       />
     </>
+  );
+}
+
+type OwnerAccessDialogProps = {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (passkey: string) => Promise<void>;
+};
+
+function OwnerAccessDialog({
+  open,
+  onClose,
+  onSubmit,
+}: OwnerAccessDialogProps) {
+  const [passkey, setPasskey] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  if (!open) return null;
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!passkey || submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      await onSubmit(passkey);
+      setPasskey("");
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Owner access could not be enabled.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-night/75 px-4 backdrop-blur-sm">
+      <form
+        onSubmit={submit}
+        className="mavis-glass w-full max-w-sm rounded-3xl p-6 shadow-lift"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-sage">
+              Private mode
+            </p>
+            <h2 className="mt-2 font-display text-2xl text-ink">
+              Owner access
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close owner access"
+            className="rounded-xl p-2 text-muted-ink transition-colors hover:bg-panel-raised hover:text-ink"
+          >
+            <XIcon className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="mt-3 text-sm leading-relaxed text-muted-ink">
+          Enter your private passkey to unlock a time-limited, unrestricted
+          Mavis session on this browser.
+        </p>
+        <label
+          htmlFor="owner-passkey"
+          className="mt-5 block font-mono text-[10px] uppercase tracking-[0.14em] text-muted-ink"
+        >
+          Passkey
+        </label>
+        <input
+          id="owner-passkey"
+          type="password"
+          autoComplete="current-password"
+          value={passkey}
+          onChange={(event) => setPasskey(event.target.value)}
+          className="mt-2 w-full rounded-xl border border-line bg-night/70 px-3 py-2.5 text-sm text-ink outline-none transition-colors focus:border-violet"
+          disabled={submitting}
+          autoFocus
+        />
+        {error && <p className="mt-3 text-sm text-peach">{error}</p>}
+        <button
+          type="submit"
+          disabled={submitting || !passkey}
+          className="mt-5 w-full rounded-xl bg-gradient-to-r from-violet to-tan px-4 py-3 text-sm font-semibold text-night transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {submitting ? "Verifying…" : "Unlock Mavis"}
+        </button>
+      </form>
+    </div>
   );
 }

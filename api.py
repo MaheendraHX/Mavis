@@ -1,5 +1,7 @@
 import os
 import json
+import time
+import re
 import uuid
 import traceback
 import base64
@@ -31,11 +33,14 @@ memory.init_db()
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB
-GUEST_MESSAGE_LIMIT = 10
-
-# In-memory per-guest message counters (fine for a single free-tier instance demo)
-_guest_message_counts = {}
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
+MAX_MESSAGE_CHARACTERS = 12_000
+MAX_HISTORY_MESSAGES = 24
+GUEST_MESSAGE_LIMIT = max(1, int(os.environ.get("GUEST_MESSAGE_LIMIT", "10")))
+OWNER_SESSION_TTL_SECONDS = max(900, int(os.environ.get("OWNER_SESSION_TTL_SECONDS", "43200")))
+OWNER_AUTH_MAX_ATTEMPTS = max(1, int(os.environ.get("OWNER_AUTH_MAX_ATTEMPTS", "5")))
+OWNER_AUTH_WINDOW_SECONDS = max(60, int(os.environ.get("OWNER_AUTH_WINDOW_SECONDS", "900")))
+_owner_auth_failures: dict[str, list[float]] = {}
 
 PC_CONTROL_ENABLED = os.environ.get("PC_CONTROL_ENABLED", "false").lower() == "true"
 OWNER_PASSKEY = os.environ.get("OWNER_PASSKEY")
@@ -49,30 +54,26 @@ ALLOWED_ORIGINS = [
 _SESSION_SECRET = os.environ.get("SESSION_SECRET", os.urandom(32).hex())
 
 def _sign_session(session_id: str) -> str:
-    """Create an HMAC signature for a session ID."""
     return hmac.new(_SESSION_SECRET.encode(), session_id.encode(), hashlib.sha256).hexdigest()[:32]
 
-def _verify_session(session_id: str, signature: str) -> bool:
-    """Verify an HMAC-signed session ID."""
-    expected = _sign_session(session_id)
-    return hmac.compare_digest(expected, signature)
-
 def create_owner_session() -> str:
-    """Create a signed owner session token. Format: owner_<uuid>_<signature>"""
-    raw = f"owner_{uuid.uuid4().hex[:12]}"
-    sig = _sign_session(raw)
-    return f"{raw}_{sig}"
+    """Create an expiring signed token for owner-only use."""
+    expires_at = int(time.time()) + OWNER_SESSION_TTL_SECONDS
+    raw = f"owner_{uuid.uuid4().hex}_{expires_at}"
+    return f"{raw}_{_sign_session(raw)}"
 
 def validate_owner_session(session_id: str) -> bool:
-    """Validate an owner session token by checking the HMAC signature."""
+    """Validate the signature and expiry of an owner token."""
     if not session_id.startswith("owner_"):
         return False
-    # Find the last underscore to split raw_id from signature
-    parts = session_id.rsplit("_", 1)
-    if len(parts) != 2:
+    parts = session_id.rsplit("_", 2)
+    if len(parts) != 3:
         return False
-    raw_id, signature = parts
-    return _verify_session(raw_id, signature)
+    raw_id, expires_at, signature = parts
+    if not expires_at.isdigit() or int(expires_at) < int(time.time()):
+        return False
+    raw = f"{raw_id}_{expires_at}"
+    return hmac.compare_digest(_sign_session(raw), signature)
 
 app = FastAPI()
 app.add_middleware(
@@ -80,32 +81,33 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Guest-ID"],
+    allow_headers=["Content-Type", "X-Guest-ID", "X-Mavis-Session"],
 )
 
 
+@app.middleware("http")
+async def retire_legacy_routes(request: Request, call_next):
+    if request.url.path.endswith("/legacy"):
+        return JSONResponse(status_code=410, content={"detail": "This Mavis endpoint has been retired."})
+    return await call_next(request)
+
+
 def _generate_title(message: str, assistant_message: str) -> str:
-    """Generate a short conversation title from the first exchange."""
+    """Generate a short title without making titles a single-provider failure point."""
+    instruction = (
+        "Generate a short conversation title in 3-5 words. Reply with only the title, "
+        "without quotes or terminal punctuation."
+    )
     try:
-        response = get_groq_client().chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Generate a short conversation title in 3-5 words max. Summarize the topic of the exchange. Reply with ONLY the title, no quotes, no punctuation at the end, no explanation."
-                },
-                {
-                    "role": "user",
-                    "content": f"User: {message}\nAssistant: {assistant_message}"
-                }
-            ],
-            max_tokens=20,
+        title, _provider = _call_text_with_fallback(
+            [{"role": "user", "content": f"User: {message}\nAssistant: {assistant_message}"}],
+            instruction,
             temperature=0.3,
+            max_tokens=20,
         )
-        title = response.choices[0].message.content.strip()
     except Exception:
         title = " ".join(message.split()[:5])
-    return " ".join(title.replace('"', '').replace("'", '').split())[:40].strip()
+    return " ".join(title.replace('"', "").replace("'", "").split())[:40].strip()
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -130,30 +132,38 @@ def get_groq_client() -> Groq:
     return client
 
 
-DEFAULT_MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "groq").strip().lower()
+DEFAULT_MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "gemini").strip().lower()
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 
 def _resolve_model_provider(provider_name: str | None) -> str:
-    provider = (provider_name or DEFAULT_MODEL_PROVIDER or "groq").strip().lower()
-    if provider not in {"groq", "gemini"}:
-        return "groq"
-    return provider
+    provider = (provider_name or DEFAULT_MODEL_PROVIDER or "gemini").strip().lower()
+    return provider if provider in {"gemini", "groq"} else "gemini"
 
 
-def _call_groq_model(messages, temperature=0.7, max_tokens=1024, tools=None, tool_choice=None, model_name="llama-3.3-70b-versatile"):
-    payload = {
-        "model": model_name,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-    }
-    if tools is not None:
-        payload["tools"] = tools
-    if tool_choice is not None:
-        payload["tool_choice"] = tool_choice
-    return get_groq_client().chat.completions.create(**payload)
+def _provider_is_configured(provider: str) -> bool:
+    return bool(GEMINI_API_KEY) if provider == "gemini" else client is not None
+
+
+def _is_retryable_provider_error(error: Exception) -> bool:
+    response = getattr(error, "response", None)
+    status_code = getattr(response, "status_code", None) or getattr(error, "status_code", None)
+    if status_code in {408, 429, 500, 502, 503, 504}:
+        return True
+    message = str(error).lower()
+    return any(token in message for token in ("resource_exhausted", "rate limit", "quota", "timeout", "temporarily", "unavailable"))
+
+
+def _call_groq_model(messages, temperature=0.7, max_tokens=1024, model_name=GROQ_MODEL):
+    response = get_groq_client().chat.completions.create(
+        model=model_name,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+    return response.choices[0].message.content or ""
 
 
 def _call_gemini_model(messages, system_prompt, temperature=0.7, max_tokens=1024):
@@ -161,59 +171,70 @@ def _call_gemini_model(messages, system_prompt, temperature=0.7, max_tokens=1024
         raise RuntimeError("GEMINI_API_KEY is not configured")
 
     contents = []
-    for msg in messages:
-        if msg.get("role") == "system":
+    for message in messages:
+        if message.get("role") == "system":
             continue
-        role = "user" if msg.get("role") == "user" else "model"
+        content = message.get("content", "")
+        if not isinstance(content, str):
+            continue
         contents.append({
-            "role": role,
-            "parts": [{"text": msg.get("content", "")}],
+            "role": "user" if message.get("role") == "user" else "model",
+            "parts": [{"text": content}],
         })
-
-    payload = {
-        "system_instruction": {
-            "parts": [{"text": system_prompt}]
-        },
-        "contents": contents,
-        "generationConfig": {
-            "temperature": temperature,
-            "maxOutputTokens": max_tokens,
-        },
-    }
+    if not contents:
+        contents = [{"role": "user", "parts": [{"text": "Hello"}]}]
 
     response = requests.post(
         f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}",
-        json=payload,
+        json={
+            "system_instruction": {"parts": [{"text": system_prompt}]},
+            "contents": contents,
+            "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
+        },
         timeout=60,
     )
     response.raise_for_status()
     data = response.json()
-    return data["candidates"][0]["content"]["parts"][0]["text"]
+    candidates = data.get("candidates") or []
+    parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
+    text = "".join(part.get("text", "") for part in parts if isinstance(part, dict))
+    if not text:
+        raise RuntimeError("Gemini returned no usable response")
+    return text
 
 
-def _call_model(messages, system_prompt, provider_name=None, temperature=0.7, max_tokens=1024, tools=None, tool_choice=None, model_name="llama-3.3-70b-versatile"):
-    provider = _resolve_model_provider(provider_name)
+def _call_text_with_fallback(messages, system_prompt, temperature=0.7, max_tokens=1024):
+    """Prefer Gemini, falling back to Groq only for configuration or transient provider failures."""
+    failures = []
+    for provider in ("gemini", "groq"):
+        if not _provider_is_configured(provider):
+            failures.append(f"{provider} is not configured")
+            continue
+        try:
+            if provider == "gemini":
+                return _call_gemini_model(messages, system_prompt, temperature, max_tokens), provider
+            return _call_groq_model(messages, temperature, max_tokens), provider
+        except Exception as error:
+            failures.append(f"{provider}: {error}")
+            if provider == "gemini" and _is_retryable_provider_error(error):
+                continue
+            if provider == "gemini" and not GEMINI_API_KEY:
+                continue
+            raise RuntimeError("Mavis could not contact its primary model provider.") from error
+    raise RuntimeError("No Mavis model provider is configured. Add GEMINI_API_KEY or GROQ_API_KEY.")
 
-    if provider == "gemini":
-        return _call_gemini_model(messages, system_prompt, temperature=temperature, max_tokens=max_tokens)
 
-    return _call_groq_model(
-        messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        tools=tools,
-        tool_choice=tool_choice,
-        model_name=model_name,
-    )
+def _guest_usage(guest_id: str) -> dict[str, int]:
+    used = memory.get_guest_message_count(guest_id)
+    return {"used": used, "limit": GUEST_MESSAGE_LIMIT, "remaining": max(0, GUEST_MESSAGE_LIMIT - used)}
 
 
-def check_guest_limit(guest_id):
-    count = _guest_message_counts.get(guest_id, 0)
-    return count >= GUEST_MESSAGE_LIMIT
+def check_guest_limit(guest_id: str) -> bool:
+    return memory.get_guest_message_count(guest_id) >= GUEST_MESSAGE_LIMIT
 
 
-def increment_guest_count(guest_id):
-    _guest_message_counts[guest_id] = _guest_message_counts.get(guest_id, 0) + 1
+def increment_guest_count(guest_id: str) -> int:
+    return memory.increment_guest_message_count(guest_id)
 
 
 MAVIS_SYSTEM_PROMPT = """
@@ -286,13 +307,61 @@ PERSONA_MODIFIERS = {
 
 class ChatRequest(BaseModel):
     message: str
-    user_type: str
-    session_id: str = "default"
+    user_type: str = "guest"
+    session_id: str
+    owner_session: str = ""
     incognito: bool = False
     web_search: bool = True
     persona: str = "default"
-    model_provider: str = "groq"
-    model_name: str = "llama-3.3-70b-versatile"
+
+
+def _validate_guest_id(guest_id: str) -> str:
+    cleaned = (guest_id or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9-]{16,128}", cleaned):
+        raise HTTPException(status_code=400, detail="Invalid guest session.")
+    return cleaned
+
+
+def _validate_chat_request(request: ChatRequest) -> None:
+    request.message = request.message.strip()
+    if not request.message:
+        raise HTTPException(status_code=400, detail="A message is required.")
+    if len(request.message) > MAX_MESSAGE_CHARACTERS:
+        raise HTTPException(status_code=400, detail=f"Messages are limited to {MAX_MESSAGE_CHARACTERS:,} characters.")
+    if not re.fullmatch(r"[A-Za-z0-9-]{8,128}", request.session_id):
+        raise HTTPException(status_code=400, detail="Invalid conversation identifier.")
+    if request.persona not in PERSONA_MODIFIERS:
+        request.persona = "default"
+
+
+def _conversation_identity(request: ChatRequest, guest_id: str) -> tuple[str, bool]:
+    is_owner = validate_owner_session(request.owner_session)
+    if is_owner:
+        return f"owner_{request.session_id}", True
+    return f"guest_{guest_id}_{request.session_id}", False
+
+
+def _system_prompt_for(request: ChatRequest, is_owner: bool) -> str:
+    prompt = MAVIS_SYSTEM_PROMPT if is_owner else GUEST_SYSTEM_PROMPT
+    if is_owner and PC_CONTROL_ENABLED:
+        prompt += "\n\nPC control is enabled for the owner. Only perform an action after a clear request."
+    return prompt + PERSONA_MODIFIERS.get(request.persona, "")
+
+
+def _search_context_for(request: ChatRequest, system_prompt: str) -> tuple[str, list[dict[str, str]]]:
+    if not request.web_search or _is_greeting(request.message):
+        return system_prompt, []
+    try:
+        results = web_search(request.message, max_results=6)
+    except Exception:
+        return system_prompt, []
+    sources = [{"title": result["title"], "url": result["url"]} for result in results]
+    if not results:
+        return system_prompt, sources
+    context = "\n\n".join(
+        f"Title: {result['title']}\nURL: {result['url']}\nSnippet: {result['snippet']}" for result in results
+    )
+    return f"{system_prompt}\n\nLive web results for the user's query:\n{context}", sources
 
 
 class UrlRequest(BaseModel):
@@ -305,16 +374,33 @@ class OwnerAuthRequest(BaseModel):
 class OwnerAuthResponse(BaseModel):
     authenticated: bool
     session_id: str
+    expires_in_seconds: int
+
+
+def _owner_auth_allowed(client_key: str) -> bool:
+    now = time.time()
+    attempts = [stamp for stamp in _owner_auth_failures.get(client_key, []) if now - stamp < OWNER_AUTH_WINDOW_SECONDS]
+    _owner_auth_failures[client_key] = attempts
+    return len(attempts) < OWNER_AUTH_MAX_ATTEMPTS
+
 
 @app.post("/auth/owner", response_model=OwnerAuthResponse)
-async def auth_owner(req: OwnerAuthRequest):
-    """Validate owner passkey. Returns a signed session token on success."""
+async def auth_owner(req: OwnerAuthRequest, request: Request):
+    """Issue a short-lived owner token after a rate-limited server-side passkey check."""
     if not OWNER_PASSKEY:
         raise HTTPException(status_code=503, detail="Owner access is not configured.")
-    if hmac.compare_digest(req.passkey, OWNER_PASSKEY):
-        session_id = create_owner_session()
-        return OwnerAuthResponse(authenticated=True, session_id=session_id)
-    raise HTTPException(status_code=403, detail="Invalid passkey")
+    client_key = request.client.host if request.client else "unknown"
+    if not _owner_auth_allowed(client_key):
+        raise HTTPException(status_code=429, detail="Too many owner sign-in attempts. Try again later.")
+    if not hmac.compare_digest(req.passkey, OWNER_PASSKEY):
+        _owner_auth_failures.setdefault(client_key, []).append(time.time())
+        raise HTTPException(status_code=403, detail="Invalid passkey")
+    _owner_auth_failures.pop(client_key, None)
+    return OwnerAuthResponse(
+        authenticated=True,
+        session_id=create_owner_session(),
+        expires_in_seconds=OWNER_SESSION_TTL_SECONDS,
+    )
 
 
 @app.post("/fetch-url")
@@ -414,8 +500,8 @@ async def upload_file(file: UploadFile = File(...)):
             os.remove(file_path)
 
 
-@app.post("/chat")
-async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous")):
+@app.post("/chat/legacy")
+async def legacy_chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous")):
     conv_id = request.session_id
     guest_id = x_guest_id or "anonymous"
 
@@ -572,8 +658,8 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="anonymous
 # STREAMING CHAT ENDPOINT (SSE)
 # ============================================================================
 
-@app.post("/chat/stream")
-async def chat_stream(request: ChatRequest):
+@app.post("/chat/stream/legacy")
+async def legacy_chat_stream(request: ChatRequest):
     """
     Server-Sent Events streaming endpoint.
     Returns a stream of text chunks as the AI generates them.
@@ -664,6 +750,121 @@ async def chat_stream(request: ChatRequest):
     return StreamingResponse(generate(), media_type="text/event-stream")
 
 
+@app.get("/usage")
+async def usage(x_guest_id: str = Header(default=""), x_mavis_session: str = Header(default="")):
+    if validate_owner_session(x_mavis_session):
+        return {"mode": "owner", "used": 0, "limit": None, "remaining": None}
+    guest_id = _validate_guest_id(x_guest_id)
+    return {"mode": "demo", **_guest_usage(guest_id)}
+
+
+@app.post("/chat")
+async def chat(request: ChatRequest, x_guest_id: str = Header(default="")):
+    _validate_chat_request(request)
+    guest_id = _validate_guest_id(x_guest_id)
+    conv_id, is_owner = _conversation_identity(request, guest_id)
+    if not is_owner and check_guest_limit(guest_id):
+        return {
+            "response": "You have reached the 10-message Mavis demo limit. Thanks for trying her.",
+            "title": None,
+            "conv_id": conv_id,
+            "limit_reached": True,
+            "usage": _guest_usage(guest_id),
+        }
+
+    if not request.incognito:
+        memory.create_conversation(conv_id, "New conversation", "owner" if is_owner else "guest", guest_id)
+    history = memory.get_conversation_messages(conv_id, MAX_HISTORY_MESSAGES) if not request.incognito else []
+    system_prompt = _system_prompt_for(request, is_owner)
+    search_prompt, sources = _search_context_for(request, system_prompt)
+    try:
+        assistant_message, provider = _call_text_with_fallback(
+            [{"role": "system", "content": search_prompt}] + history + [{"role": "user", "content": request.message}],
+            search_prompt,
+        )
+    except Exception:
+        traceback.print_exc()
+        raise HTTPException(status_code=503, detail="Mavis is temporarily unavailable. Please try again shortly.")
+
+    title = None
+    if not request.incognito:
+        first_turn = not history
+        memory.add_message(conv_id, "user", request.message)
+        memory.add_message(conv_id, "assistant", assistant_message)
+        if first_turn:
+            title = _generate_title(request.message, assistant_message)
+            memory.update_conversation_title(conv_id, title)
+
+    usage_data = None if is_owner else _guest_usage(guest_id)
+    if not is_owner:
+        increment_guest_count(guest_id)
+        usage_data = _guest_usage(guest_id)
+    return {
+        "response": assistant_message,
+        "title": title,
+        "conv_id": conv_id,
+        "sources": sources,
+        "provider": provider,
+        "usage": usage_data,
+    }
+
+
+@app.post("/chat/stream")
+async def chat_stream(request: ChatRequest, x_guest_id: str = Header(default="")):
+    from fastapi.responses import StreamingResponse
+
+    _validate_chat_request(request)
+    guest_id = _validate_guest_id(x_guest_id)
+    conv_id, is_owner = _conversation_identity(request, guest_id)
+
+    async def event_stream():
+        if not is_owner and check_guest_limit(guest_id):
+            yield "data: " + json.dumps({"type": "text", "content": "You have reached the 10-message Mavis demo limit. Thanks for trying her."}) + "\\n\\n"
+            yield "data: " + json.dumps({"type": "done", "limit_reached": True, "usage": _guest_usage(guest_id)}) + "\\n\\n"
+            return
+
+        if not request.incognito:
+            memory.create_conversation(conv_id, "New conversation", "owner" if is_owner else "guest", guest_id)
+        history = memory.get_conversation_messages(conv_id, MAX_HISTORY_MESSAGES) if not request.incognito else []
+        system_prompt = _system_prompt_for(request, is_owner)
+        search_prompt, sources = _search_context_for(request, system_prompt)
+        try:
+            response, provider = _call_text_with_fallback(
+                [{"role": "system", "content": search_prompt}] + history + [{"role": "user", "content": request.message}],
+                search_prompt,
+            )
+        except Exception:
+            traceback.print_exc()
+            yield "data: " + json.dumps({"type": "error", "content": "Mavis is temporarily unavailable. Please try again shortly."}) + "\\n\\n"
+            return
+
+        if response:
+            yield "data: " + json.dumps({"type": "text", "content": response}) + "\\n\\n"
+        if sources:
+            yield "data: " + json.dumps({"type": "sources", "content": sources}) + "\\n\\n"
+
+        title = None
+        if not request.incognito:
+            first_turn = not history
+            memory.add_message(conv_id, "user", request.message)
+            memory.add_message(conv_id, "assistant", response)
+            if first_turn:
+                title = _generate_title(request.message, response)
+                memory.update_conversation_title(conv_id, title)
+
+        usage_data = None
+        if not is_owner:
+            increment_guest_count(guest_id)
+            usage_data = _guest_usage(guest_id)
+        yield "data: " + json.dumps({"type": "done", "title": title, "conv_id": conv_id, "provider": provider, "usage": usage_data}) + "\\n\\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 class CreateFileRequest(BaseModel):
     content: str
     filename: str = "document"
@@ -724,8 +925,8 @@ async def create_file(req: CreateFileRequest):
     }
 
 
-@app.post("/chat-with-file")
-async def chat_with_file(
+@app.post("/chat-with-file/legacy")
+async def legacy_chat_with_file(
     message: str = Form(...),
     user_type: str = Form(...),
     session_id: str = Form("default"),
@@ -810,8 +1011,8 @@ async def chat_with_file(
     return {"response": assistant_message, "title": title, "conv_id": conv_id}
 
 
-@app.post("/chat-with-image")
-async def chat_with_image(
+@app.post("/chat-with-image/legacy")
+async def legacy_chat_with_image(
     message: str = Form(...),
     user_type: str = Form(...),
     session_id: str = Form("default"),
@@ -897,29 +1098,164 @@ async def chat_with_image(
     return {"response": assistant_message, "title": title, "conv_id": conv_id}
 
 
-@app.get("/conversations")
-async def list_conversations(x_guest_id: str = Header(default="anonymous")):
-    guest_id = x_guest_id or "anonymous"
+def _attachment_request(message: str, session_id: str, owner_session: str, incognito: bool, persona: str) -> ChatRequest:
+    request = ChatRequest(
+        message=message or "Please analyze this attachment.",
+        session_id=session_id,
+        owner_session=owner_session,
+        incognito=incognito,
+        persona=persona,
+        web_search=False,
+    )
+    _validate_chat_request(request)
+    return request
+
+
+@app.post("/chat-with-file")
+async def chat_with_file(
+    message: str = Form(""),
+    session_id: str = Form(...),
+    owner_session: str = Form(""),
+    incognito: bool = Form(False),
+    persona: str = Form("default"),
+    filename: str = Form(...),
+    file_content: str = Form(""),
+    x_guest_id: str = Header(default=""),
+):
+    request = _attachment_request(message, session_id, owner_session, incognito, persona)
+    guest_id = _validate_guest_id(x_guest_id)
+    if not filename or len(filename) > 200 or len(file_content) > 50_000:
+        raise HTTPException(status_code=400, detail="The attachment is invalid or too large to analyze.")
+    conv_id, is_owner = _conversation_identity(request, guest_id)
+    if not is_owner and check_guest_limit(guest_id):
+        return {"response": "You have reached the 10-message Mavis demo limit. Thanks for trying her.", "limit_reached": True, "usage": _guest_usage(guest_id)}
+
+    if not request.incognito:
+        memory.create_conversation(conv_id, "New conversation", "owner" if is_owner else "guest", guest_id)
+    history = memory.get_conversation_messages(conv_id, MAX_HISTORY_MESSAGES) if not request.incognito else []
+    system_prompt = _system_prompt_for(request, is_owner)
+    prompt = f"{request.message}\n\nAttached file ({filename}):\n{file_content}"
     try:
-        convs = memory.get_all_conversations_for_guest(guest_id)
-        return {"conversations": convs}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        response, provider = _call_text_with_fallback(
+            [{"role": "system", "content": system_prompt}] + history + [{"role": "user", "content": prompt}],
+            system_prompt,
+        )
+    except Exception:
+        traceback.print_exc()
+        raise HTTPException(status_code=503, detail="Mavis could not analyze that attachment right now.")
+
+    title = None
+    if not request.incognito:
+        first_turn = not history
+        memory.add_message(conv_id, "user", f"{request.message} [attached {filename}]")
+        memory.add_message(conv_id, "assistant", response)
+        if first_turn:
+            title = _generate_title(request.message, response)
+            memory.update_conversation_title(conv_id, title)
+    usage_data = None
+    if not is_owner:
+        increment_guest_count(guest_id)
+        usage_data = _guest_usage(guest_id)
+    return {"response": response, "title": title, "conv_id": conv_id, "provider": provider, "usage": usage_data}
+
+
+def _call_image_with_fallback(prompt: str, system_prompt: str, base64_image: str, mime: str) -> tuple[str, str]:
+    if len(base64_image) > 8_000_000:
+        raise HTTPException(status_code=400, detail="Images are limited to 6 MB.")
+    if GEMINI_API_KEY:
+        try:
+            response = requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}",
+                json={
+                    "system_instruction": {"parts": [{"text": system_prompt}]},
+                    "contents": [{"role": "user", "parts": [{"text": prompt}, {"inline_data": {"mime_type": mime, "data": base64_image}}]}],
+                },
+                timeout=60,
+            )
+            response.raise_for_status()
+            data = response.json()
+            parts = (data.get("candidates") or [{}])[0].get("content", {}).get("parts", [])
+            answer = "".join(part.get("text", "") for part in parts if isinstance(part, dict))
+            if answer:
+                return answer, "gemini"
+            raise RuntimeError("Gemini returned no usable image response")
+        except Exception as error:
+            if not _is_retryable_provider_error(error):
+                raise HTTPException(status_code=503, detail="Mavis could not analyze that image right now.") from error
+    try:
+        response = get_groq_client().chat.completions.create(
+            model=os.environ.get("GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct"),
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{base64_image}"}}]},
+            ],
+            max_tokens=1024,
+        )
+        return response.choices[0].message.content or "", "groq"
+    except Exception as error:
+        raise HTTPException(status_code=503, detail="Mavis could not analyze that image right now.") from error
+
+
+@app.post("/chat-with-image")
+async def chat_with_image(
+    message: str = Form(""),
+    session_id: str = Form(...),
+    owner_session: str = Form(""),
+    incognito: bool = Form(False),
+    persona: str = Form("default"),
+    base64_image: str = Form(...),
+    mime: str = Form(...),
+    x_guest_id: str = Header(default=""),
+):
+    request = _attachment_request(message, session_id, owner_session, incognito, persona)
+    guest_id = _validate_guest_id(x_guest_id)
+    if mime not in {"image/jpeg", "image/png", "image/webp", "image/gif"}:
+        raise HTTPException(status_code=400, detail="Unsupported image type.")
+    conv_id, is_owner = _conversation_identity(request, guest_id)
+    if not is_owner and check_guest_limit(guest_id):
+        return {"response": "You have reached the 10-message Mavis demo limit. Thanks for trying her.", "limit_reached": True, "usage": _guest_usage(guest_id)}
+
+    if not request.incognito:
+        memory.create_conversation(conv_id, "New conversation", "owner" if is_owner else "guest", guest_id)
+    history = memory.get_conversation_messages(conv_id, MAX_HISTORY_MESSAGES) if not request.incognito else []
+    system_prompt = _system_prompt_for(request, is_owner)
+    response, provider = _call_image_with_fallback(request.message, system_prompt, base64_image, mime)
+    title = None
+    if not request.incognito:
+        first_turn = not history
+        memory.add_message(conv_id, "user", f"{request.message} [shared an image]")
+        memory.add_message(conv_id, "assistant", response)
+        if first_turn:
+            title = _generate_title(request.message, response)
+            memory.update_conversation_title(conv_id, title)
+    usage_data = None
+    if not is_owner:
+        increment_guest_count(guest_id)
+        usage_data = _guest_usage(guest_id)
+    return {"response": response, "title": title, "conv_id": conv_id, "provider": provider, "usage": usage_data}
+
+
+@app.get("/conversations")
+async def list_conversations(x_guest_id: str = Header(default=""), x_mavis_session: str = Header(default="")):
+    if validate_owner_session(x_mavis_session):
+        return {"conversations": memory.get_all_owner_conversations()}
+    return {"conversations": memory.get_all_conversations_for_guest(_validate_guest_id(x_guest_id))}
 
 
 @app.get("/conversations/{conv_id}/messages")
-async def get_messages(conv_id: str, x_guest_id: str = Header(default="anonymous")):
-    guest_id = x_guest_id or "anonymous"
-    if not memory.conversation_belongs_to_guest(conv_id, guest_id):
+async def get_messages(conv_id: str, x_guest_id: str = Header(default=""), x_mavis_session: str = Header(default="")):
+    owner_access = validate_owner_session(x_mavis_session)
+    guest_access = memory.conversation_belongs_to_guest(conv_id, _validate_guest_id(x_guest_id))
+    if not ((owner_access and memory.conversation_is_owner(conv_id)) or guest_access):
         raise HTTPException(status_code=404, detail="Conversation not found")
-    messages = memory.get_conversation_messages(conv_id)
-    return {"messages": messages}
+    return {"messages": memory.get_conversation_messages(conv_id, MAX_HISTORY_MESSAGES)}
 
 
 @app.delete("/conversations/{conv_id}")
-async def delete_conv(conv_id: str, x_guest_id: str = Header(default="anonymous")):
-    guest_id = x_guest_id or "anonymous"
-    if not memory.conversation_belongs_to_guest(conv_id, guest_id):
+async def delete_conv(conv_id: str, x_guest_id: str = Header(default=""), x_mavis_session: str = Header(default="")):
+    owner_access = validate_owner_session(x_mavis_session)
+    guest_access = memory.conversation_belongs_to_guest(conv_id, _validate_guest_id(x_guest_id))
+    if not ((owner_access and memory.conversation_is_owner(conv_id)) or guest_access):
         raise HTTPException(status_code=404, detail="Conversation not found")
     memory.delete_conversation(conv_id)
     return {"status": "deleted"}
@@ -932,4 +1268,5 @@ async def health():
         "model_provider": DEFAULT_MODEL_PROVIDER,
         "groq_configured": client is not None,
         "gemini_configured": bool(GEMINI_API_KEY),
+        "guest_message_limit": GUEST_MESSAGE_LIMIT,
     }

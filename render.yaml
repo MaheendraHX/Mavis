@@ -8,18 +8,30 @@ services:
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
-      # Render requires a fully qualified version when set as an environment variable.
       - key: PYTHON_VERSION
         value: "3.12.3"
+      # Gemini is Mavis's primary provider. Groq is retained for transient or rate-limit fallback.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: "gemini-2.5-flash"
+      - key: MODEL_PROVIDER
+        value: "gemini"
       - key: GROQ_API_KEY
         sync: false
+      - key: GROQ_MODEL
+        value: "llama-3.3-70b-versatile"
       - key: ALLOWED_ORIGINS
         sync: false
+      - key: GUEST_MESSAGE_LIMIT
+        value: "10"
       - key: PC_CONTROL_ENABLED
         value: "false"
       - key: SERPER_API_KEY
         sync: false
       - key: OWNER_PASSKEY
         sync: false
+      - key: OWNER_SESSION_TTL_SECONDS
+        value: "43200"
       - key: SESSION_SECRET
         generateValue: true

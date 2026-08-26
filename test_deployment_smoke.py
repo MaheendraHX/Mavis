@@ -39,16 +39,12 @@ def run() -> None:
         headers={"X-Guest-ID": "deployment-smoke"},
     )
     assert stream.status_code == 200
-    assert "GROQ_API_KEY is not configured" in stream.text
+    assert "Mavis is temporarily unavailable" in stream.text
 
     class FakeCompletions:
         def create(self, **_kwargs):
-            return iter(
-                [
-                    SimpleNamespace(
-                        choices=[SimpleNamespace(delta=SimpleNamespace(content="Mavis is ready."))]
-                    )
-                ]
+            return SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content="Mavis is ready."))]
             )
 
     original_client = api.client
