@@ -140,14 +140,24 @@ def run() -> None:
 
         titled_guest_id = "12345678-1234-5678-1234-567812345678"
         title_text = "hi"
+        api.requests.post = lambda *args, **kwargs: FakeResponse(text="A Warm Welcome")
         titled_stream = test_client.post(
             "/chat/stream",
             json=stream_payload(title_text, incognito=False),
             headers={"X-Guest-ID": titled_guest_id},
         )
         assert titled_stream.status_code == 200
+        assert '"title": "A Warm Welcome"' in titled_stream.text
         titled_conversations = memory.get_all_conversations_for_guest(titled_guest_id)
-        assert titled_conversations[0]["title"] == title_text
+        assert titled_conversations[0]["title"] == "A Warm Welcome"
+
+        original_client = api.client
+        try:
+            api.client = None
+            api.requests.post = lambda *args, **kwargs: FakeResponse(status_code=500)
+            assert api._generate_title("hi", "Hello! How can I help?") == "Getting Started"
+        finally:
+            api.client = original_client
 
         retired_model_completions = RetiredModelFallbackCompletions()
         api.client = SimpleNamespace(chat=SimpleNamespace(completions=retired_model_completions))

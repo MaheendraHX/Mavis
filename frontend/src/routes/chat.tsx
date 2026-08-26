@@ -177,14 +177,22 @@ function ChatPage() {
     if (!incognito) saveThreads(next);
   };
 
-  const handleMessages = (id: string, messages: UIMessage[]) => {
+  const handleMessages = (
+    id: string,
+    messages: UIMessage[],
+    generatedTitle?: string,
+  ) => {
     setThreads((prev) => {
       const next = prev.map((thread) =>
         thread.id === id
           ? {
               ...thread,
               messages,
-              title: deriveTitle(messages, thread.title),
+              title:
+                generatedTitle?.trim() ||
+                (thread.title === "New chat"
+                  ? deriveTitle(messages, thread.title)
+                  : thread.title),
               updatedAt: Date.now(),
             }
           : thread,
@@ -362,7 +370,9 @@ function ChatPage() {
           <ChatSurface
             key={active.id}
             thread={active}
-            onMessages={(messages) => handleMessages(active.id, messages)}
+            onMessages={(messages, generatedTitle) =>
+              handleMessages(active.id, messages, generatedTitle)
+            }
             persona={persona}
             onPersonaChange={setPersona}
             webSearch={webSearch}
@@ -386,7 +396,7 @@ function ChatPage() {
 
 type ChatSurfaceProps = {
   thread: Thread;
-  onMessages: (messages: UIMessage[]) => void;
+  onMessages: (messages: UIMessage[], generatedTitle?: string) => void;
   persona: PersonaId;
   onPersonaChange: (value: PersonaId) => void;
   webSearch: boolean;
@@ -507,6 +517,7 @@ function ChatSurface({
     const decoder = new TextDecoder();
     let buffer = "";
     let answer = "";
+    let generatedTitle: string | undefined;
 
     const consumeEvent = (event: string) => {
       const line = event.split("\n").find((item) => item.startsWith("data: "));
@@ -514,6 +525,7 @@ function ChatSurface({
       const data = JSON.parse(line.slice(6)) as {
         type?: string;
         content?: string | { title?: string; url?: string }[];
+        title?: string | null;
         usage?: Usage | null;
       };
       if (data.type === "text" && typeof data.content === "string") {
@@ -530,8 +542,9 @@ function ChatSurface({
           onText(answer);
         }
       }
-      if (data.type === "done" && data.usage) {
-        onUsage(data.usage);
+      if (data.type === "done") {
+        if (data.title?.trim()) generatedTitle = data.title.trim();
+        if (data.usage) onUsage(data.usage);
       }
       if (data.type === "error") {
         throw new Error(
@@ -552,6 +565,7 @@ function ChatSurface({
       setStatus("streaming");
     }
     if (buffer.trim()) consumeEvent(buffer);
+    return generatedTitle;
   };
 
   const send = async (text: string, files: FileUIPart[]) => {
@@ -572,16 +586,18 @@ function ChatSurface({
       } as UIMessage,
     ]);
 
+    let generatedTitle: string | undefined;
     try {
       if (files[0]) {
         const result = await sendAttachment(text, files[0], history);
+        generatedTitle = result.title?.trim() || undefined;
         appendAssistantText(
           assistantId,
           result.response || "Mavis could not read that attachment.",
         );
         if (result.usage) onUsage(result.usage);
       } else {
-        await streamText(text, history, (content) =>
+        generatedTitle = await streamText(text, history, (content) =>
           appendAssistantText(assistantId, content),
         );
       }
@@ -595,7 +611,7 @@ function ChatSurface({
       toast.error(nextError.message);
     } finally {
       setStatus("ready");
-      onMessages(messagesRef.current);
+      onMessages(messagesRef.current, generatedTitle);
     }
   };
 

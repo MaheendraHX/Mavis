@@ -92,10 +92,12 @@ app.add_middleware(
 
 
 def _generate_title(message: str, assistant_message: str) -> str:
-    """Generate a short title without making titles a single-provider failure point."""
+    """Generate a useful short title without making titles a provider failure point."""
     instruction = (
-        "Generate a short conversation title in 3-5 words. Reply with only the title, "
-        "without quotes or terminal punctuation."
+        "Create a useful conversation title in 2-5 words from this first exchange. "
+        "Do not copy a greeting such as hi, hello, or hey as the title; if the exchange "
+        "is only a greeting, use a warm title such as Getting Started. Reply with only "
+        "the title, without quotes, markdown, or terminal punctuation."
     )
     try:
         title, _provider = _call_text_with_fallback(
@@ -105,8 +107,11 @@ def _generate_title(message: str, assistant_message: str) -> str:
             max_tokens=20,
         )
     except Exception:
-        title = " ".join(message.split()[:5])
-    return " ".join(title.replace('"', "").replace("'", "").split())[:40].strip()
+        title = "Getting Started" if _is_greeting(message) else " ".join(message.split()[:5])
+    cleaned = " ".join(title.replace('"', "").replace("'", "").split())[:40].strip()
+    if not cleaned or (_is_greeting(message) and _is_greeting(cleaned)):
+        return "Getting Started"
+    return cleaned
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
@@ -622,7 +627,7 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="")):
         memory.add_message(conv_id, "user", request.message)
         memory.add_message(conv_id, "assistant", assistant_message)
         if first_turn:
-            title = request.message
+            title = _generate_title(request.message, assistant_message)
             memory.update_conversation_title(conv_id, title)
 
     usage_data = None if is_owner else _guest_usage(guest_id)
@@ -680,7 +685,7 @@ async def chat_stream(request: ChatRequest, x_guest_id: str = Header(default="")
             memory.add_message(conv_id, "user", request.message)
             memory.add_message(conv_id, "assistant", response)
             if first_turn:
-                title = request.message
+                title = _generate_title(request.message, response)
                 memory.update_conversation_title(conv_id, title)
 
         usage_data = None
@@ -829,7 +834,7 @@ async def chat_with_file(
         memory.add_message(conv_id, "user", f"{request.message} [attached {filename}]")
         memory.add_message(conv_id, "assistant", response)
         if first_turn:
-            title = request.message
+            title = _generate_title(request.message, response)
             memory.update_conversation_title(conv_id, title)
     usage_data = None
     if not is_owner:
@@ -907,7 +912,7 @@ async def chat_with_image(
         memory.add_message(conv_id, "user", f"{request.message} [shared an image]")
         memory.add_message(conv_id, "assistant", response)
         if first_turn:
-            title = request.message
+            title = _generate_title(request.message, response)
             memory.update_conversation_title(conv_id, title)
     usage_data = None
     if not is_owner:
