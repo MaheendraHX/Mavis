@@ -120,11 +120,16 @@ def _generate_title(message: str, assistant_message: str) -> str:
     cleaned = " ".join(title.replace('"', "").replace("'", "").split())[:40].strip()
     lowered = cleaned.lower()
     looks_like_answer = len(cleaned.split()) > 7 or re.match(r"^(sure|here|of course|absolutely|hello there)[,! ]", lowered)
+    looks_like_code_response = (
+        cleaned.startswith("```")
+        or "assistant:" in lowered
+        or re.search(r"</?[a-z][^>]*>", cleaned, re.IGNORECASE) is not None
+    )
     looks_like_self_introduction = (
         "compound mini" in lowered
         or re.match(r"^(i['’]?m|i am|this is) .*\b(ai|system|model|assistant)\b", lowered)
     )
-    if not cleaned or looks_like_answer or looks_like_self_introduction or (_is_greeting(message) and _is_greeting(cleaned)):
+    if not cleaned or looks_like_answer or looks_like_code_response or looks_like_self_introduction or (_is_greeting(message) and _is_greeting(cleaned)):
         return _fallback_title(message)
     return cleaned
 

@@ -101,7 +101,8 @@ export function normalizeStoredTitle(thread: Thread): string {
   const isRawTitle = normalized === firstNormalized;
   const isGreetingTitle = /^(hi|hello|hey) (there )?(how can i (help|assist)|how may i help)/.test(normalized);
   const isAnswerTitle = /^(sure|here|of course|absolutely|hello there)[,! ]/i.test(title) || title.split(/\s+/).length > 7;
-  if (isRawTitle || isGreetingTitle || isAnswerTitle) return fallbackTitleFromMessage(firstText);
+  const isCodeResponseTitle = title.startsWith("```") || /assistant:/i.test(title) || /</.test(title);
+  if (isRawTitle || isGreetingTitle || isAnswerTitle || isCodeResponseTitle) return fallbackTitleFromMessage(firstText);
   return title || "New chat";
 }
 
