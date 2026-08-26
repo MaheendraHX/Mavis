@@ -58,16 +58,32 @@ export function deriveTitle(messages: UIMessage[], fallback = "New chat"): strin
   return text || fallback;
 }
 
+const TITLE_STOP_WORDS = new Set([
+  "a", "an", "the", "how", "can", "i", "to", "build", "better", "my", "what",
+  "is", "are", "do", "for", "with", "and", "of", "this", "that", "please", "me", "you",
+]);
+
+export function fallbackTitleFromMessage(message: string): string {
+  const normalized = message.replace(/[^a-zA-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  const lowered = normalized.toLowerCase();
+  if (["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "thanks", "thank you"].includes(lowered)) {
+    return "Getting Started";
+  }
+  const words = normalized.split(" ").filter((word) => !TITLE_STOP_WORDS.has(word.toLowerCase()));
+  const selected = (words.length ? words : normalized.split(" ")).slice(0, 4);
+  return selected.map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(" ") || "New chat";
+}
+
 export function normalizeStoredTitle(thread: Thread): string {
   const firstUser = thread.messages.find((m) => m.role === "user");
   const firstText = firstUser ? messageText(firstUser) : "";
   const title = thread.title.trim();
   const normalized = title.toLowerCase().replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
-  const isGreeting = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"].includes(firstText.toLowerCase().trim());
-  const isGreetingTitle = /^(hi|hello|hey) (there[ ,!]*)?(how can i (help|assist)|how may i help)/.test(normalized);
-  if (isGreeting && (title.toLowerCase().trim() === firstText.toLowerCase().trim() || isGreetingTitle)) {
-    return "Getting Started";
-  }
+  const firstNormalized = firstText.toLowerCase().replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+  const isRawTitle = normalized === firstNormalized;
+  const isGreetingTitle = /^(hi|hello|hey) (there )?(how can i (help|assist)|how may i help)/.test(normalized);
+  const isAnswerTitle = /^(sure|here|of course|absolutely|hello there)[,! ]/i.test(title) || title.split(/\s+/).length > 7;
+  if (isRawTitle || isGreetingTitle || isAnswerTitle) return fallbackTitleFromMessage(firstText);
   return title || "New chat";
 }
 

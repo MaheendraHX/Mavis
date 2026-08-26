@@ -91,13 +91,22 @@ app.add_middleware(
 )
 
 
+def _fallback_title(message: str) -> str:
+    normalized = re.sub(r"[^a-zA-Z0-9 ]", " ", message)
+    words = [word for word in re.sub(r"\s+", " ", normalized).strip().split() if word.lower() not in {"a", "an", "the", "how", "can", "i", "to", "build", "better", "my", "what", "is", "are", "do", "for", "with", "and", "of", "this", "that", "please", "me", "you"}]
+    if _is_greeting(message):
+        return "Getting Started"
+    return " ".join(word.capitalize() for word in (words or normalized.split())[:4]) or "New chat"
+
+
 def _generate_title(message: str, assistant_message: str) -> str:
     """Generate a useful short title without making titles a provider failure point."""
     instruction = (
         "Create a useful conversation title in 2-5 words from this first exchange. "
-        "Do not copy a greeting such as hi, hello, or hey as the title; if the exchange "
-        "is only a greeting, use a warm title such as Getting Started. Reply with only "
-        "the title, without quotes, markdown, or terminal punctuation."
+        "Do not copy a greeting such as hi, hello, or hey as the title, and do not "
+        "return an answer sentence. If the exchange is only a greeting, use a warm "
+        "title such as Getting Started. Reply with only the title, without quotes, "
+        "markdown, or terminal punctuation."
     )
     try:
         title, _provider = _call_text_with_fallback(
@@ -107,10 +116,12 @@ def _generate_title(message: str, assistant_message: str) -> str:
             max_tokens=20,
         )
     except Exception:
-        title = "Getting Started" if _is_greeting(message) else " ".join(message.split()[:5])
+        return _fallback_title(message)
     cleaned = " ".join(title.replace('"', "").replace("'", "").split())[:40].strip()
-    if not cleaned or (_is_greeting(message) and _is_greeting(cleaned)):
-        return "Getting Started"
+    lowered = cleaned.lower()
+    looks_like_answer = len(cleaned.split()) > 7 or re.match(r"^(sure|here|of course|absolutely|hello there)[,! ]", lowered)
+    if not cleaned or looks_like_answer or (_is_greeting(message) and _is_greeting(cleaned)):
+        return _fallback_title(message)
     return cleaned
 
 @app.exception_handler(HTTPException)
