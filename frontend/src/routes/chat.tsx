@@ -21,6 +21,7 @@ import {
   deriveTitle,
   loadThreads,
   newId,
+  normalizeStoredTitle,
   saveThreads,
   toModelHistory,
   type Thread,
@@ -125,7 +126,7 @@ function ChatPage() {
   useEffect(() => {
     const stored = loadThreads().map((thread) => ({
       ...thread,
-      title: deriveTitle(thread.messages, thread.title),
+      title: normalizeStoredTitle(thread),
     }));
     const initial = stored.length > 0 ? stored : [createThread()];
     setThreads(initial);

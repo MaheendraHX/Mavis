@@ -58,6 +58,19 @@ export function deriveTitle(messages: UIMessage[], fallback = "New chat"): strin
   return text || fallback;
 }
 
+export function normalizeStoredTitle(thread: Thread): string {
+  const firstUser = thread.messages.find((m) => m.role === "user");
+  const firstText = firstUser ? messageText(firstUser) : "";
+  const title = thread.title.trim();
+  const normalized = title.toLowerCase().replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+  const isGreeting = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"].includes(firstText.toLowerCase().trim());
+  const isGreetingTitle = /^(hi|hello|hey) (there[ ,!]*)?(how can i (help|assist)|how may i help)/.test(normalized);
+  if (isGreeting && (title.toLowerCase().trim() === firstText.toLowerCase().trim() || isGreetingTitle)) {
+    return "Getting Started";
+  }
+  return title || "New chat";
+}
+
 export function toModelHistory(
   messages: UIMessage[],
 ): { role: "user" | "assistant"; content: string }[] {
