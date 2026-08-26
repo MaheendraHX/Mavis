@@ -83,6 +83,8 @@ def run() -> None:
         )
         assert gemini_stream.status_code == 200
         assert "Gemini is ready." in gemini_stream.text
+        assert "\n\n" in gemini_stream.text
+        assert "\\n\\n" not in gemini_stream.text
         assert '"provider": "gemini"' in gemini_stream.text
         assert '"remaining": 9' in gemini_stream.text
 

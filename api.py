@@ -587,8 +587,8 @@ async def chat_stream(request: ChatRequest, x_guest_id: str = Header(default="")
 
     async def event_stream():
         if not is_owner and check_guest_limit(guest_id):
-            yield "data: " + json.dumps({"type": "text", "content": "You have reached the 10-message Mavis demo limit. Thanks for trying her."}) + "\\n\\n"
-            yield "data: " + json.dumps({"type": "done", "limit_reached": True, "usage": _guest_usage(guest_id)}) + "\\n\\n"
+            yield "data: " + json.dumps({"type": "text", "content": "You have reached the 10-message Mavis demo limit. Thanks for trying her."}) + "\n\n"
+            yield "data: " + json.dumps({"type": "done", "limit_reached": True, "usage": _guest_usage(guest_id)}) + "\n\n"
             return
 
         if not request.incognito:
@@ -603,13 +603,13 @@ async def chat_stream(request: ChatRequest, x_guest_id: str = Header(default="")
             )
         except Exception:
             traceback.print_exc()
-            yield "data: " + json.dumps({"type": "error", "content": "Mavis is temporarily unavailable. Please try again shortly."}) + "\\n\\n"
+            yield "data: " + json.dumps({"type": "error", "content": "Mavis is temporarily unavailable. Please try again shortly."}) + "\n\n"
             return
 
         if response:
-            yield "data: " + json.dumps({"type": "text", "content": response}) + "\\n\\n"
+            yield "data: " + json.dumps({"type": "text", "content": response}) + "\n\n"
         if sources:
-            yield "data: " + json.dumps({"type": "sources", "content": sources}) + "\\n\\n"
+            yield "data: " + json.dumps({"type": "sources", "content": sources}) + "\n\n"
 
         title = None
         if not request.incognito:
@@ -624,7 +624,7 @@ async def chat_stream(request: ChatRequest, x_guest_id: str = Header(default="")
         if not is_owner:
             increment_guest_count(guest_id)
             usage_data = _guest_usage(guest_id)
-        yield "data: " + json.dumps({"type": "done", "title": title, "conv_id": conv_id, "provider": provider, "usage": usage_data}) + "\\n\\n"
+        yield "data: " + json.dumps({"type": "done", "title": title, "conv_id": conv_id, "provider": provider, "usage": usage_data}) + "\n\n"
 
     return StreamingResponse(
         event_stream(),
