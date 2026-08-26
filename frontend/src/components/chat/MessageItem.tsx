@@ -15,6 +15,7 @@ import type { SearchResult } from "@/lib/mavis/search-types";
 
 type MessageItemProps = {
   message: UIMessage;
+  sources?: SearchResult[];
   onRegenerate?: () => void;
   canRegenerate?: boolean;
 };
@@ -53,6 +54,7 @@ function CopyButton({
 
 export function MessageItem({
   message,
+  sources: attachedSources = [],
   onRegenerate,
   canRegenerate,
 }: MessageItemProps) {
@@ -65,7 +67,7 @@ export function MessageItem({
 
   const files = message.parts.filter((part) => part.type === "file");
 
-  const sources: SearchResult[] = message.parts.flatMap((part) => {
+  const toolSources: SearchResult[] = message.parts.flatMap((part) => {
     if (
       part.type === "tool-web_search" &&
       part.state === "output-available" &&
@@ -78,6 +80,8 @@ export function MessageItem({
     }
     return [];
   });
+
+  const sources = [...new Map([...attachedSources, ...toolSources].map((source) => [source.url, source])).values()];
 
   const searching = message.parts.some(
     (part) =>
@@ -150,27 +154,35 @@ export function MessageItem({
             )}
 
             {sources.length > 0 && (
-              <ul className="mt-4 space-y-1.5 border-t border-line/70 pt-3">
-                {sources.map((source) => (
-                  <li
-                    key={source.url}
-                    className="flex items-start gap-2 text-left"
-                  >
-                    <LinkIcon className="mt-0.5 h-3 w-3 shrink-0 text-tan" />
+              <section className="mt-4 border-t border-line/70 pt-3" aria-label="Sources">
+                <div className="mb-2 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-ink">
+                  <LinkIcon className="h-3 w-3 text-sage" />
+                  Sources used
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {sources.map((source, index) => (
                     <a
+                      key={source.url}
                       href={source.url}
                       target="_blank"
                       rel="noreferrer noopener"
-                      className="text-xs text-muted-ink transition-colors hover:text-sage"
+                      className="group flex min-w-0 items-start gap-2 rounded-xl border border-line/70 bg-panel/60 px-2.5 py-2 text-left transition-colors hover:border-sage/60 hover:bg-panel-raised"
                     >
-                      {source.title}
-                      <span className="ml-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-tan">
-                        {source.domain}
+                      <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-sage/15 font-mono text-[9px] text-sage">
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-xs text-ink group-hover:text-sage">
+                          {source.title}
+                        </span>
+                        <span className="mt-0.5 block truncate font-mono text-[9px] uppercase tracking-[0.1em] text-muted-ink">
+                          {source.domain}
+                        </span>
                       </span>
                     </a>
-                  </li>
-                ))}
-              </ul>
+                  ))}
+                </div>
+              </section>
             )}
           </div>
         )}

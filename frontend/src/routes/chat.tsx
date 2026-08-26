@@ -16,6 +16,7 @@ import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { Composer } from "@/components/chat/Composer";
 import { MessageItem } from "@/components/chat/MessageItem";
 import type { PersonaId } from "@/lib/mavis/personas";
+import type { SearchResult } from "@/lib/mavis/search-types";
 import {
   createThread,
   deriveTitle,
@@ -423,6 +424,7 @@ function ChatSurface({
     "ready",
   );
   const [error, setError] = useState<Error | null>(null);
+  const [sourcesByMessage, setSourcesByMessage] = useState<Record<string, SearchResult[]>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef(thread.messages);
   const isBusy = status !== "ready";
@@ -443,6 +445,10 @@ function ChatSurface({
           : message,
       ),
     );
+  };
+
+  const setAssistantSources = (assistantId: string, sources: SearchResult[]) => {
+    setSourcesByMessage((current) => ({ ...current, [assistantId]: sources }));
   };
 
   const sendAttachment = async (
@@ -496,6 +502,7 @@ function ChatSurface({
     text: string,
     history: { role: "user" | "assistant"; content: string }[],
     onText: (content: string) => void,
+    onSources: (sources: SearchResult[]) => void,
   ) => {
     const response = await fetch(renderApiUrl("/chat/stream"), {
       method: "POST",
@@ -525,7 +532,7 @@ function ChatSurface({
       if (!line) return;
       const data = JSON.parse(line.slice(6)) as {
         type?: string;
-        content?: string | { title?: string; url?: string }[];
+        content?: string | { title?: string; url?: string; domain?: string }[];
         title?: string | null;
         usage?: Usage | null;
       };
@@ -534,14 +541,18 @@ function ChatSurface({
         onText(answer);
       }
       if (data.type === "sources" && Array.isArray(data.content)) {
-        const citations = data.content
-          .filter((source) => source.title && source.url)
-          .map((source) => `- [${source.title}](${source.url})`)
-          .join("\n");
-        if (citations) {
-          answer += `${answer ? "\n\n" : ""}Sources:\n${citations}`;
-          onText(answer);
-        }
+        const unique = new Map<string, SearchResult>();
+        data.content.forEach((source) => {
+          if (!source.title || !source.url || unique.has(source.url)) return;
+          let domain = source.domain || source.url;
+          try {
+            domain = new URL(source.url).hostname.replace(/^www\\./, "");
+          } catch {
+            /* keep the URL as a safe label */
+          }
+          unique.set(source.url, { title: source.title, url: source.url, domain, snippet: "" });
+        });
+        onSources([...unique.values()]);
       }
       if (data.type === "done") {
         if (data.title?.trim()) generatedTitle = data.title.trim();
@@ -598,8 +609,11 @@ function ChatSurface({
         );
         if (result.usage) onUsage(result.usage);
       } else {
-        generatedTitle = await streamText(text, history, (content) =>
-          appendAssistantText(assistantId, content),
+        generatedTitle = await streamText(
+          text,
+          history,
+          (content) => appendAssistantText(assistantId, content),
+          (sources) => setAssistantSources(assistantId, sources),
         );
       }
     } catch (requestError) {
@@ -692,6 +706,7 @@ function ChatSurface({
               <MessageItem
                 key={message.id}
                 message={message}
+                sources={sourcesByMessage[message.id]}
                 canRegenerate={!isBusy && message.id === lastAssistantId}
                 onRegenerate={regenerate}
               />

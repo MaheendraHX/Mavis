@@ -106,6 +106,7 @@ def run() -> None:
                 None,
                 {"title": "", "url": "https://invalid.example", "snippet": "Skip this."},
                 {"title": "Current result", "url": "https://example.com/current", "snippet": "Usable context."},
+                {"title": "Current result duplicate", "url": "https://example.com/current/", "snippet": "Duplicate URL."},
             ]
             web_request = api.ChatRequest(
                 message="What changed recently?",
@@ -115,6 +116,7 @@ def run() -> None:
             search_prompt, sources = api._search_context_for(web_request, "System prompt")
             assert "Current result" in search_prompt
             assert sources == [{"title": "Current result", "url": "https://example.com/current"}]
+            assert api._generate_title("Explain study routines", "I’m Compound Mini, an AI system built to help.") == "Study Routines"
         finally:
             api.web_search = original_web_search
 

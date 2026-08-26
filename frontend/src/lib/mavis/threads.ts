@@ -60,7 +60,7 @@ export function deriveTitle(messages: UIMessage[], fallback = "New chat"): strin
 
 const TITLE_STOP_WORDS = new Set([
   "a", "an", "the", "how", "can", "i", "to", "build", "better", "my", "what",
-  "is", "are", "do", "for", "with", "and", "of", "this", "that", "please", "me", "you",
+  "is", "are", "do", "for", "with", "and", "of", "this", "that", "please", "me", "you", "explain",
 ]);
 
 export function fallbackTitleFromMessage(message: string): string {

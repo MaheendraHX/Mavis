@@ -1,4 +1,5 @@
 import os
+import uuid
 from types import SimpleNamespace
 
 os.environ.pop("GROQ_API_KEY", None)
@@ -50,17 +51,18 @@ def run() -> None:
     original_client = api.client
     try:
         api.client = SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
+        configured_guest_id = f"configured-{uuid.uuid4()}"
         configured_stream = test_client.post(
             "/chat/stream",
             json={
                 "message": "Hello",
                 "user_type": "guest",
-                "session_id": "configured-smoke",
+                "session_id": configured_guest_id,
                 "incognito": True,
                 "web_search": False,
                 "model_name": "llama-3.1-8b-instant",
             },
-            headers={"X-Guest-ID": "configured-smoke"},
+            headers={"X-Guest-ID": configured_guest_id},
         )
         assert configured_stream.status_code == 200
         assert "Mavis is ready." in configured_stream.text

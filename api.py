@@ -93,7 +93,7 @@ app.add_middleware(
 
 def _fallback_title(message: str) -> str:
     normalized = re.sub(r"[^a-zA-Z0-9 ]", " ", message)
-    words = [word for word in re.sub(r"\s+", " ", normalized).strip().split() if word.lower() not in {"a", "an", "the", "how", "can", "i", "to", "build", "better", "my", "what", "is", "are", "do", "for", "with", "and", "of", "this", "that", "please", "me", "you"}]
+    words = [word for word in re.sub(r"\s+", " ", normalized).strip().split() if word.lower() not in {"a", "an", "the", "how", "can", "i", "to", "build", "better", "my", "what", "is", "are", "do", "for", "with", "and", "of", "this", "that", "please", "me", "you", "explain"}]
     if _is_greeting(message):
         return "Getting Started"
     return " ".join(word.capitalize() for word in (words or normalized.split())[:4]) or "New chat"
@@ -120,7 +120,11 @@ def _generate_title(message: str, assistant_message: str) -> str:
     cleaned = " ".join(title.replace('"', "").replace("'", "").split())[:40].strip()
     lowered = cleaned.lower()
     looks_like_answer = len(cleaned.split()) > 7 or re.match(r"^(sure|here|of course|absolutely|hello there)[,! ]", lowered)
-    if not cleaned or looks_like_answer or (_is_greeting(message) and _is_greeting(cleaned)):
+    looks_like_self_introduction = (
+        "compound mini" in lowered
+        or re.match(r"^(i['’]?m|i am|this is) .*\b(ai|system|model|assistant)\b", lowered)
+    )
+    if not cleaned or looks_like_answer or looks_like_self_introduction or (_is_greeting(message) and _is_greeting(cleaned)):
         return _fallback_title(message)
     return cleaned
 
@@ -447,6 +451,15 @@ def _search_context_for(request: ChatRequest, system_prompt: str) -> tuple[str, 
             if not title or not url:
                 continue
             results.append({"title": title, "url": url, "snippet": snippet})
+        unique_results: list[dict[str, str]] = []
+        seen_urls: set[str] = set()
+        for result in results:
+            normalized_url = result["url"].rstrip("/").lower()
+            if normalized_url in seen_urls:
+                continue
+            seen_urls.add(normalized_url)
+            unique_results.append(result)
+        results = unique_results[:6]
         sources = [{"title": result["title"], "url": result["url"]} for result in results]
         if not results:
             return system_prompt, sources
