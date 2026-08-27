@@ -17,6 +17,8 @@ import type {
   CodingVerificationResult,
 } from "@/lib/mavis/coding";
 
+import { CodePreview } from "./CodePreview";
+
 type WorkspaceFile = { path: string; size: number };
 
 type CodingWorkspaceProps = {
@@ -163,7 +165,7 @@ export function CodingWorkspace({
             <p className="mt-0.5 text-xs text-muted-ink">
               {workspaceKind === "temporary"
                 ? "Isolated upload · plan · approve · download. Nothing touches Mavis’s repository."
-                : "Read → plan → approve → verify. Mavis cannot write without your approval."}
+                : "Generate or inspect → review → approve → verify. Mavis cannot write without your approval."}
             </p>
           </div>
         </div>
@@ -188,7 +190,9 @@ export function CodingWorkspace({
         <div className="p-3">
           <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-2">
             <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-muted-ink">
-              Choose the files Mavis may inspect for this task
+              {workspaceKind === "mavis"
+                ? "Select files to edit, or select none to generate new code"
+                : "Select files to edit, or select none to generate a new file"}
             </p>
             <input
               value={filter}
@@ -235,7 +239,7 @@ export function CodingWorkspace({
           <p className="px-1 pt-2 text-xs leading-relaxed text-muted-ink">
             {workspaceKind === "temporary"
               ? "Choose only the uploaded files relevant to this change. Mavis will create a reviewable proposal, never modify your Mavis repository, and let you download the edited project afterward."
-              : "Start with the focused files shown here, or filter to reveal more. Pick the smallest relevant set, then describe the change below. Mavis will create a reviewable proposal instead of editing immediately."}
+              : "Need something from scratch? Select no files and describe what to build below. To change existing code, pick the smallest relevant set. Mavis will show the generated files and a reviewable proposal before writing anything."}
           </p>
         </div>
       )}
@@ -296,14 +300,30 @@ export function CodingWorkspace({
                   <div className="flex gap-2">
                     <FileCode2Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sage" />
                     <div className="min-w-0">
-                      <p className="truncate font-mono text-[11px] text-ink">
-                        {change.path}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="truncate font-mono text-[11px] text-ink">
+                          {change.path}
+                        </p>
+                        {change.operation === "create" && (
+                          <span className="rounded-full border border-mint/35 bg-mint/10 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.12em] text-sage">
+                            New file
+                          </span>
+                        )}
+                      </div>
                       <p className="mt-1 text-xs leading-relaxed text-muted-ink">
                         {change.explanation}
                       </p>
                     </div>
                   </div>
+                  {change.operation === "create" && change.content && (
+                    <div className="mt-2">
+                      <CodePreview
+                        code={change.content}
+                        language={change.path.split(".").pop() ?? "text"}
+                        tone="light"
+                      />
+                    </div>
+                  )}
                   {proposal.diffs.find((diff) => diff.path === change.path)
                     ?.diff && (
                     <button
@@ -358,7 +378,13 @@ export function CodingWorkspace({
                 ) : (
                   <CheckIcon className="h-4 w-4" />
                 )}
-                Approve & apply {proposal.proposedChanges.length} change
+                Approve &{" "}
+                {proposal.proposedChanges.some(
+                  (change) => change.operation === "create",
+                )
+                  ? "create / apply"
+                  : "apply"}{" "}
+                {proposal.proposedChanges.length} change
                 {proposal.proposedChanges.length === 1 ? "" : "s"}
               </button>
             )}

@@ -2,6 +2,7 @@ export type CodingChange = {
   path: string;
   operation: "replace" | "create";
   explanation: string;
+  content?: string;
 };
 
 export type CodingDiff = {
@@ -83,6 +84,10 @@ export function codingProposalFromApi(value: unknown): CodingProposal {
             typeof change.explanation === "string"
               ? change.explanation
               : "Focused code update.",
+          content:
+            change.operation === "create" && typeof change.content === "string"
+              ? change.content
+              : undefined,
         }))
     : [];
   const diffs = Array.isArray(data.diffs)

@@ -1015,8 +1015,8 @@ Return valid JSON only—no Markdown fence or prose before/after it—with this 
     {
       "path": "selected/project/file.ext",
       "operation": "replace",
-      "find": "an exact unique excerpt copied from the supplied file",
-      "replace": "the replacement text",
+      "find": "an exact unique excerpt only for replace; empty for create",
+      "replace": "the replacement or complete new-file contents",
       "explanation": "why this focused edit is needed"
     }
   ],
@@ -1024,9 +1024,9 @@ Return valid JSON only—no Markdown fence or prose before/after it—with this 
 }
 
 Rules:
-- Make no more than six focused changes. Use only the supplied selected paths.
-- Initial Coding Mode supports only operation "replace" in existing selected files.
-  A replace change must contain exact text that occurs once in the source file.
+- Make no more than six focused changes. Replace only supplied selected paths; create may use a new safe project-relative source path.
+- Use operation "create" when the user asks for new code or a new file. A create change must have an empty find value and complete, self-contained file contents in replace.
+- A replace change must contain exact text that occurs once in the supplied file.
 - If the user asks only to understand, review, or explain the selected files, return no changes and provide the explanation in answer.
 - If requirements are unclear or the requested change is unsafe, return no changes and
   use questions to ask for clarification.
@@ -1052,8 +1052,8 @@ Return valid JSON only—no Markdown fence or prose before/after it—with this 
     {
       "path": "selected/uploaded/file.ext",
       "operation": "replace",
-      "find": "an exact unique excerpt copied from the supplied file",
-      "replace": "the replacement text",
+      "find": "an exact unique excerpt only for replace; empty for create",
+      "replace": "the replacement or complete new-file contents",
       "explanation": "why this focused edit is needed"
     }
   ],
@@ -1061,8 +1061,8 @@ Return valid JSON only—no Markdown fence or prose before/after it—with this 
 }
 
 Rules:
-- Make no more than six focused changes. Use only the supplied selected paths.
-- Only operation "replace" is supported; never create, delete, rename, or move files.
+- Make no more than six focused changes. Replace only supplied selected paths; create may use a new safe project-relative source path.
+- Use operation "create" when the user asks for new code or a new file. A create change must have an empty find value and complete, self-contained file contents in replace.
 - A replace change must contain exact text that occurs once in the supplied file.
 - If requirements are unclear or a change is unsafe, return no changes and use questions.
 - Never request, reveal, or include secrets or environment variable values.
@@ -1075,7 +1075,7 @@ class CodingTaskRequest(BaseModel):
     message: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARACTERS)
     session_id: str = Field(min_length=8, max_length=128)
     owner_session: str = Field(min_length=1, max_length=256)
-    files: list[str] = Field(min_length=1, max_length=coding_workspace.MAX_SELECTED_FILES)
+    files: list[str] = Field(default_factory=list, max_length=coding_workspace.MAX_SELECTED_FILES)
     history: list[dict[str, str]] = Field(default_factory=list)
 
 
@@ -1205,6 +1205,7 @@ def _normalize_coding_proposal(
     raw: dict[str, Any],
     context: list[dict[str, str]],
     allowed_verification: set[str] | None = None,
+    create_path_validator: Any | None = None,
 ) -> dict[str, Any]:
     selected = {item["path"]: item["content"] for item in context}
     summary = str(raw.get("summary") or "Mavis reviewed the selected project files.").strip()[:600]
@@ -1225,14 +1226,26 @@ def _normalize_coding_proposal(
         find = str(candidate.get("find") or "")
         replace = str(candidate.get("replace") or "")
         explanation = str(candidate.get("explanation") or "Focused code update.").strip()[:500]
-        if path not in selected or operation != "replace" or not find:
-            continue
         if len(find.encode("utf-8")) > coding_workspace.MAX_FILE_BYTES or len(replace.encode("utf-8")) > coding_workspace.MAX_FILE_BYTES:
             continue
-        before = selected[path]
-        if before.count(find) != 1:
+        if operation == "create":
+            if not create_path_validator or find or not replace.strip():
+                continue
+            try:
+                path = str(create_path_validator(path))
+            except (ValueError, TypeError):
+                continue
+            before = ""
+            after = replace
+        elif operation == "replace":
+            if path not in selected or not find:
+                continue
+            before = selected[path]
+            if before.count(find) != 1:
+                continue
+            after = before.replace(find, replace, 1)
+        else:
             continue
-        after = before.replace(find, replace, 1)
         diff = "".join(
             difflib.unified_diff(
                 before.splitlines(keepends=True),
@@ -1282,6 +1295,7 @@ def _public_coding_proposal(record: dict[str, Any]) -> dict[str, Any]:
             "path": change["path"],
             "operation": change["operation"],
             "explanation": change["explanation"],
+            **({"content": change["replace"]} if change["operation"] == "create" else {}),
         }
         for change in record["changes"]
     ]
@@ -1346,14 +1360,15 @@ async def propose_temporary_project_change(project_id: str, request: TemporaryPr
     if len(task) > MAX_CODING_TASK_CHARACTERS:
         raise HTTPException(status_code=400, detail="Coding tasks are limited to 4,000 characters so Mavis can keep the plan focused.")
     try:
-        context = temporary_project_workspace.read_project_context(project_id, request.files)
+        context = temporary_project_workspace.read_project_context(project_id, request.files) if request.files else []
     except temporary_project_workspace.TemporaryProjectError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
     file_context = "\n\n".join(
         f"--- UPLOADED FILE: {item['path']} ---\n{item['content']}\n--- END FILE ---" for item in context
     )
-    prompt = f"User's temporary-project coding task:\n{task}\n\nSelected uploaded files:\n{file_context}"
+    selected_context = file_context or "(No existing uploaded files were selected. Create a new self-contained source file for the request.)"
+    prompt = f"User's temporary-project coding task:\n{task}\n\nSelected uploaded files:\n{selected_context}"
     try:
         model_response, provider = _call_text_with_fallback(
             [{"role": "system", "content": TEMPORARY_PROJECT_SYSTEM_PROMPT}]
@@ -1368,6 +1383,7 @@ async def propose_temporary_project_change(project_id: str, request: TemporaryPr
             _clean_json_response(model_response),
             context,
             {"project_scan", "json_validate"},
+            lambda path: temporary_project_workspace.validate_new_file_path(project_id, path),
         )
     except ValueError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
@@ -1530,14 +1546,15 @@ async def propose_coding_change(request: CodingTaskRequest):
     if len(task) > MAX_CODING_TASK_CHARACTERS:
         raise HTTPException(status_code=400, detail="Coding tasks are limited to 4,000 characters so Mavis can keep the plan focused.")
     try:
-        context = coding_workspace.read_workspace_context(request.files)
+        context = coding_workspace.read_workspace_context(request.files) if request.files else []
     except coding_workspace.WorkspaceError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
     file_context = "\n\n".join(
         f"--- FILE: {item['path']} ---\n{item['content']}\n--- END FILE ---" for item in context
     )
-    prompt = f"User's coding task:\n{task}\n\nSelected workspace files:\n{file_context}"
+    selected_context = file_context or "(No existing project files were selected. Create a new self-contained source file for the request.)"
+    prompt = f"User's coding task:\n{task}\n\nSelected workspace files:\n{selected_context}"
     try:
         model_response, provider = _call_text_with_fallback(
             [{"role": "system", "content": CODING_SYSTEM_PROMPT}]
@@ -1548,7 +1565,11 @@ async def propose_coding_change(request: CodingTaskRequest):
             max_tokens=3_500,
             json_mode=True,
         )
-        proposal = _normalize_coding_proposal(_clean_json_response(model_response), context)
+        proposal = _normalize_coding_proposal(
+            _clean_json_response(model_response),
+            context,
+            create_path_validator=coding_workspace.validate_new_file_path,
+        )
     except ValueError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
     except Exception as error:
@@ -1567,12 +1588,7 @@ async def propose_coding_change(request: CodingTaskRequest):
         "provider": provider,
     }
     _coding_proposals[proposal_id] = record
-    public_record = {key: value for key, value in record.items() if key not in {"owner_key", "created_at", "changes"}}
-    public_record["proposed_changes"] = [
-        {"path": change["path"], "operation": change["operation"], "explanation": change["explanation"]}
-        for change in record["changes"]
-    ]
-    return public_record
+    return _public_coding_proposal(record)
 
 
 @app.post("/coding/apply")

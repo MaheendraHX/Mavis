@@ -8,6 +8,7 @@ access.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -163,6 +164,14 @@ def read_workspace_context(paths: Iterable[str]) -> list[dict[str, str]]:
     return context
 
 
+def validate_new_file_path(value: str) -> str:
+    """Validate a new workspace path without writing to it."""
+    path = resolve_workspace_file(value, must_exist=False)
+    if path.exists():
+        raise WorkspaceError("That project file already exists. Ask Mavis to replace it instead.")
+    return path.relative_to(WORKSPACE_ROOT).as_posix()
+
+
 def _checkpoint_root() -> Path:
     return WORKSPACE_ROOT / ".mavis-checkpoints"
 
@@ -178,14 +187,15 @@ def _checkpoint_path(checkpoint_id: str, relative_path: str) -> Path:
 
 
 def apply_changes(changes: list[dict[str, str]]) -> dict[str, object]:
-    """Apply exact-match replacements with a checkpoint and all-or-revert writes."""
+    """Apply reviewed replacements or new files with a checkpoint and all-or-revert writes."""
     if not changes:
         raise WorkspaceError("The proposal contains no edits to apply.")
     if len(changes) > 12:
         raise WorkspaceError("A proposal may change at most 12 files.")
 
     checkpoint_id = uuid.uuid4().hex
-    staged: list[tuple[Path, str, str]] = []
+    staged: list[tuple[Path, str | None, str]] = []
+    created_paths: list[str] = []
     seen_paths: set[str] = set()
     for change in changes:
         path_value = str(change.get("path") or "")
@@ -195,24 +205,39 @@ def apply_changes(changes: list[dict[str, str]]) -> dict[str, object]:
         if path_value in seen_paths:
             raise WorkspaceError("Each file may be changed only once per proposal.")
         seen_paths.add(path_value)
+        if operation == "create":
+            path = resolve_workspace_file(path_value, must_exist=False)
+            if path.exists():
+                raise WorkspaceError("That new-file path is no longer available. Refresh the proposal.")
+            if find or not replace.strip():
+                raise WorkspaceError("A new file must contain code and cannot include replacement text to find.")
+            if len(replace.encode("utf-8")) > MAX_FILE_BYTES:
+                raise WorkspaceError("The generated file would be too large for Coding Mode.")
+            staged.append((path, None, replace))
+            created_paths.append(path.relative_to(WORKSPACE_ROOT).as_posix())
+            continue
         if operation != "replace":
-            raise WorkspaceError("Initial Coding Mode supports replacements in existing source files only.")
+            raise WorkspaceError("Coding Mode supports only reviewed replacements or new source files.")
         path = resolve_workspace_file(path_value, must_exist=True)
         original = path.read_text(encoding="utf-8", errors="replace")
-        if not find:
-            raise WorkspaceError("A replacement proposal must include the original exact text.")
-        occurrences = original.count(find)
-        if occurrences != 1:
+        if not find or original.count(find) != 1:
             raise WorkspaceError("The proposed original text no longer matches the workspace exactly. Refresh the proposal.")
         updated = original.replace(find, replace, 1)
         if len(updated.encode("utf-8")) > MAX_FILE_BYTES:
             raise WorkspaceError("The resulting file would be too large for Coding Mode.")
         staged.append((path, original, updated))
 
+    checkpoint_root = _checkpoint_root() / checkpoint_id
     for path, original, _updated in staged:
+        if original is None:
+            continue
         backup = _checkpoint_path(checkpoint_id, path.relative_to(WORKSPACE_ROOT).as_posix())
         backup.parent.mkdir(parents=True, exist_ok=True)
         backup.write_text(original, encoding="utf-8")
+    checkpoint_root.mkdir(parents=True, exist_ok=True)
+    (checkpoint_root / "manifest.json").write_text(
+        json.dumps({"created_files": created_paths}), encoding="utf-8"
+    )
 
     temporary_files: list[tuple[Path, Path]] = []
     try:
@@ -225,10 +250,13 @@ def apply_changes(changes: list[dict[str, str]]) -> dict[str, object]:
             temporary.replace(path)
     except OSError as error:
         for _path, temporary in temporary_files:
-            if temporary.exists():
-                temporary.unlink(missing_ok=True)
+            temporary.unlink(missing_ok=True)
         for path, original, _updated in staged:
-            path.write_text(original, encoding="utf-8")
+            if original is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(original, encoding="utf-8")
         raise WorkspaceError("Mavis could not safely apply every change, so the workspace was restored.") from error
 
     return {
@@ -240,10 +268,22 @@ def apply_changes(changes: list[dict[str, str]]) -> dict[str, object]:
 def rollback_checkpoint(checkpoint_id: str, changed_files: Iterable[str]) -> list[str]:
     if not checkpoint_id or not checkpoint_id.isalnum():
         raise WorkspaceError("Invalid checkpoint identifier.")
+    manifest_path = _checkpoint_root() / checkpoint_id / "manifest.json"
+    created_paths: set[str] = set()
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        created_paths = {str(value) for value in manifest.get("created_files", [])}
+    except (OSError, ValueError, AttributeError):
+        pass
     restored: list[str] = []
     for value in changed_files:
-        path = resolve_workspace_file(str(value), must_exist=False)
-        backup = _checkpoint_path(checkpoint_id, str(value))
+        path_value = str(value)
+        path = resolve_workspace_file(path_value, must_exist=False)
+        if path_value in created_paths:
+            path.unlink(missing_ok=True)
+            restored.append(path.relative_to(WORKSPACE_ROOT).as_posix())
+            continue
+        backup = _checkpoint_path(checkpoint_id, path_value)
         if not backup.exists():
             raise WorkspaceError("The requested checkpoint is no longer available.")
         path.parent.mkdir(parents=True, exist_ok=True)

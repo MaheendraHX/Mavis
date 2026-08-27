@@ -243,6 +243,15 @@ def read_project_context(project_id: str, paths: Iterable[str]) -> list[dict[str
     return context
 
 
+def validate_new_file_path(project_id: str, value: str) -> str:
+    """Validate a new temporary-project path without writing to it."""
+    root = _project_directory(project_id)
+    path = _resolve_file(project_id, value, must_exist=False)
+    if path.exists():
+        raise TemporaryProjectError("That uploaded project file already exists. Ask Mavis to replace it instead.")
+    return path.relative_to(root).as_posix()
+
+
 def _checkpoint_root(project_id: str) -> Path:
     return _project_directory(project_id) / ".mavis-checkpoints"
 
@@ -267,7 +276,8 @@ def apply_changes(project_id: str, changes: list[dict[str, str]]) -> dict[str, o
 
     root = _project_directory(project_id)
     checkpoint_id = uuid.uuid4().hex
-    staged: list[tuple[Path, str, str]] = []
+    staged: list[tuple[Path, str | None, str]] = []
+    created_paths: list[str] = []
     seen: set[str] = set()
     for change in changes:
         path_value = str(change.get("path") or "")
@@ -277,8 +287,19 @@ def apply_changes(project_id: str, changes: list[dict[str, str]]) -> dict[str, o
         if path_value in seen:
             raise TemporaryProjectError("Each file may be changed only once per proposal.")
         seen.add(path_value)
+        if operation == "create":
+            path = _resolve_file(project_id, path_value, must_exist=False)
+            if path.exists():
+                raise TemporaryProjectError("That new-file path is no longer available. Refresh the proposal.")
+            if find or not replace.strip():
+                raise TemporaryProjectError("A new file must contain code and cannot include replacement text to find.")
+            if len(replace.encode("utf-8")) > MAX_FILE_BYTES:
+                raise TemporaryProjectError("The generated file would be too large for Temporary Project Mode.")
+            staged.append((path, None, replace))
+            created_paths.append(path.relative_to(root).as_posix())
+            continue
         if operation != "replace":
-            raise TemporaryProjectError("Temporary Project Mode supports replacements in uploaded files only.")
+            raise TemporaryProjectError("Temporary Project Mode supports only reviewed replacements or new source files.")
         path = _resolve_file(project_id, path_value, must_exist=True)
         original = path.read_text(encoding="utf-8", errors="replace")
         if not find or original.count(find) != 1:
@@ -287,15 +308,22 @@ def apply_changes(project_id: str, changes: list[dict[str, str]]) -> dict[str, o
         if len(updated.encode("utf-8")) > MAX_FILE_BYTES:
             raise TemporaryProjectError("The resulting file would be too large for Temporary Project Mode.")
         staged.append((path, original, updated))
-
+    checkpoint_root = _checkpoint_root(project_id) / checkpoint_id
     for path, original, _updated in staged:
+        if original is None:
+            continue
         backup = _checkpoint_path(project_id, checkpoint_id, path.relative_to(root).as_posix())
         backup.parent.mkdir(parents=True, exist_ok=True)
         backup.write_text(original, encoding="utf-8")
+    checkpoint_root.mkdir(parents=True, exist_ok=True)
+    (checkpoint_root / "manifest.json").write_text(
+        json.dumps({"created_files": created_paths}), encoding="utf-8"
+    )
 
     temporary_files: list[tuple[Path, Path]] = []
     try:
         for path, _original, updated in staged:
+            path.parent.mkdir(parents=True, exist_ok=True)
             temporary = path.with_suffix(path.suffix + ".mavis-tmp")
             temporary.write_text(updated, encoding="utf-8")
             temporary_files.append((path, temporary))
@@ -305,7 +333,11 @@ def apply_changes(project_id: str, changes: list[dict[str, str]]) -> dict[str, o
         for _path, temporary in temporary_files:
             temporary.unlink(missing_ok=True)
         for path, original, _updated in staged:
-            path.write_text(original, encoding="utf-8")
+            if original is None:
+                path.unlink(missing_ok=True)
+            else:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(original, encoding="utf-8")
         raise TemporaryProjectError("Mavis could not safely apply every temporary-project change, so the upload was restored.") from error
 
     return {
@@ -316,16 +348,29 @@ def apply_changes(project_id: str, changes: list[dict[str, str]]) -> dict[str, o
 
 def rollback_checkpoint(project_id: str, checkpoint_id: str, changed_files: Iterable[str]) -> list[str]:
     root = _project_directory(project_id)
+    manifest_path = _checkpoint_root(project_id) / checkpoint_id / "manifest.json"
+    created_paths: set[str] = set()
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        created_paths = {str(value) for value in manifest.get("created_files", [])}
+    except (OSError, ValueError, AttributeError):
+        pass
     restored: list[str] = []
     for value in changed_files:
-        path = _resolve_file(project_id, str(value), must_exist=False)
-        backup = _checkpoint_path(project_id, checkpoint_id, str(value))
+        path_value = str(value)
+        path = _resolve_file(project_id, path_value, must_exist=False)
+        if path_value in created_paths:
+            path.unlink(missing_ok=True)
+            restored.append(path.relative_to(root).as_posix())
+            continue
+        backup = _checkpoint_path(project_id, checkpoint_id, path_value)
         if not backup.exists():
             raise TemporaryProjectError("The requested checkpoint is no longer available.")
         path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(backup, path)
         restored.append(path.relative_to(root).as_posix())
     return restored
+
 
 
 def verify_project(project_id: str, command_id: str) -> dict[str, object]:

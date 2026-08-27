@@ -667,13 +667,6 @@ function ChatSurface({
     history: { role: "user" | "assistant"; content: string }[],
   ): Promise<CodingProposal> => {
     if (!ownerSession) throw new Error("Coding Mode requires owner access.");
-    if (codingState.selectedFiles.length === 0) {
-      throw new Error(
-        codingState.workspace === "temporary"
-          ? "Upload a temporary project and choose at least one file before asking Mavis to plan a code change."
-          : "Choose at least one project file before asking Mavis to plan a code change.",
-      );
-    }
     const temporaryProjectId =
       codingState.workspace === "temporary"
         ? codingState.temporaryProject?.projectId
@@ -931,10 +924,17 @@ function ChatSurface({
         if (proposal.answer && proposal.proposedChanges.length === 0) {
           appendAssistantText(assistantId, proposal.answer);
         } else {
+          const createCount = proposal.proposedChanges.filter(
+            (change) => change.operation === "create",
+          ).length;
           const changeLabel =
-            proposal.proposedChanges.length === 1
-              ? "1 reviewable change"
-              : `${proposal.proposedChanges.length} reviewable changes`;
+            createCount === proposal.proposedChanges.length
+              ? createCount === 1
+                ? "1 reviewable new file"
+                : `${createCount} reviewable new files`
+              : proposal.proposedChanges.length === 1
+                ? "1 reviewable change"
+                : `${proposal.proposedChanges.length} reviewable changes`;
           appendAssistantText(
             assistantId,
             `${proposal.summary}\n\n**Coding plan ready.** I prepared ${changeLabel}. Review the plan and diff in the Coding Mode panel, then approve it only if it looks right.`,

@@ -15,6 +15,7 @@ type PreviewKind = "html" | "css" | "javascript" | "react";
 type CodePreviewProps = {
   code: string;
   language: string;
+  tone?: "dark" | "light";
 };
 
 const PREVIEWABLE_LANGUAGES: Record<string, PreviewKind> = {
@@ -191,7 +192,11 @@ function buildPreviewDocument(kind: PreviewKind, code: string) {
   }
 }
 
-export function CodePreview({ code, language }: CodePreviewProps) {
+export function CodePreview({
+  code,
+  language,
+  tone = "dark",
+}: CodePreviewProps) {
   const [open, setOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const kind = useMemo(() => previewKindFor(language, code), [code, language]);
@@ -207,7 +212,7 @@ export function CodePreview({ code, language }: CodePreviewProps) {
       <DialogTrigger asChild>
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-cream/70 transition-colors hover:text-mint"
+          className={`inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors ${tone === "light" ? "text-muted-ink hover:text-sage" : "text-cream/70 hover:text-mint"}`}
           title="Open an isolated live preview"
         >
           <EyeIcon className="h-3 w-3" /> Preview

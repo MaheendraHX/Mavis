@@ -60,8 +60,8 @@ export function Composer({
       event.target.value = "";
       toast(
         codingWorkspace === "temporary"
-          ? "Temporary Project Mode uses the uploaded files selected above."
-          : "Coding Mode uses the project files selected above. Turn off Code to attach external files.",
+          ? "Select uploaded files to edit, or select none and ask Mavis to generate a new file."
+          : "Select project files to edit, or select none and ask Mavis to generate new code. Turn off Code to attach external files.",
       );
       return;
     }
@@ -145,8 +145,8 @@ export function Composer({
           placeholder={
             codingMode
               ? codingWorkspace === "temporary"
-                ? "Describe the change Mavis should plan for the selected uploaded files…"
-                : "Describe the change Mavis should plan for the selected project files…"
+                ? "Describe a new file to generate, or a change for selected uploads…"
+                : "Describe new code to generate, or a change for selected project files…"
               : "Ask anything, paste a link, or attach a file…"
           }
           className="scroll-slim w-full resize-none bg-transparent px-3 py-2.5 text-[15px] leading-relaxed text-ink outline-none placeholder:text-muted-ink/70"
@@ -261,8 +261,8 @@ export function Composer({
       <p className="mx-auto mt-3 max-w-3xl text-center font-mono text-[9px] uppercase tracking-[0.18em] text-muted-ink">
         {codingMode
           ? codingWorkspaceOpen
-            ? "Select files in the workspace above, then send your request"
-            : "Open the workspace to choose files before asking Mavis to make a coding plan"
+            ? "Describe what to build, or select files in the workspace above to edit them"
+            : "Open the workspace to select files for an edit, or just describe new code to generate"
           : "Mavis can make mistakes · Enter to send · Shift + Enter for a new line"}
       </p>
     </div>

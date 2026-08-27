@@ -39,7 +39,29 @@ def run() -> None:
         gemini_requests: list[dict] = []
 
         def fake_post(*_args, **kwargs):
-            gemini_requests.append(kwargs.get("json", {}))
+            request_json = kwargs.get("json", {})
+            gemini_requests.append(request_json)
+            if "Generate a new profile card" in json.dumps(request_json):
+                return FakeResponse(
+                    json.dumps(
+                        {
+                            "summary": "Create a standalone profile card.",
+                            "answer": "",
+                            "plan": ["Create the requested HTML page."],
+                            "questions": [],
+                            "changes": [
+                                {
+                                    "path": "frontend/src/generated/profile-card.html",
+                                    "operation": "create",
+                                    "find": "",
+                                    "replace": "<main><h1>Mavis profile</h1></main>\n",
+                                    "explanation": "Add the requested standalone previewable page.",
+                                }
+                            ],
+                            "verification": ["frontend_build"],
+                        }
+                    )
+                )
             return FakeResponse(
                 json.dumps(
                     {
@@ -173,6 +195,44 @@ def run() -> None:
             )
             assert rolled_back.status_code == 200
             assert source.read_text(encoding="utf-8") == "export const greeting = 'hello';\n"
+
+            generated_response = client.post(
+                "/coding/propose",
+                json={
+                    "message": "Generate a new profile card in a separate HTML file.",
+                    "session_id": "11111111-2222-3333-4444-555555555555",
+                    "owner_session": owner_session,
+                    "files": [],
+                    "history": [],
+                },
+            )
+            assert generated_response.status_code == 200
+            generated = generated_response.json()
+            assert generated["proposed_changes"][0]["operation"] == "create"
+            assert generated["proposed_changes"][0]["path"] == "frontend/src/generated/profile-card.html"
+            assert "Mavis profile" in generated["proposed_changes"][0]["content"]
+            assert "+<main>" in generated["diffs"][0]["diff"]
+            generated_path = workspace / "frontend" / "src" / "generated" / "profile-card.html"
+            assert not generated_path.exists()
+            generated_apply = client.post(
+                "/coding/apply",
+                json={"proposal_id": generated["proposal_id"], "confirm": True},
+                headers=headers,
+            )
+            assert generated_apply.status_code == 200
+            assert generated_path.read_text(encoding="utf-8") == "<main><h1>Mavis profile</h1></main>\n"
+            generated_rollback = client.post(
+                "/coding/rollback",
+                json={"proposal_id": generated["proposal_id"], "confirm": True},
+                headers=headers,
+            )
+            assert generated_rollback.status_code == 200
+            assert not generated_path.exists()
+            try:
+                coding_workspace.validate_new_file_path(".env")
+                raise AssertionError("Generated secret files must be blocked")
+            except coding_workspace.WorkspaceError:
+                pass
         finally:
             coding_workspace.WORKSPACE_ROOT = original_root
             api.requests.post = original_post
