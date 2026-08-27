@@ -99,10 +99,10 @@ export function Composer({
   };
 
   return (
-    <div className="border-t border-line/70 bg-cream/80 px-4 py-4 backdrop-blur-xl sm:px-8 sm:py-6">
+    <div className="border-t border-line/70 bg-cream/80 px-3 pb-[max(0.9rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl sm:px-8 sm:py-6">
       <form
         onSubmit={submit}
-        className="mavis-glass mx-auto max-w-3xl rounded-[1.5rem] p-2.5 transition-colors focus-within:border-violet/70"
+        className="mavis-glass mx-auto max-w-3xl rounded-[1.35rem] p-2 transition-colors focus-within:border-violet/70 sm:rounded-[1.5rem] sm:p-2.5"
       >
         {attachments.length > 0 && (
           <ul className="flex flex-wrap gap-2 px-2 pb-1 pt-1">
@@ -149,10 +149,10 @@ export function Composer({
                 : "Describe new code to generate, or a change for selected project files…"
               : "Ask anything, paste a link, or attach a file…"
           }
-          className="scroll-slim w-full resize-none bg-transparent px-3 py-2.5 text-[15px] leading-relaxed text-ink outline-none placeholder:text-muted-ink/70"
+          className="scroll-slim w-full resize-none bg-transparent px-2.5 py-2 text-[15px] leading-relaxed text-ink outline-none placeholder:text-muted-ink/70 sm:px-3 sm:py-2.5"
         />
 
-        <div className="flex items-center justify-between gap-2 px-1 pt-1">
+        <div className="flex items-center justify-between gap-2 px-0.5 pt-1 sm:px-1">
           <div className="flex items-center gap-1.5">
             <input
               ref={fileInputRef}
@@ -168,7 +168,7 @@ export function Composer({
                 onClick={onCodingWorkspaceToggle}
                 aria-expanded={codingWorkspaceOpen}
                 title="Open the file picker and coding plan workspace."
-                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-violet/35 bg-violet/8 px-3 font-mono text-[9px] uppercase tracking-[0.12em] text-violet transition-colors hover:border-violet hover:bg-violet/15"
+                className="inline-flex h-9 items-center gap-1 rounded-full border border-violet/35 bg-violet/8 px-2.5 font-mono text-[9px] uppercase tracking-[0.1em] text-violet transition-colors hover:border-violet hover:bg-violet/15 sm:gap-1.5 sm:px-3 sm:tracking-[0.12em]"
               >
                 <Code2Icon className="h-3.5 w-3.5" />
                 {codingWorkspaceOpen
@@ -238,7 +238,7 @@ export function Composer({
               onChange={(event) =>
                 onPersonaChange(event.target.value as PersonaId)
               }
-              className="rounded-full border border-line bg-night/30 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-ink outline-none transition-colors hover:border-violet/60 hover:text-ink"
+              className="max-w-[5.8rem] rounded-full border border-line bg-night/30 px-2 py-1.5 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-ink outline-none transition-colors hover:border-violet/60 hover:text-ink sm:max-w-none sm:px-3 sm:text-[10px] sm:tracking-[0.14em]"
             >
               {PERSONA_IDS.map((id) => (
                 <option key={id} value={id}>
@@ -258,12 +258,12 @@ export function Composer({
           </button>
         </div>
       </form>
-      <p className="mx-auto mt-3 max-w-3xl text-center font-mono text-[9px] uppercase tracking-[0.18em] text-muted-ink">
+      <p className="mx-auto mt-2 max-w-3xl px-1 text-center font-mono text-[8px] uppercase tracking-[0.11em] text-muted-ink sm:mt-3 sm:text-[9px] sm:tracking-[0.18em]">
         {codingMode
           ? codingWorkspaceOpen
             ? "Describe what to build, or select files in the workspace above to edit them"
             : "Open the workspace to select files for an edit, or just describe new code to generate"
-          : "Mavis can make mistakes · Enter to send · Shift + Enter for a new line"}
+          : "Enter sends · Shift + Enter adds a new line"}
       </p>
     </div>
   );

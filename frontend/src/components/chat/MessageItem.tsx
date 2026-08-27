@@ -145,18 +145,18 @@ function CodeRenderer({
     );
   }
   return (
-    <div className="my-4 overflow-hidden rounded-2xl border border-line bg-night/95 text-cream shadow-soft">
-      <div className="flex items-center justify-between border-b border-cream/10 px-3 py-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-cream/60">
+    <div className="my-3 overflow-hidden rounded-2xl border border-line bg-night/95 text-cream shadow-soft sm:my-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-b border-cream/10 px-3 py-2">
+        <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-cream/60 sm:text-[10px]">
           {language}
         </span>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <CopyButton text={code} label="Copy code" />
           <CodePreview code={code} language={language} />
           <DownloadButton text={code} language={language} />
         </div>
       </div>
-      <pre className="overflow-x-auto p-4 text-left text-[13px] leading-relaxed">
+      <pre className="overflow-x-auto p-3 text-left text-xs leading-relaxed sm:p-4 sm:text-[13px]">
         <code className={className}>{children}</code>
       </pre>
     </div>
@@ -212,18 +212,20 @@ export function MessageItem({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      className={`flex gap-4 ${isUser ? "justify-end" : "justify-start"}`}
+      className={`flex gap-2.5 sm:gap-4 ${isUser ? "justify-end" : "justify-start"}`}
     >
       {!isUser && (
         <span
           aria-hidden="true"
-          className="mavis-orb mt-1 flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-violet/40 bg-panel"
+          className="mavis-orb mt-1 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-violet/40 bg-panel sm:h-8 sm:w-8"
         >
           <img src={mavisOrb} alt="" className="h-full w-full object-cover" />
         </span>
       )}
 
-      <div className={`max-w-[min(42rem,85%)] ${isUser ? "text-right" : ""}`}>
+      <div
+        className={`w-fit max-w-[calc(100%-2.25rem)] sm:max-w-[min(42rem,85%)] ${isUser ? "text-right" : ""}`}
+      >
         {files.length > 0 && (
           <ul
             className={`mb-2 flex flex-wrap gap-2 ${isUser ? "justify-end" : ""}`}
@@ -254,8 +256,8 @@ export function MessageItem({
           <div
             className={
               isUser
-                ? "rounded-2xl rounded-br-md bg-gradient-to-br from-tan/95 to-peach/95 px-4 py-3 text-left text-[15px] leading-relaxed text-night shadow-soft"
-                : "mavis-glass rounded-2xl rounded-tl-md px-4 py-3 text-[15px] leading-relaxed text-ink"
+                ? "rounded-2xl rounded-br-md bg-gradient-to-br from-tan/95 to-peach/95 px-3.5 py-3 text-left text-[15px] leading-relaxed text-night shadow-soft sm:px-4"
+                : "mavis-glass rounded-2xl rounded-tl-md px-3.5 py-3 text-[15px] leading-relaxed text-ink sm:px-4"
             }
           >
             {searching && !text && (
@@ -287,7 +289,7 @@ export function MessageItem({
                   <LinkIcon className="h-3 w-3 text-sage" />
                   Sources used
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-2 md:grid-cols-2">
                   {sources.map((source, index) => (
                     <a
                       key={source.url}
@@ -316,7 +318,7 @@ export function MessageItem({
         )}
 
         {!isUser && text && (
-          <div className="mt-2 flex items-center gap-3 pl-1">
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 pl-1">
             <CopyButton text={text} />
             {canRegenerate && (
               <button

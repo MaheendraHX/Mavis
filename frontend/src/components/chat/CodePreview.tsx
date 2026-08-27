@@ -1,4 +1,11 @@
-import { EyeIcon, RefreshCwIcon, ShieldCheckIcon } from "lucide-react";
+import {
+  EyeIcon,
+  LaptopIcon,
+  RefreshCwIcon,
+  ShieldCheckIcon,
+  SmartphoneIcon,
+  TabletIcon,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -42,6 +49,34 @@ const previewDescriptions: Record<PreviewKind, string> = {
   javascript: "Runs inside an isolated preview frame.",
   react: "Runs inside an isolated preview frame with React available.",
 };
+
+type PreviewViewport = "desktop" | "tablet" | "mobile";
+
+const previewViewports: {
+  id: PreviewViewport;
+  label: string;
+  Icon: typeof LaptopIcon;
+  frameClass: string;
+}[] = [
+  {
+    id: "desktop",
+    label: "Desktop",
+    Icon: LaptopIcon,
+    frameClass: "h-full w-full",
+  },
+  {
+    id: "tablet",
+    label: "Tablet",
+    Icon: TabletIcon,
+    frameClass: "h-[min(100%,52rem)] w-[min(100%,48rem)] shadow-2xl",
+  },
+  {
+    id: "mobile",
+    label: "Mobile",
+    Icon: SmartphoneIcon,
+    frameClass: "h-[min(100%,48rem)] w-[min(100%,24rem)] shadow-2xl",
+  },
+];
 
 function escapeInlineScript(value: string) {
   return value.replace(/<\/script/gi, "<\\/script");
@@ -199,6 +234,7 @@ export function CodePreview({
 }: CodePreviewProps) {
   const [open, setOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [viewport, setViewport] = useState<PreviewViewport>("desktop");
   const kind = useMemo(() => previewKindFor(language, code), [code, language]);
   const srcDoc = useMemo(
     () => (kind ? buildPreviewDocument(kind, code) : ""),
@@ -218,38 +254,51 @@ export function CodePreview({
           <EyeIcon className="h-3 w-3" /> Preview
         </button>
       </DialogTrigger>
-      <DialogContent className="flex h-[min(48rem,calc(100vh-2rem))] max-w-[min(76rem,calc(100vw-1rem))] flex-col gap-0 overflow-hidden rounded-[1.75rem] border border-cream/15 bg-night p-0 text-cream shadow-[0_30px_100px_rgba(9,20,16,0.48)] sm:rounded-[1.75rem]">
-        <DialogHeader className="shrink-0 border-b border-cream/10 bg-night-raised px-5 py-4 pr-14 text-left sm:px-6">
-          <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-mint/80">
+      <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 bg-night p-0 text-cream shadow-[0_30px_100px_rgba(9,20,16,0.48)] sm:h-[min(48rem,calc(100vh-2rem))] sm:max-h-[calc(100vh-2rem)] sm:max-w-[min(76rem,calc(100vw-1rem))] sm:rounded-[1.75rem] sm:border sm:border-cream/15">
+        <DialogHeader className="shrink-0 border-b border-cream/10 bg-night-raised px-4 py-3 pr-12 text-left sm:px-6 sm:py-4 sm:pr-14">
+          <div className="flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.16em] text-mint/80 sm:text-[10px]">
             <ShieldCheckIcon className="h-3.5 w-3.5" /> Isolated preview
           </div>
-          <DialogTitle className="mt-1 text-xl font-medium text-cream sm:text-2xl">
+          <DialogTitle className="mt-1 text-lg font-medium text-cream sm:text-2xl">
             {previewLabels[kind]}
           </DialogTitle>
-          <DialogDescription className="mt-1 text-sm text-cream/60">
+          <DialogDescription className="mt-1 text-xs leading-relaxed text-cream/60 sm:text-sm">
             {previewDescriptions[kind]} It cannot access Mavis, your chat, or
             the parent page.
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 bg-[#dfe9e3] p-2 sm:p-3">
+        <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-cream/10 bg-night px-4 py-2.5 sm:px-6">
+          {previewViewports.map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={viewport === id}
+              onClick={() => setViewport(id)}
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1.5 font-mono text-[9px] uppercase tracking-[0.12em] transition-colors ${viewport === id ? "border-mint/50 bg-mint/12 text-mint" : "border-cream/12 text-cream/55 hover:border-cream/30 hover:text-cream"}`}
+            >
+              <Icon className="h-3 w-3" /> {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#dfe9e3] p-2 sm:p-3">
           <iframe
-            key={refreshKey}
-            title={previewLabels[kind]}
+            key={`${refreshKey}-${viewport}`}
+            title={`${previewLabels[kind]} — ${viewport} viewport`}
             sandbox="allow-scripts"
             srcDoc={srcDoc}
-            className="h-full w-full rounded-[1.15rem] border border-black/10 bg-white"
+            className={`shrink-0 rounded-[1.15rem] border border-black/10 bg-white transition-[width,height] duration-200 ${previewViewports.find((item) => item.id === viewport)?.frameClass ?? "h-full w-full"}`}
           />
         </div>
-        <div className="flex shrink-0 items-center justify-between border-t border-cream/10 bg-night-raised px-5 py-3 sm:px-6">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-cream/10 bg-night-raised px-4 py-3 sm:px-6">
           <p className="hidden font-mono text-[9px] uppercase tracking-[0.12em] text-cream/45 sm:block">
             Scripts run only in this preview frame
           </p>
           <button
             type="button"
             onClick={() => setRefreshKey((current) => current + 1)}
-            className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-cream/15 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-cream/75 transition-colors hover:border-mint/50 hover:text-mint"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-full border border-cream/15 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-cream/75 transition-colors hover:border-mint/50 hover:text-mint active:scale-[0.97]"
           >
-            <RefreshCwIcon className="h-3 w-3" /> Restart preview
+            <RefreshCwIcon className="h-3 w-3" /> Restart
           </button>
         </div>
       </DialogContent>

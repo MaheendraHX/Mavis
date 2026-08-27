@@ -303,7 +303,7 @@ function ChatPage() {
   };
 
   return (
-    <div className="mavis-shell grain flex h-screen w-full overflow-hidden bg-cream">
+    <div className="mavis-shell grain flex h-[100dvh] min-h-[100dvh] w-full overflow-hidden bg-cream">
       <AnimatePresence initial={false}>
         {sidebarOpen && active && (
           <motion.aside
@@ -311,7 +311,7 @@ function ChatPage() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -280, opacity: 0 }}
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute z-40 h-full shrink-0 lg:relative"
+            className="absolute z-40 h-full max-w-[calc(100vw-1.25rem)] shrink-0 shadow-[18px_0_48px_rgba(17,35,27,0.16)] lg:relative lg:shadow-none"
           >
             <ChatSidebar
               threads={threads}
@@ -326,7 +326,7 @@ function ChatPage() {
       </AnimatePresence>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="mavis-glass flex h-[4.5rem] items-center justify-between gap-3 border-x-0 border-t-0 px-4 sm:px-8">
+        <header className="mavis-glass flex min-h-[4.25rem] items-center justify-between gap-3 border-x-0 border-t-0 px-3 py-2 sm:h-[4.5rem] sm:px-8">
           <div className="flex min-w-0 items-center gap-3">
             {!sidebarOpen && (
               <button
@@ -347,7 +347,7 @@ function ChatPage() {
               </h1>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
             <span className="hidden rounded-full border border-sage/30 bg-sage/10 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.14em] text-sage lg:inline-flex">
               Gemini primary · Groq fallback
             </span>
@@ -376,7 +376,10 @@ function ChatPage() {
               ) : (
                 <KeyRoundIcon className="h-3 w-3" />
               )}
-              {ownerSession ? "Owner active" : "Owner access"}
+              <span className="hidden sm:inline">
+                {ownerSession ? "Owner active" : "Owner access"}
+              </span>
+              <span className="sm:hidden">Owner</span>
             </button>
             <button
               type="button"
@@ -389,14 +392,17 @@ function ChatPage() {
               }`}
             >
               <EyeOffIcon className="h-3 w-3" />
-              Incognito {incognito ? "on" : "off"}
+              <span className="hidden sm:inline">
+                Incognito {incognito ? "on" : "off"}
+              </span>
+              <span className="sm:hidden">Private</span>
             </button>
           </div>
         </header>
 
         {serviceStatus !== "ready" && (
           <div
-            className={`mx-4 mt-4 rounded-2xl border px-4 py-3 text-sm sm:mx-8 ${serviceStatus === "unconfigured" ? "border-peach/35 bg-peach/10 text-peach" : "border-violet/35 bg-violet/10 text-ink"}`}
+            className={`mx-3 mt-3 rounded-2xl border px-4 py-3 text-sm sm:mx-8 sm:mt-4 ${serviceStatus === "unconfigured" ? "border-peach/35 bg-peach/10 text-peach" : "border-violet/35 bg-violet/10 text-ink"}`}
             role="status"
           >
             <p className="font-medium">
@@ -409,7 +415,7 @@ function ChatPage() {
             <p className="mt-1 text-xs leading-relaxed text-muted-ink">
               {serviceStatus === "unconfigured"
                 ? "This deployment is missing its API address. Please try again after the site owner completes setup."
-                : "This free portfolio demo pauses after quiet periods. The first connection can take about a minute; you can start writing while she wakes."}
+                : "This free portfolio demo pauses after quiet periods. Your first message retries automatically while she wakes; you can keep writing."}
             </p>
           </div>
         )}
@@ -440,6 +446,7 @@ function ChatPage() {
                 return next;
               });
             }}
+            onServiceStatusChange={setServiceStatus}
           />
         ) : (
           <div className="flex-1" />
@@ -466,6 +473,7 @@ type ChatSurfaceProps = {
   incognito: boolean;
   coding: CodingState;
   onCodingChange: (coding: CodingState) => void;
+  onServiceStatusChange: (status: ServiceStatus) => void;
 };
 
 function ChatSurface({
@@ -480,6 +488,7 @@ function ChatSurface({
   incognito,
   coding,
   onCodingChange,
+  onServiceStatusChange,
 }: ChatSurfaceProps) {
   const [messages, setMessages] = useState(thread.messages);
   const [status, setStatus] = useState<"ready" | "submitted" | "streaming">(
@@ -528,6 +537,24 @@ function ChatSurface({
     setSourcesByMessage((current) => ({ ...current, [assistantId]: sources }));
   };
 
+  const fetchWithWarmupRetry = async (url: string, init: RequestInit) => {
+    let response = await fetch(url, init);
+    if (response.ok || ![502, 503, 504].includes(response.status))
+      return response;
+
+    onServiceStatusChange("waking");
+    for (const delay of [2_500, 5_000]) {
+      await new Promise((resolve) => window.setTimeout(resolve, delay));
+      response = await fetch(url, init);
+      if (response.ok) {
+        onServiceStatusChange("ready");
+        return response;
+      }
+      if (![502, 503, 504].includes(response.status)) return response;
+    }
+    return response;
+  };
+
   const sendAttachment = async (
     text: string,
     file: FileUIPart,
@@ -551,11 +578,14 @@ function ChatSurface({
       if (!image) throw new Error("The image could not be prepared for Mavis.");
       form.set("base64_image", image.base64);
       form.set("mime", image.mime);
-      const response = await fetch(renderApiUrl("/chat-with-image"), {
-        method: "POST",
-        headers,
-        body: form,
-      });
+      const response = await fetchWithWarmupRetry(
+        renderApiUrl("/chat-with-image"),
+        {
+          method: "POST",
+          headers,
+          body: form,
+        },
+      );
       if (!response.ok) throw new Error(await toErrorMessage(response));
       return (await response.json()) as {
         response?: string;
@@ -566,11 +596,14 @@ function ChatSurface({
     const content = await fetch(dataUrl).then((response) => response.text());
     form.set("filename", file.filename ?? "attachment.txt");
     form.set("file_content", content.slice(0, 15_000));
-    const response = await fetch(renderApiUrl("/chat-with-file"), {
-      method: "POST",
-      headers,
-      body: form,
-    });
+    const response = await fetchWithWarmupRetry(
+      renderApiUrl("/chat-with-file"),
+      {
+        method: "POST",
+        headers,
+        body: form,
+      },
+    );
     if (!response.ok) throw new Error(await toErrorMessage(response));
     return (await response.json()) as { response?: string };
   };
@@ -581,7 +614,7 @@ function ChatSurface({
     onText: (content: string) => void,
     onSources: (sources: SearchResult[]) => void,
   ) => {
-    const response = await fetch(renderApiUrl("/chat/stream"), {
+    const response = await fetchWithWarmupRetry(renderApiUrl("/chat/stream"), {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Guest-ID": guestId() },
       body: JSON.stringify({
@@ -966,13 +999,9 @@ function ChatSurface({
           ? requestError
           : new Error("Mavis could not complete that response.");
       setError(nextError);
-      if (codingState.enabled) {
-        updateMessages((current) =>
-          current.filter((message) => message.id !== assistantId),
-        );
-      } else {
-        appendAssistantText(assistantId, nextError.message);
-      }
+      updateMessages((current) =>
+        current.filter((message) => message.id !== assistantId),
+      );
       toast.error(nextError.message);
     } finally {
       setStatus("ready");
@@ -1006,7 +1035,7 @@ function ChatSurface({
     <>
       <div
         ref={scrollRef}
-        className="scroll-slim flex-1 overflow-y-auto px-4 py-8 sm:px-8"
+        className="scroll-slim flex-1 overflow-y-auto px-3 py-5 sm:px-8 sm:py-8"
       >
         {messages.length === 0 && !isBusy ? (
           <div className="mx-auto flex h-full max-w-2xl flex-col items-center justify-center text-center">
@@ -1024,7 +1053,7 @@ function ChatSurface({
             <p className="mt-8 font-mono text-[10px] uppercase tracking-[0.28em] text-sage">
               Personal intelligence, tuned to you
             </p>
-            <h2 className="mt-3 font-display text-4xl tracking-[-0.025em] text-ink sm:text-5xl">
+            <h2 className="mt-3 font-display text-3xl tracking-[-0.025em] text-ink sm:text-5xl">
               {codingState.enabled
                 ? codingState.workspace === "temporary"
                   ? "What should we improve in this upload?"
@@ -1035,7 +1064,7 @@ function ChatSurface({
               {codingState.enabled
                 ? codingState.workspace === "temporary"
                   ? "Upload a small external project, choose only the relevant files, then describe the change. Mavis will plan it before anything is edited."
-                  : "Choose the smallest relevant set of source files above, then describe the change. Mavis will plan it before anything is edited."
+                  : "Describe new code to generate, or choose a focused source-file set to edit. Mavis will plan it before anything is written."
                 : "Mavis can reason through an idea, explore the web, or make sense of a file — all in one focused space."}
             </p>
             <p className="mt-4 inline-flex max-w-md items-center rounded-full border border-line bg-panel/60 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.13em] text-muted-ink">
@@ -1093,9 +1122,19 @@ function ChatSurface({
               </div>
             )}
             {error && (
-              <p className="mx-auto max-w-3xl rounded-xl border border-[#e3b7b3] bg-[#fdf1ef] px-4 py-3 text-sm text-[#8f3f38]">
-                {error.message}
-              </p>
+              <div
+                className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e3b7b3] bg-[#fdf1ef] px-4 py-3 text-sm text-[#8f3f38]"
+                role="alert"
+              >
+                <p>{error.message}</p>
+                <button
+                  type="button"
+                  onClick={regenerate}
+                  className="rounded-full border border-[#d5928b]/50 bg-white/70 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.13em] text-[#8f3f38] transition-colors hover:bg-white active:scale-[0.97]"
+                >
+                  Retry now
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -1103,7 +1142,7 @@ function ChatSurface({
 
       {codingState.enabled && workspaceOpen && (
         <section
-          className="border-t border-line/80 bg-[#eff4ed]/94 px-4 py-3 shadow-[0_-12px_28px_rgba(20,49,32,0.08)] backdrop-blur-xl sm:px-8"
+          className="border-t border-line/80 bg-[#eff4ed]/94 px-3 py-3 shadow-[0_-12px_28px_rgba(20,49,32,0.08)] backdrop-blur-xl sm:px-8"
           aria-label="Coding workspace dock"
         >
           <div className="mx-auto max-w-3xl">
@@ -1113,7 +1152,8 @@ function ChatSurface({
                   Coding workspace
                 </p>
                 <p className="mt-0.5 text-xs text-muted-ink">
-                  Select project files here before sending your coding request.
+                  Generate new code with no file selected, or select a focused
+                  set to edit.
                 </p>
               </div>
               <button
