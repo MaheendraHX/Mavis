@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import mavisOrb from "@/assets/mavis-orb.jpg";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
 import { CodingWorkspace } from "@/components/chat/CodingWorkspace";
+import { TemporaryProjectWorkspace } from "@/components/chat/TemporaryProjectWorkspace";
 import { Composer } from "@/components/chat/Composer";
 import { MessageItem } from "@/components/chat/MessageItem";
 import {
@@ -667,22 +668,44 @@ function ChatSurface({
     if (!ownerSession) throw new Error("Coding Mode requires owner access.");
     if (codingState.selectedFiles.length === 0) {
       throw new Error(
-        "Choose at least one project file before asking Mavis to plan a code change.",
+        codingState.workspace === "temporary"
+          ? "Upload a temporary project and choose at least one file before asking Mavis to plan a code change."
+          : "Choose at least one project file before asking Mavis to plan a code change.",
+      );
+    }
+    const temporaryProjectId =
+      codingState.workspace === "temporary"
+        ? codingState.temporaryProject?.projectId
+        : undefined;
+    if (codingState.workspace === "temporary" && !temporaryProjectId) {
+      throw new Error(
+        "Upload a temporary project before asking Mavis to plan a code change.",
       );
     }
     if (text.length > 12_000)
       throw new Error("Coding tasks are limited to 12,000 characters.");
-    const response = await fetch(renderApiUrl("/coding/propose"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Guest-ID": guestId() },
-      body: JSON.stringify({
-        message: text,
-        session_id: thread.id,
-        owner_session: ownerSession,
-        files: codingState.selectedFiles,
-        history,
-      }),
-    });
+    const response = await fetch(
+      renderApiUrl(
+        temporaryProjectId
+          ? `/temporary-projects/${temporaryProjectId}/propose`
+          : "/coding/propose",
+      ),
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Guest-ID": guestId(),
+        },
+        body: JSON.stringify({
+          message: text,
+          session_id: thread.id,
+          owner_session: ownerSession,
+          files: codingState.selectedFiles,
+          history,
+          ...(temporaryProjectId ? { project_id: temporaryProjectId } : {}),
+        }),
+      },
+    );
     const body = await response.json().catch(() => ({}));
     if (!response.ok)
       throw new Error(
@@ -700,14 +723,34 @@ function ChatSurface({
 
   const applyCoding = async (proposalId: string) => {
     try {
-      const response = await fetch(renderApiUrl("/coding/apply"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Mavis-Session": ownerSession,
+      const temporaryProjectId =
+        codingState.workspace === "temporary"
+          ? codingState.temporaryProject?.projectId
+          : undefined;
+      if (codingState.workspace === "temporary" && !temporaryProjectId) {
+        throw new Error(
+          "That temporary project has expired. Upload it again to continue.",
+        );
+      }
+      const response = await fetch(
+        renderApiUrl(
+          temporaryProjectId
+            ? `/temporary-projects/${temporaryProjectId}/apply`
+            : "/coding/apply",
+        ),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Mavis-Session": ownerSession,
+          },
+          body: JSON.stringify({
+            proposal_id: proposalId,
+            confirm: true,
+            ...(temporaryProjectId ? { project_id: temporaryProjectId } : {}),
+          }),
         },
-        body: JSON.stringify({ proposal_id: proposalId, confirm: true }),
-      });
+      );
       const body = (await response.json().catch(() => ({}))) as {
         detail?: string;
         checkpoint_id?: string;
@@ -740,14 +783,34 @@ function ChatSurface({
 
   const verifyCoding = async (proposalId: string, command: string) => {
     try {
-      const response = await fetch(renderApiUrl("/coding/verify"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Mavis-Session": ownerSession,
+      const temporaryProjectId =
+        codingState.workspace === "temporary"
+          ? codingState.temporaryProject?.projectId
+          : undefined;
+      if (codingState.workspace === "temporary" && !temporaryProjectId) {
+        throw new Error(
+          "That temporary project has expired. Upload it again to continue.",
+        );
+      }
+      const response = await fetch(
+        renderApiUrl(
+          temporaryProjectId
+            ? `/temporary-projects/${temporaryProjectId}/verify`
+            : "/coding/verify",
+        ),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Mavis-Session": ownerSession,
+          },
+          body: JSON.stringify({
+            proposal_id: proposalId,
+            command,
+            ...(temporaryProjectId ? { project_id: temporaryProjectId } : {}),
+          }),
         },
-        body: JSON.stringify({ proposal_id: proposalId, command }),
-      });
+      );
       const body = await response.json().catch(() => ({}));
       if (!response.ok)
         throw new Error(
@@ -785,14 +848,34 @@ function ChatSurface({
 
   const rollbackCoding = async (proposalId: string) => {
     try {
-      const response = await fetch(renderApiUrl("/coding/rollback"), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Mavis-Session": ownerSession,
+      const temporaryProjectId =
+        codingState.workspace === "temporary"
+          ? codingState.temporaryProject?.projectId
+          : undefined;
+      if (codingState.workspace === "temporary" && !temporaryProjectId) {
+        throw new Error(
+          "That temporary project has expired. Upload it again to continue.",
+        );
+      }
+      const response = await fetch(
+        renderApiUrl(
+          temporaryProjectId
+            ? `/temporary-projects/${temporaryProjectId}/rollback`
+            : "/coding/rollback",
+        ),
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Mavis-Session": ownerSession,
+          },
+          body: JSON.stringify({
+            proposal_id: proposalId,
+            confirm: true,
+            ...(temporaryProjectId ? { project_id: temporaryProjectId } : {}),
+          }),
         },
-        body: JSON.stringify({ proposal_id: proposalId, confirm: true }),
-      });
+      );
       const body = (await response.json().catch(() => ({}))) as {
         detail?: string;
       };
@@ -912,19 +995,96 @@ function ChatSurface({
       >
         {codingState.enabled && (
           <div className="mx-auto max-w-3xl pb-5">
-            <CodingWorkspace
-              apiUrl={renderApiUrl}
-              ownerSession={ownerSession}
-              selectedFiles={codingState.selectedFiles}
-              onSelectedFilesChange={(selectedFiles) =>
-                updateCoding((current) => ({ ...current, selectedFiles }))
-              }
-              proposal={codingState.proposal}
-              disabled={isBusy}
-              onApply={applyCoding}
-              onVerify={verifyCoding}
-              onRollback={rollbackCoding}
-            />
+            <div
+              className="mb-3 flex flex-wrap gap-2"
+              role="tablist"
+              aria-label="Coding workspace type"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={codingState.workspace === "mavis"}
+                onClick={() =>
+                  updateCoding((current) => ({
+                    ...current,
+                    workspace: "mavis",
+                    selectedFiles: [],
+                    proposal: undefined,
+                  }))
+                }
+                className={`rounded-full border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.13em] transition-colors ${
+                  codingState.workspace === "mavis"
+                    ? "border-violet/55 bg-violet/12 text-ink"
+                    : "border-line bg-panel/70 text-muted-ink hover:border-violet/35 hover:text-ink"
+                }`}
+              >
+                Mavis repository
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={codingState.workspace === "temporary"}
+                onClick={() =>
+                  updateCoding((current) => ({
+                    ...current,
+                    workspace: "temporary",
+                    selectedFiles: [],
+                    proposal: undefined,
+                  }))
+                }
+                className={`rounded-full border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.13em] transition-colors ${
+                  codingState.workspace === "temporary"
+                    ? "border-sage/55 bg-sage/12 text-ink"
+                    : "border-line bg-panel/70 text-muted-ink hover:border-sage/35 hover:text-ink"
+                }`}
+              >
+                Temporary project
+              </button>
+            </div>
+
+            {codingState.workspace === "temporary" && (
+              <TemporaryProjectWorkspace
+                apiUrl={renderApiUrl}
+                ownerSession={ownerSession}
+                project={codingState.temporaryProject}
+                disabled={isBusy}
+                onSelectedFilesChange={(selectedFiles) =>
+                  updateCoding((current) => ({ ...current, selectedFiles }))
+                }
+                onProjectChange={(temporaryProject) =>
+                  updateCoding((current) => ({
+                    ...current,
+                    temporaryProject,
+                    selectedFiles: [],
+                    proposal: undefined,
+                  }))
+                }
+              />
+            )}
+
+            {(codingState.workspace === "mavis" ||
+              codingState.temporaryProject) && (
+              <CodingWorkspace
+                apiUrl={renderApiUrl}
+                workspaceKind={codingState.workspace}
+                workspacePath={
+                  codingState.workspace === "temporary" &&
+                  codingState.temporaryProject
+                    ? `/temporary-projects/${codingState.temporaryProject.projectId}`
+                    : "/coding/workspace"
+                }
+                ownerSession={ownerSession}
+                selectedFiles={codingState.selectedFiles}
+                onSelectedFilesChange={(selectedFiles) =>
+                  updateCoding((current) => ({ ...current, selectedFiles }))
+                }
+                proposal={codingState.proposal}
+                disabled={isBusy}
+                onApply={applyCoding}
+                onVerify={verifyCoding}
+                onRollback={rollbackCoding}
+              />
+            )}
           </div>
         )}
         {messages.length === 0 && !isBusy ? (
@@ -945,17 +1105,23 @@ function ChatSurface({
             </p>
             <h2 className="mt-3 font-display text-4xl tracking-[-0.025em] text-ink sm:text-5xl">
               {codingState.enabled
-                ? "What should we improve?"
+                ? codingState.workspace === "temporary"
+                  ? "What should we improve in this upload?"
+                  : "What should we improve?"
                 : "Where should we begin?"}
             </h2>
             <p className="mt-4 max-w-md text-sm leading-relaxed text-muted-ink">
               {codingState.enabled
-                ? "Choose the smallest relevant set of source files above, then describe the change. Mavis will plan it before anything is edited."
+                ? codingState.workspace === "temporary"
+                  ? "Upload a small external project, choose only the relevant files, then describe the change. Mavis will plan it before anything is edited."
+                  : "Choose the smallest relevant set of source files above, then describe the change. Mavis will plan it before anything is edited."
                 : "Mavis can reason through an idea, explore the web, or make sense of a file — all in one focused space."}
             </p>
             <p className="mt-4 inline-flex max-w-md items-center rounded-full border border-line bg-panel/60 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.13em] text-muted-ink">
               {codingState.enabled
-                ? "Owner coding mode · nothing changes without approval"
+                ? codingState.workspace === "temporary"
+                  ? "Isolated upload · your original files stay unchanged"
+                  : "Owner coding mode · nothing changes without approval"
                 : "Free demo note · first connection after quiet time can take about a minute"}
             </p>
 
@@ -1022,10 +1188,16 @@ function ChatSurface({
         webSearch={webSearch}
         onWebSearchChange={onWebSearchChange}
         codingMode={codingState.enabled}
+        codingWorkspace={codingState.workspace}
         codingAvailable={Boolean(ownerSession)}
         onCodingModeChange={(enabled) => {
           if (enabled) onWebSearchChange(false);
-          updateCoding((current) => ({ ...current, enabled }));
+          updateCoding((current) => ({
+            ...current,
+            enabled,
+            selectedFiles: enabled ? current.selectedFiles : [],
+            proposal: enabled ? current.proposal : undefined,
+          }));
         }}
       />
     </>

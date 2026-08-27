@@ -36,6 +36,7 @@ IGNORED_DIRS = {
     ".output",
     "coverage",
     "uploads",
+    "temporary_projects",
     ".pytest_cache",
     ".mypy_cache",
 }

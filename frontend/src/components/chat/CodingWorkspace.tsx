@@ -21,6 +21,8 @@ type WorkspaceFile = { path: string; size: number };
 
 type CodingWorkspaceProps = {
   apiUrl: (path: string) => string;
+  workspacePath?: string;
+  workspaceKind?: "mavis" | "temporary";
   ownerSession: string;
   selectedFiles: string[];
   onSelectedFilesChange: (files: string[]) => void;
@@ -35,10 +37,14 @@ const verificationLabels: Record<string, string> = {
   frontend_build: "Build frontend",
   backend_tests: "Run backend tests",
   deployment_tests: "Run deployment checks",
+  project_scan: "Scan uploaded project",
+  json_validate: "Validate JSON files",
 };
 
 export function CodingWorkspace({
   apiUrl,
+  workspacePath = "/coding/workspace",
+  workspaceKind = "mavis",
   ownerSession,
   selectedFiles,
   onSelectedFilesChange,
@@ -61,7 +67,7 @@ export function CodingWorkspace({
       setLoading(true);
       setWorkspaceError("");
       try {
-        const response = await fetch(apiUrl("/coding/workspace"), {
+        const response = await fetch(apiUrl(workspacePath), {
           headers: { "X-Mavis-Session": ownerSession },
           signal: controller.signal,
         });
@@ -97,7 +103,7 @@ export function CodingWorkspace({
     return () => controller.abort();
     // The callback only updates the active thread; refetch on mode/owner change instead.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiUrl, ownerSession]);
+  }, [apiUrl, ownerSession, workspacePath]);
 
   const visibleFiles = useMemo(() => {
     const defaultFiles = files.filter(
@@ -108,11 +114,11 @@ export function CodingWorkspace({
         ),
     );
     const needle = filter.trim().toLowerCase();
-    const pool = needle ? files : defaultFiles;
+    const pool = needle || workspaceKind === "temporary" ? files : defaultFiles;
     return pool
       .filter((file) => file.path.toLowerCase().includes(needle))
       .slice(0, 120);
-  }, [files, filter]);
+  }, [files, filter, workspaceKind]);
 
   const toggleFile = (path: string) => {
     if (disabled) return;
@@ -150,11 +156,14 @@ export function CodingWorkspace({
           </span>
           <div>
             <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-violet">
-              Owner coding mode
+              {workspaceKind === "temporary"
+                ? "Temporary project mode"
+                : "Mavis repository mode"}
             </p>
             <p className="mt-0.5 text-xs text-muted-ink">
-              Read → plan → approve → verify. Mavis cannot write without your
-              approval.
+              {workspaceKind === "temporary"
+                ? "Isolated upload · plan · approve · download. Nothing touches Mavis’s repository."
+                : "Read → plan → approve → verify. Mavis cannot write without your approval."}
             </p>
           </div>
         </div>
@@ -166,7 +175,9 @@ export function CodingWorkspace({
       {loading ? (
         <div className="flex items-center gap-2 px-4 py-5 text-sm text-muted-ink">
           <LoaderCircleIcon className="h-4 w-4 animate-spin text-violet" />
-          Opening the private workspace…
+          {workspaceKind === "temporary"
+            ? "Opening the uploaded project…"
+            : "Opening the private workspace…"}
         </div>
       ) : workspaceError ? (
         <div className="flex gap-2 px-4 py-4 text-sm leading-relaxed text-[#8f3f38]">
@@ -222,10 +233,9 @@ export function CodingWorkspace({
             )}
           </div>
           <p className="px-1 pt-2 text-xs leading-relaxed text-muted-ink">
-            Start with the focused files shown here, or filter to reveal more.
-            Pick the smallest relevant set, then describe the change below.
-            Mavis will create a reviewable proposal instead of editing
-            immediately.
+            {workspaceKind === "temporary"
+              ? "Choose only the uploaded files relevant to this change. Mavis will create a reviewable proposal, never modify your Mavis repository, and let you download the edited project afterward."
+              : "Start with the focused files shown here, or filter to reveal more. Pick the smallest relevant set, then describe the change below. Mavis will create a reviewable proposal instead of editing immediately."}
           </p>
         </div>
       )}
@@ -336,7 +346,9 @@ export function CodingWorkspace({
                   void requestAction(
                     "apply",
                     () => onApply(proposal.proposalId),
-                    "Apply this reviewed proposal to the private workspace? A checkpoint will be created first, so you can undo it.",
+                    workspaceKind === "temporary"
+                      ? "Apply this reviewed proposal to the isolated temporary upload? Mavis will create a checkpoint first, and your original files on your computer remain unchanged."
+                      : "Apply this reviewed proposal to the private workspace? A checkpoint will be created first, so you can undo it.",
                   )
                 }
                 className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-violet to-tan px-3.5 py-2.5 text-sm font-medium text-night shadow-soft transition-transform hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60"
@@ -354,7 +366,9 @@ export function CodingWorkspace({
           {proposal.status === "applied" && (
             <div className="mt-4 rounded-xl border border-sage/35 bg-sage/10 p-3">
               <p className="text-sm text-ink">
-                Changes applied to{" "}
+                {workspaceKind === "temporary"
+                  ? "Changes applied to the isolated upload: "
+                  : "Changes applied to "}
                 <span className="font-mono text-xs">
                   {proposal.changedFiles.join(", ")}
                 </span>

@@ -45,6 +45,20 @@ export function loadThreads(): Thread[] {
         coding: {
           ...emptyCodingState(),
           enabled: Boolean(thread.coding?.enabled),
+          workspace:
+            thread.coding?.workspace === "temporary" ? "temporary" : "mavis",
+          temporaryProject:
+            thread.coding?.temporaryProject &&
+            typeof thread.coding.temporaryProject.projectId === "string" &&
+            typeof thread.coding.temporaryProject.fileCount === "number" &&
+            typeof thread.coding.temporaryProject.expiresInSeconds === "number"
+              ? {
+                  projectId: thread.coding.temporaryProject.projectId,
+                  fileCount: thread.coding.temporaryProject.fileCount,
+                  expiresInSeconds:
+                    thread.coding.temporaryProject.expiresInSeconds,
+                }
+              : undefined,
           selectedFiles: Array.isArray(thread.coding?.selectedFiles)
             ? thread.coding.selectedFiles
                 .filter((path): path is string => typeof path === "string")

@@ -19,6 +19,7 @@ type ComposerProps = {
   persona: PersonaId;
   onPersonaChange: (value: PersonaId) => void;
   codingMode?: boolean;
+  codingWorkspace?: "mavis" | "temporary";
   codingAvailable?: boolean;
   onCodingModeChange?: (value: boolean) => void;
 };
@@ -42,6 +43,7 @@ export function Composer({
   persona,
   onPersonaChange,
   codingMode = false,
+  codingWorkspace = "mavis",
   codingAvailable = false,
   onCodingModeChange,
 }: ComposerProps) {
@@ -53,7 +55,9 @@ export function Composer({
     if (codingMode) {
       event.target.value = "";
       toast(
-        "Coding Mode uses the project files selected above. Turn off Code to attach external files.",
+        codingWorkspace === "temporary"
+          ? "Temporary Project Mode uses the uploaded files selected above."
+          : "Coding Mode uses the project files selected above. Turn off Code to attach external files.",
       );
       return;
     }
@@ -136,7 +140,9 @@ export function Composer({
           }}
           placeholder={
             codingMode
-              ? "Describe the change Mavis should plan for the selected project files…"
+              ? codingWorkspace === "temporary"
+                ? "Describe the change Mavis should plan for the selected uploaded files…"
+                : "Describe the change Mavis should plan for the selected project files…"
               : "Ask anything, paste a link, or attach a file…"
           }
           className="scroll-slim w-full resize-none bg-transparent px-3 py-2.5 text-[15px] leading-relaxed text-ink outline-none placeholder:text-muted-ink/70"
@@ -154,10 +160,17 @@ export function Composer({
             />
             {codingMode ? (
               <span
-                title="Coding Mode reads the project files selected in the workspace panel above."
+                title={
+                  codingWorkspace === "temporary"
+                    ? "Temporary Project Mode reads the uploaded files selected above."
+                    : "Coding Mode reads the project files selected in the workspace panel above."
+                }
                 className="inline-flex h-9 items-center gap-1.5 rounded-full border border-violet/25 bg-violet/8 px-3 font-mono text-[9px] uppercase tracking-[0.12em] text-violet"
               >
-                <Code2Icon className="h-3.5 w-3.5" /> Workspace files
+                <Code2Icon className="h-3.5 w-3.5" />
+                {codingWorkspace === "temporary"
+                  ? "Uploaded files"
+                  : "Workspace files"}
               </span>
             ) : (
               <button
@@ -192,7 +205,7 @@ export function Composer({
                 if (enabling && attachments.length > 0) {
                   setAttachments([]);
                   toast(
-                    "Attachments cleared. Coding Mode uses the project files selected above.",
+                    "Attachments cleared. Choose files from the active Coding Mode workspace instead.",
                   );
                 }
                 onCodingModeChange?.(enabling);
@@ -242,7 +255,9 @@ export function Composer({
       </form>
       <p className="mx-auto mt-3 max-w-3xl text-center font-mono text-[9px] uppercase tracking-[0.18em] text-muted-ink">
         {codingMode
-          ? "Coding Mode reads selected workspace files · review every diff before applying"
+          ? codingWorkspace === "temporary"
+            ? "Temporary Project Mode uses uploaded files · download the edited copy when ready"
+            : "Coding Mode reads selected workspace files · review every diff before applying"
           : "Mavis can make mistakes · Enter to send · Shift + Enter for a new line"}
       </p>
     </div>

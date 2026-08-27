@@ -14,3 +14,4 @@ aria_memory.db
 mavis_usage.db
 frontend/.vercel
 frontend/.env.local
+temporary_projects/

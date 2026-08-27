@@ -17,7 +17,7 @@ import requests
 from bs4 import BeautifulSoup
 from docx import Document as DocxDocument
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Header, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, HttpUrl
 from groq import Groq
@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 import memory
 import usage_store
 import coding_workspace
+import temporary_project_workspace
 from url_reader import is_safe_url
 from file_reader import process_file, get_file_type
 from web_search import web_search
@@ -51,7 +52,9 @@ _owner_auth_failures: dict[str, list[float]] = {}
 _public_request_windows: dict[str, deque[float]] = defaultdict(deque)
 _provider_metrics: dict[str, int] = defaultdict(int)
 CODE_PROPOSAL_TTL_SECONDS = max(300, int(os.environ.get("CODE_PROPOSAL_TTL_SECONDS", "1800")))
+TEMP_PROJECT_TTL_SECONDS = max(900, int(os.environ.get("TEMP_PROJECT_TTL_SECONDS", "7200")))
 _coding_proposals: dict[str, dict[str, Any]] = {}
+_temporary_projects: dict[str, dict[str, Any]] = {}
 
 PC_CONTROL_ENABLED = os.environ.get("PC_CONTROL_ENABLED", "false").lower() == "true"
 OWNER_PASSKEY = os.environ.get("OWNER_PASSKEY")
@@ -1023,6 +1026,39 @@ Rules:
 - Prefer minimal, maintainable edits that preserve the existing design and behavior.
 """
 
+TEMPORARY_PROJECT_SYSTEM_PROMPT = """
+You are Mavis in Temporary Project Mode: a careful senior software engineer reviewing a
+small, owner-uploaded project stored in an isolated temporary workspace. You do not have
+shell access and must never claim to have applied, tested, or deployed a change. Analyze
+only the supplied uploaded source files.
+
+Return valid JSON only—no Markdown fence or prose before/after it—with this exact shape:
+{
+  "summary": "one concise sentence",
+  "plan": ["short ordered step"],
+  "questions": ["only questions that block a safe change"],
+  "changes": [
+    {
+      "path": "selected/uploaded/file.ext",
+      "operation": "replace",
+      "find": "an exact unique excerpt copied from the supplied file",
+      "replace": "the replacement text",
+      "explanation": "why this focused edit is needed"
+    }
+  ],
+  "verification": ["project_scan"]
+}
+
+Rules:
+- Make no more than six focused changes. Use only the supplied selected paths.
+- Only operation "replace" is supported; never create, delete, rename, or move files.
+- A replace change must contain exact text that occurs once in the supplied file.
+- If requirements are unclear or a change is unsafe, return no changes and use questions.
+- Never request, reveal, or include secrets or environment variable values.
+- Available verification IDs: project_scan, json_validate. These checks never execute uploaded code.
+- Prefer minimal, maintainable edits that preserve the existing design and behavior.
+"""
+
 
 class CodingTaskRequest(BaseModel):
     message: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARACTERS)
@@ -1037,9 +1073,21 @@ class CodingProposalAction(BaseModel):
     confirm: bool = False
 
 
+class TemporaryProjectTaskRequest(CodingTaskRequest):
+    project_id: str = Field(min_length=37, max_length=37)
+
+
+class TemporaryProjectAction(CodingProposalAction):
+    project_id: str = Field(min_length=37, max_length=37)
+
+
 class CodingVerificationRequest(BaseModel):
     proposal_id: str = Field(min_length=8, max_length=64)
     command: str = Field(min_length=1, max_length=64)
+
+
+class TemporaryProjectVerificationRequest(CodingVerificationRequest):
+    project_id: str = Field(min_length=37, max_length=37)
 
 
 def _coding_owner_key(owner_session: str) -> str:
@@ -1057,14 +1105,46 @@ def _require_coding_owner(owner_session: str) -> str:
     return _coding_owner_key(owner_session)
 
 
+def _require_temporary_project_owner(owner_session: str) -> str:
+    if not validate_owner_session(owner_session):
+        raise HTTPException(status_code=401, detail="Temporary Project Mode requires owner access.")
+    if not temporary_project_workspace.workspace_enabled():
+        raise HTTPException(
+            status_code=503,
+            detail="Temporary Project Mode is not enabled on this deployment yet.",
+        )
+    return _coding_owner_key(owner_session)
+
+
 def _prune_coding_proposals() -> None:
     cutoff = time.time() - CODE_PROPOSAL_TTL_SECONDS
     expired = [proposal_id for proposal_id, proposal in _coding_proposals.items() if proposal["created_at"] < cutoff]
     for proposal_id in expired:
         proposal = _coding_proposals.pop(proposal_id)
         checkpoint_id = proposal.get("checkpoint_id")
-        if checkpoint_id:
+        if checkpoint_id and proposal.get("workspace") == "mavis":
             coding_workspace.cleanup_checkpoint(str(checkpoint_id))
+
+
+def _prune_temporary_projects() -> None:
+    expired_ids = set(temporary_project_workspace.cleanup_expired_projects(TEMP_PROJECT_TTL_SECONDS))
+    cutoff = time.time() - TEMP_PROJECT_TTL_SECONDS
+    for project_id, project in list(_temporary_projects.items()):
+        if project_id in expired_ids or project["created_at"] < cutoff:
+            _temporary_projects.pop(project_id, None)
+
+
+def _temporary_project_or_404(project_id: str, owner_key: str) -> dict[str, Any]:
+    _prune_temporary_projects()
+    project = _temporary_projects.get(project_id)
+    if not project or project["owner_key"] != owner_key:
+        raise HTTPException(status_code=404, detail="That temporary project has expired or is unavailable.")
+    try:
+        temporary_project_workspace.list_project_files(project_id)
+    except temporary_project_workspace.TemporaryProjectError as error:
+        _temporary_projects.pop(project_id, None)
+        raise HTTPException(status_code=404, detail="That temporary project has expired or is unavailable.") from error
+    return project
 
 
 def _proposal_or_404(proposal_id: str, owner_key: str) -> dict[str, Any]:
@@ -1088,14 +1168,18 @@ def _clean_json_response(response: str) -> dict[str, Any]:
     return parsed
 
 
-def _normalize_coding_proposal(raw: dict[str, Any], context: list[dict[str, str]]) -> dict[str, Any]:
+def _normalize_coding_proposal(
+    raw: dict[str, Any],
+    context: list[dict[str, str]],
+    allowed_verification: set[str] | None = None,
+) -> dict[str, Any]:
     selected = {item["path"]: item["content"] for item in context}
     summary = str(raw.get("summary") or "Mavis reviewed the selected project files.").strip()[:600]
     plan = [str(item).strip()[:300] for item in raw.get("plan", []) if str(item).strip()][:8]
     questions = [str(item).strip()[:400] for item in raw.get("questions", []) if str(item).strip()][:5]
     verification = [str(item).strip() for item in raw.get("verification", []) if str(item).strip()]
-    allowed_verification = {"frontend_build", "backend_tests", "deployment_tests"}
-    verification = [item for item in verification if item in allowed_verification][:3]
+    allowed_checks = allowed_verification or {"frontend_build", "backend_tests", "deployment_tests"}
+    verification = [item for item in verification if item in allowed_checks][:3]
 
     changes: list[dict[str, str]] = []
     diffs: list[dict[str, str]] = []
@@ -1150,6 +1234,233 @@ def _coding_history(history: list[dict[str, str]]) -> list[dict[str, str]]:
         if role in {"user", "assistant"} and isinstance(content, str) and content.strip():
             normalized.append({"role": role, "content": content.strip()[:4_000]})
     return normalized
+
+
+def _public_coding_proposal(record: dict[str, Any]) -> dict[str, Any]:
+    public_record = {
+        key: value
+        for key, value in record.items()
+        if key not in {"owner_key", "created_at", "changes"}
+    }
+    public_record["proposed_changes"] = [
+        {
+            "path": change["path"],
+            "operation": change["operation"],
+            "explanation": change["explanation"],
+        }
+        for change in record["changes"]
+    ]
+    return public_record
+
+
+@app.post("/temporary-projects")
+async def create_temporary_project(
+    files: list[UploadFile] = File(...),
+    x_mavis_session: str = Header(default=""),
+):
+    owner_key = _require_temporary_project_owner(x_mavis_session)
+    _prune_temporary_projects()
+    uploads: list[tuple[str, bytes]] = []
+    for upload in files:
+        filename = (upload.filename or "").strip()
+        if not filename:
+            raise HTTPException(status_code=400, detail="Every uploaded file needs a filename.")
+        raw = await upload.read(temporary_project_workspace.MAX_FILE_BYTES + 1)
+        uploads.append((filename, raw))
+    try:
+        project = temporary_project_workspace.create_project(uploads)
+    except temporary_project_workspace.TemporaryProjectError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    project_id = str(project["project_id"])
+    _temporary_projects[project_id] = {"owner_key": owner_key, "created_at": time.time()}
+    return {**project, "expires_in_seconds": TEMP_PROJECT_TTL_SECONDS}
+
+
+@app.get("/temporary-projects/{project_id}")
+async def temporary_project_status(project_id: str, x_mavis_session: str = Header(default="")):
+    owner_key = _require_temporary_project_owner(x_mavis_session)
+    _temporary_project_or_404(project_id, owner_key)
+    try:
+        files = temporary_project_workspace.list_project_files(project_id)
+    except temporary_project_workspace.TemporaryProjectError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return {"project_id": project_id, "files": files, "expires_in_seconds": TEMP_PROJECT_TTL_SECONDS}
+
+
+@app.get("/temporary-projects/{project_id}/file")
+async def temporary_project_file(project_id: str, path: str, x_mavis_session: str = Header(default="")):
+    owner_key = _require_temporary_project_owner(x_mavis_session)
+    _temporary_project_or_404(project_id, owner_key)
+    try:
+        return temporary_project_workspace.read_project_file(project_id, path)
+    except temporary_project_workspace.TemporaryProjectError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/temporary-projects/{project_id}/propose")
+async def propose_temporary_project_change(project_id: str, request: TemporaryProjectTaskRequest):
+    owner_key = _require_temporary_project_owner(request.owner_session)
+    _temporary_project_or_404(project_id, owner_key)
+    if project_id != request.project_id:
+        raise HTTPException(status_code=400, detail="The temporary project identifier does not match the request.")
+    if not re.fullmatch(r"[A-Za-z0-9-]{8,128}", request.session_id):
+        raise HTTPException(status_code=400, detail="Invalid conversation identifier.")
+    task = request.message.strip()
+    if not task:
+        raise HTTPException(status_code=400, detail="Describe the coding task first.")
+    try:
+        context = temporary_project_workspace.read_project_context(project_id, request.files)
+    except temporary_project_workspace.TemporaryProjectError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    file_context = "\n\n".join(
+        f"--- UPLOADED FILE: {item['path']} ---\n{item['content']}\n--- END FILE ---" for item in context
+    )
+    prompt = f"User's temporary-project coding task:\n{task}\n\nSelected uploaded files:\n{file_context}"
+    try:
+        model_response, provider = _call_text_with_fallback(
+            [{"role": "system", "content": TEMPORARY_PROJECT_SYSTEM_PROMPT}]
+            + _coding_history(request.history)
+            + [{"role": "user", "content": prompt}],
+            TEMPORARY_PROJECT_SYSTEM_PROMPT,
+            temperature=0.2,
+            max_tokens=7_000,
+        )
+        proposal = _normalize_coding_proposal(
+            _clean_json_response(model_response),
+            context,
+            {"project_scan", "json_validate"},
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    except Exception as error:
+        traceback.print_exc()
+        raise HTTPException(status_code=503, detail="Mavis could not prepare a temporary-project proposal right now.") from error
+
+    proposal_id = uuid.uuid4().hex
+    record = {
+        **proposal,
+        "proposal_id": proposal_id,
+        "owner_key": owner_key,
+        "created_at": time.time(),
+        "status": "pending",
+        "checkpoint_id": None,
+        "changed_files": [],
+        "provider": provider,
+        "workspace": "temporary",
+        "project_id": project_id,
+    }
+    _coding_proposals[proposal_id] = record
+    return _public_coding_proposal(record)
+
+
+@app.post("/temporary-projects/{project_id}/apply")
+async def apply_temporary_project_change(
+    project_id: str,
+    request: TemporaryProjectAction,
+    x_mavis_session: str = Header(default=""),
+):
+    owner_key = _require_temporary_project_owner(x_mavis_session)
+    _temporary_project_or_404(project_id, owner_key)
+    if project_id != request.project_id:
+        raise HTTPException(status_code=400, detail="The temporary project identifier does not match the request.")
+    if not request.confirm:
+        raise HTTPException(status_code=400, detail="Confirm the proposal before Mavis can apply it.")
+    proposal = _proposal_or_404(request.proposal_id, owner_key)
+    if proposal.get("workspace") != "temporary" or proposal.get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="That proposal does not belong to this temporary project.")
+    if proposal["status"] != "pending":
+        raise HTTPException(status_code=409, detail="This coding proposal was already handled. Create a new proposal to continue.")
+    try:
+        result = temporary_project_workspace.apply_changes(project_id, proposal["changes"])
+    except temporary_project_workspace.TemporaryProjectError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    proposal["status"] = "applied"
+    proposal["checkpoint_id"] = result["checkpoint_id"]
+    proposal["changed_files"] = result["changed_files"]
+    return {"status": "applied", **result}
+
+
+@app.post("/temporary-projects/{project_id}/verify")
+async def verify_temporary_project_change(
+    project_id: str,
+    request: TemporaryProjectVerificationRequest,
+    x_mavis_session: str = Header(default=""),
+):
+    owner_key = _require_temporary_project_owner(x_mavis_session)
+    _temporary_project_or_404(project_id, owner_key)
+    if project_id != request.project_id:
+        raise HTTPException(status_code=400, detail="The temporary project identifier does not match the request.")
+    proposal = _proposal_or_404(request.proposal_id, owner_key)
+    if proposal.get("workspace") != "temporary" or proposal.get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="That proposal does not belong to this temporary project.")
+    if proposal["status"] != "applied":
+        raise HTTPException(status_code=409, detail="Apply the proposal before running its verification checks.")
+    if request.command not in proposal["verification"]:
+        raise HTTPException(status_code=400, detail="That check was not recommended for this proposal.")
+    try:
+        result = temporary_project_workspace.verify_project(project_id, request.command)
+    except temporary_project_workspace.TemporaryProjectError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    proposal.setdefault("verification_results", []).append(result)
+    return result
+
+
+@app.post("/temporary-projects/{project_id}/rollback")
+async def rollback_temporary_project_change(
+    project_id: str,
+    request: TemporaryProjectAction,
+    x_mavis_session: str = Header(default=""),
+):
+    owner_key = _require_temporary_project_owner(x_mavis_session)
+    _temporary_project_or_404(project_id, owner_key)
+    if project_id != request.project_id:
+        raise HTTPException(status_code=400, detail="The temporary project identifier does not match the request.")
+    if not request.confirm:
+        raise HTTPException(status_code=400, detail="Confirm the rollback before restoring the uploaded files.")
+    proposal = _proposal_or_404(request.proposal_id, owner_key)
+    if proposal.get("workspace") != "temporary" or proposal.get("project_id") != project_id:
+        raise HTTPException(status_code=404, detail="That proposal does not belong to this temporary project.")
+    if proposal["status"] != "applied" or not proposal.get("checkpoint_id"):
+        raise HTTPException(status_code=409, detail="There is no applied coding proposal to undo.")
+    try:
+        restored = temporary_project_workspace.rollback_checkpoint(project_id, str(proposal["checkpoint_id"]), proposal["changed_files"])
+    except temporary_project_workspace.TemporaryProjectError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    proposal["status"] = "rolled_back"
+    return {"status": "rolled_back", "restored_files": restored}
+
+
+@app.get("/temporary-projects/{project_id}/download")
+async def download_temporary_project(project_id: str, x_mavis_session: str = Header(default="")):
+    owner_key = _require_temporary_project_owner(x_mavis_session)
+    _temporary_project_or_404(project_id, owner_key)
+    try:
+        archive = temporary_project_workspace.export_project(project_id)
+    except temporary_project_workspace.TemporaryProjectError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    return Response(
+        content=archive,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="mavis-edited-{project_id}.zip"'},
+    )
+
+
+@app.delete("/temporary-projects/{project_id}")
+async def delete_temporary_project(project_id: str, confirm: bool = False, x_mavis_session: str = Header(default="")):
+    owner_key = _require_temporary_project_owner(x_mavis_session)
+    _temporary_project_or_404(project_id, owner_key)
+    if not confirm:
+        raise HTTPException(status_code=400, detail="Confirm before deleting the temporary project.")
+    try:
+        temporary_project_workspace.delete_project(project_id)
+    except temporary_project_workspace.TemporaryProjectError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    _temporary_projects.pop(project_id, None)
+    for proposal_id, proposal in list(_coding_proposals.items()):
+        if proposal.get("workspace") == "temporary" and proposal.get("project_id") == project_id:
+            _coding_proposals.pop(proposal_id, None)
+    return {"status": "deleted"}
 
 
 @app.get("/coding/workspace")
@@ -1284,5 +1595,6 @@ async def health():
         "public_requests_per_minute": PUBLIC_REQUESTS_PER_MINUTE,
         "quota_storage": usage_store.backend_name(),
         "coding_mode_enabled": coding_workspace.workspace_enabled(),
+        "temporary_project_mode_enabled": temporary_project_workspace.workspace_enabled(),
         "provider_metrics": dict(_provider_metrics),
     }

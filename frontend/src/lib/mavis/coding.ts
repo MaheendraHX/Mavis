@@ -32,14 +32,23 @@ export type CodingProposal = {
   verificationResults: CodingVerificationResult[];
 };
 
+export type TemporaryProject = {
+  projectId: string;
+  fileCount: number;
+  expiresInSeconds: number;
+};
+
 export type CodingState = {
   enabled: boolean;
+  workspace: "mavis" | "temporary";
   selectedFiles: string[];
+  temporaryProject?: TemporaryProject;
   proposal?: CodingProposal;
 };
 
 export const emptyCodingState = (): CodingState => ({
   enabled: false,
+  workspace: "mavis",
   selectedFiles: [],
 });
 
