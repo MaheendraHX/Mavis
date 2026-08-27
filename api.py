@@ -618,6 +618,15 @@ async def monitoring_overview(
     return monitoring_store.overview(days)
 
 
+@app.post("/monitoring/test-alert")
+async def monitoring_test_alert(x_mavis_session: str = Header(default="")):
+    _require_monitoring_owner(x_mavis_session)
+    if not telegram_alerts.configured():
+        raise HTTPException(status_code=503, detail="Telegram alerts are not configured.")
+    telegram_alerts.notify_error("manual_test", "/monitoring", "owner_requested_test")
+    return {"queued": True}
+
+
 def _owner_auth_allowed(client_key: str) -> bool:
     now = time.time()
     attempts = [stamp for stamp in _owner_auth_failures.get(client_key, []) if now - stamp < OWNER_AUTH_WINDOW_SECONDS]

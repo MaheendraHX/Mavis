@@ -12,6 +12,7 @@ import {
   LoaderCircleIcon,
   LockKeyholeIcon,
   RefreshCwIcon,
+  SendIcon,
   ShieldCheckIcon,
   UsersRoundIcon,
 } from "lucide-react";
@@ -240,6 +241,9 @@ function MonitoringPage() {
     useState<DashboardState>("loading");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [testAlertState, setTestAlertState] = useState<
+    "idle" | "sending" | "sent" | "error"
+  >("idle");
 
   const loadOverview = useCallback(async () => {
     const session = window.sessionStorage.getItem(OWNER_SESSION_KEY) ?? "";
@@ -277,6 +281,28 @@ function MonitoringPage() {
     void loadOverview();
   }, [loadOverview]);
 
+  const sendTestAlert = async () => {
+    const session = window.sessionStorage.getItem(OWNER_SESSION_KEY) ?? "";
+    const endpoint = apiUrl("/monitoring/test-alert");
+    if (!session || !endpoint) {
+      setTestAlertState("error");
+      return;
+    }
+    setTestAlertState("sending");
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "X-Mavis-Session": session },
+      });
+      if (!response.ok)
+        throw new Error(`Test alert returned ${response.status}`);
+      setTestAlertState("sent");
+      window.setTimeout(() => setTestAlertState("idle"), 4000);
+    } catch {
+      setTestAlertState("error");
+    }
+  };
+
   const largestMetric = useMemo(
     () => Math.max(1, ...(overview?.daily ?? []).map((item) => item.errors)),
     [overview],
@@ -305,17 +331,32 @@ function MonitoringPage() {
             <span className="hidden items-center gap-1.5 rounded-full border border-sage/25 bg-sage/10 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.13em] text-sage sm:inline-flex">
               <ShieldCheckIcon className="h-3 w-3" /> Owner only
             </span>
-            <button
-              type="button"
-              onClick={() => void loadOverview()}
-              disabled={dashboardState === "loading"}
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-panel-raised px-3 text-xs font-medium text-ink transition hover:border-sage disabled:cursor-wait disabled:opacity-60"
-            >
-              <RefreshCwIcon
-                className={`h-3.5 w-3.5 ${dashboardState === "loading" ? "animate-spin" : ""}`}
-              />
-              Refresh
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void sendTestAlert()}
+                disabled={testAlertState === "sending"}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-violet/25 bg-violet/10 px-3 text-xs font-medium text-violet transition hover:border-violet/50 disabled:cursor-wait disabled:opacity-60"
+              >
+                <SendIcon className="h-3.5 w-3.5" />
+                {testAlertState === "sending"
+                  ? "Sending…"
+                  : testAlertState === "sent"
+                    ? "Sent"
+                    : "Test Telegram"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void loadOverview()}
+                disabled={dashboardState === "loading"}
+                className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line bg-panel-raised px-3 text-xs font-medium text-ink transition hover:border-sage disabled:cursor-wait disabled:opacity-60"
+              >
+                <RefreshCwIcon
+                  className={`h-3.5 w-3.5 ${dashboardState === "loading" ? "animate-spin" : ""}`}
+                />
+                Refresh
+              </button>
+            </div>
           </div>
         </header>
 
@@ -429,6 +470,12 @@ function MonitoringPage() {
                   ))}
                 </div>
               </div>
+              {testAlertState === "error" ? (
+                <p className="mt-2 text-right text-xs text-peach">
+                  Telegram test could not be queued. Check the Render alert
+                  settings.
+                </p>
+              ) : null}
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <MetricCard
