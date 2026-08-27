@@ -14,6 +14,8 @@ import { Streamdown } from "streamdown";
 import mavisOrb from "@/assets/mavis-orb.jpg";
 import type { SearchResult } from "@/lib/mavis/search-types";
 
+import { CodePreview } from "./CodePreview";
+
 type MessageItemProps = {
   message: UIMessage;
   sources?: SearchResult[];
@@ -70,14 +72,38 @@ function CopyButton({
       ) : (
         <CopyIcon className="h-3 w-3" />
       )}
-      {state === "copied" ? "Copied" : state === "failed" ? "Copy failed" : label}
+      {state === "copied"
+        ? "Copied"
+        : state === "failed"
+          ? "Copy failed"
+          : label}
     </button>
   );
 }
 
-function DownloadButton({ text, language }: { text: string; language: string }) {
+function DownloadButton({
+  text,
+  language,
+}: {
+  text: string;
+  language: string;
+}) {
   const [downloaded, setDownloaded] = useState(false);
-  const extension = ({ html: "html", css: "css", javascript: "js", js: "js", typescript: "ts", ts: "ts", python: "py", json: "json", markdown: "md", md: "md" } as Record<string, string>)[language.toLowerCase()] ?? "txt";
+  const extension =
+    (
+      {
+        html: "html",
+        css: "css",
+        javascript: "js",
+        js: "js",
+        typescript: "ts",
+        ts: "ts",
+        python: "py",
+        json: "json",
+        markdown: "md",
+        md: "md",
+      } as Record<string, string>
+    )[language.toLowerCase()] ?? "txt";
   return (
     <button
       type="button"
@@ -110,20 +136,29 @@ function CodeRenderer({
   ...props
 }: ComponentProps<"code"> & { inline?: boolean; node?: unknown }) {
   const code = String(children ?? "").replace(/\n$/, "");
-  const language = className?.match(/language-([\\w-]+)/)?.[1] ?? "code";
+  const language = className?.match(/language-([\w-]+)/)?.[1] ?? "code";
   if (inline || (!className && !code.includes("\n"))) {
-    return <code className={className} {...props}>{children}</code>;
+    return (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    );
   }
   return (
     <div className="my-4 overflow-hidden rounded-2xl border border-line bg-night/95 text-cream shadow-soft">
       <div className="flex items-center justify-between border-b border-cream/10 px-3 py-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-cream/60">{language}</span>
+        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-cream/60">
+          {language}
+        </span>
         <div className="flex items-center gap-3">
           <CopyButton text={code} label="Copy code" />
+          <CodePreview code={code} language={language} />
           <DownloadButton text={code} language={language} />
         </div>
       </div>
-      <pre className="overflow-x-auto p-4 text-left text-[13px] leading-relaxed"><code className={className}>{children}</code></pre>
+      <pre className="overflow-x-auto p-4 text-left text-[13px] leading-relaxed">
+        <code className={className}>{children}</code>
+      </pre>
     </div>
   );
 }
@@ -157,7 +192,14 @@ export function MessageItem({
     return [];
   });
 
-  const sources = [...new Map([...attachedSources, ...toolSources].map((source) => [source.url, source])).values()];
+  const sources = [
+    ...new Map(
+      [...attachedSources, ...toolSources].map((source) => [
+        source.url,
+        source,
+      ]),
+    ).values(),
+  ];
 
   const searching = message.parts.some(
     (part) =>
@@ -227,14 +269,20 @@ export function MessageItem({
               <Streamdown
                 className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                 components={{ code: CodeRenderer }}
-                controls={{ table: { copy: true, download: true }, mermaid: { copy: true, download: true, fullscreen: true } }}
+                controls={{
+                  table: { copy: true, download: true },
+                  mermaid: { copy: true, download: true, fullscreen: true },
+                }}
               >
                 {text}
               </Streamdown>
             )}
 
             {sources.length > 0 && (
-              <section className="mt-4 border-t border-line/70 pt-3" aria-label="Sources">
+              <section
+                className="mt-4 border-t border-line/70 pt-3"
+                aria-label="Sources"
+              >
                 <div className="mb-2 flex items-center gap-2 font-mono text-[9px] uppercase tracking-[0.18em] text-muted-ink">
                   <LinkIcon className="h-3 w-3 text-sage" />
                   Sources used
