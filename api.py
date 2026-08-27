@@ -42,6 +42,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 MAX_MESSAGE_CHARACTERS = 12_000
+MAX_CODING_TASK_CHARACTERS = 4_000
 MAX_HISTORY_MESSAGES = 24
 GUEST_MESSAGE_LIMIT = max(1, int(os.environ.get("GUEST_MESSAGE_LIMIT", "10")))
 OWNER_SESSION_TTL_SECONDS = max(900, int(os.environ.get("OWNER_SESSION_TTL_SECONDS", "43200")))
@@ -1260,13 +1261,13 @@ def _normalize_coding_proposal(
 
 def _coding_history(history: list[dict[str, str]]) -> list[dict[str, str]]:
     normalized: list[dict[str, str]] = []
-    for item in history[-8:]:
+    for item in history[-3:]:
         if not isinstance(item, dict):
             continue
         role = item.get("role")
         content = item.get("content")
         if role in {"user", "assistant"} and isinstance(content, str) and content.strip():
-            normalized.append({"role": role, "content": content.strip()[:4_000]})
+            normalized.append({"role": role, "content": content.strip()[:1_500]})
     return normalized
 
 
@@ -1342,6 +1343,8 @@ async def propose_temporary_project_change(project_id: str, request: TemporaryPr
     task = request.message.strip()
     if not task:
         raise HTTPException(status_code=400, detail="Describe the coding task first.")
+    if len(task) > MAX_CODING_TASK_CHARACTERS:
+        raise HTTPException(status_code=400, detail="Coding tasks are limited to 4,000 characters so Mavis can keep the plan focused.")
     try:
         context = temporary_project_workspace.read_project_context(project_id, request.files)
     except temporary_project_workspace.TemporaryProjectError as error:
@@ -1524,6 +1527,8 @@ async def propose_coding_change(request: CodingTaskRequest):
     task = request.message.strip()
     if not task:
         raise HTTPException(status_code=400, detail="Describe the coding task first.")
+    if len(task) > MAX_CODING_TASK_CHARACTERS:
+        raise HTTPException(status_code=400, detail="Coding tasks are limited to 4,000 characters so Mavis can keep the plan focused.")
     try:
         context = coding_workspace.read_workspace_context(request.files)
     except coding_workspace.WorkspaceError as error:
