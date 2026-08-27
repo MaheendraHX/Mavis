@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 import api
 import memory
+import monitoring_store
 import usage_store
 
 
@@ -79,8 +80,10 @@ def run() -> None:
     with tempfile.TemporaryDirectory() as directory:
         memory.DB_PATH = Path(directory) / "mavis-test.db"
         usage_store.SQLITE_PATH = Path(directory) / "mavis-usage-test.db"
+        monitoring_store.SQLITE_PATH = Path(directory) / "mavis-monitoring-test.db"
         memory.init_db()
         usage_store.init()
+        monitoring_store.init()
         api.GEMINI_API_KEY = "test-gemini-key"
         api.OWNER_PASSKEY = "test-owner-passkey"
         api.client = None
@@ -96,6 +99,21 @@ def run() -> None:
         )
         assert preflight.status_code == 200
         assert preflight.headers["access-control-allow-origin"] == "https://mavis.example.com"
+
+        telemetry = test_client.post(
+            "/monitoring/events",
+            json={"event_type": "page_view", "route": "/", "outcome": "first_load", "surface": "root"},
+            headers={"X-Guest-ID": GUEST_ID},
+        )
+        assert telemetry.status_code == 204
+        client_error_telemetry = test_client.post(
+            "/monitoring/events",
+            json={"event_type": "client_error", "route": "/chat", "outcome": "script_error", "surface": "chat"},
+            headers={"X-Guest-ID": GUEST_ID},
+        )
+        assert client_error_telemetry.status_code == 204
+        unauthorized_monitoring = test_client.get("/monitoring/overview")
+        assert unauthorized_monitoring.status_code == 401
 
         assert api._is_greeting("Hello!")
         assert not api._is_greeting("What changed recently?")
@@ -222,6 +240,20 @@ def run() -> None:
         auth = test_client.post("/auth/owner", json={"passkey": "test-owner-passkey"})
         assert auth.status_code == 200
         owner_session = auth.json()["session_id"]
+        monitoring = test_client.get(
+            "/monitoring/overview?days=7",
+            headers={"X-Mavis-Session": owner_session},
+        )
+        assert monitoring.status_code == 200
+        monitoring_payload = monitoring.json()
+        assert monitoring_payload["summary"]["unique_visitors"] >= 1
+        assert monitoring_payload["summary"]["page_views"] >= 1
+        assert monitoring_payload["summary"]["chat_requests"] >= 1
+        assert monitoring_payload["summary"]["client_errors"] >= 1
+        assert any(signal["outcome"] == "script_error" for signal in monitoring_payload["recent_signals"])
+        assert monitoring_payload["privacy"]["message_content"] == "Never collected"
+        assert len(monitoring_payload["daily"]) == 7
+
         owner_stream = test_client.post(
             "/chat/stream",
             json=stream_payload("Owner remains unlimited.", owner_session),

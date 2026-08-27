@@ -11,7 +11,7 @@ import hmac
 import hashlib
 import time
 import difflib
-from typing import Any
+from typing import Any, Literal
 
 import requests
 from bs4 import BeautifulSoup
@@ -27,6 +27,7 @@ import memory
 import usage_store
 import coding_workspace
 import temporary_project_workspace
+import monitoring_store
 from url_reader import is_safe_url
 from file_reader import process_file, get_file_type
 from web_search import web_search
@@ -36,6 +37,7 @@ from tools import calculator, wikipedia_search, get_tool_definitions
 load_dotenv()
 memory.init_db()
 usage_store.init()
+monitoring_store.init()
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -52,6 +54,8 @@ PUBLIC_REQUESTS_PER_MINUTE = max(1, int(os.environ.get("PUBLIC_REQUESTS_PER_MINU
 _owner_auth_failures: dict[str, list[float]] = {}
 _public_request_windows: dict[str, deque[float]] = defaultdict(deque)
 _provider_metrics: dict[str, int] = defaultdict(int)
+_telemetry_request_windows: dict[str, deque[float]] = defaultdict(deque)
+TELEMETRY_REQUESTS_PER_MINUTE = 6
 CODE_PROPOSAL_TTL_SECONDS = max(300, int(os.environ.get("CODE_PROPOSAL_TTL_SECONDS", "1800")))
 TEMP_PROJECT_TTL_SECONDS = max(900, int(os.environ.get("TEMP_PROJECT_TTL_SECONDS", "7200")))
 _coding_proposals: dict[str, dict[str, Any]] = {}
@@ -144,12 +148,21 @@ def _generate_title(message: str, assistant_message: str) -> str:
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
+    if exc.status_code >= 500:
+        monitoring_store.record_event(
+            "request_failed",
+            route=_safe_monitoring_route(request.url.path),
+            outcome=f"http_{exc.status_code}",
+        )
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     traceback.print_exc()
+    monitoring_store.record_event(
+        "server_error", route=_safe_monitoring_route(request.url.path), outcome="unhandled_exception"
+    )
     return JSONResponse(status_code=500, content={"detail": "Internal server error."})
 
 
@@ -285,6 +298,9 @@ def _call_text_with_fallback(messages, system_prompt, temperature=0.7, max_token
             # the configured Groq fallback instead of failing the visitor's conversation.
             if provider == "gemini":
                 _provider_metrics["gemini_fallbacks"] += 1
+                monitoring_store.record_event(
+                    "provider_fallback", outcome="gemini_to_groq"
+                )
                 continue
             raise RuntimeError("Mavis could not contact its fallback model provider.") from error
     raise RuntimeError("No Mavis model provider is configured. Add GEMINI_API_KEY or GROQ_API_KEY.")
@@ -300,6 +316,43 @@ def _enforce_public_rate_limit(guest_id: str, is_owner: bool) -> None:
     if len(window) >= PUBLIC_REQUESTS_PER_MINUTE:
         raise HTTPException(status_code=429, detail="Please wait a moment before sending another Mavis request.")
     window.append(now)
+
+
+def _telemetry_rate_allowed(guest_id: str) -> bool:
+    """Limit browser telemetry so analytics cannot become a public write surface."""
+    now = time.time()
+    window = _telemetry_request_windows[guest_id]
+    while window and now - window[0] >= 60:
+        window.popleft()
+    if len(window) >= TELEMETRY_REQUESTS_PER_MINUTE:
+        return False
+    window.append(now)
+    return True
+
+
+def _safe_monitoring_route(route: str) -> str:
+    return route if route in {"/", "/chat", "/monitoring"} else "/other"
+
+
+def _record_chat_event(
+    event_type: str,
+    guest_id: str,
+    is_owner: bool,
+    *,
+    incognito: bool = False,
+    outcome: str = "",
+    provider: str = "",
+) -> None:
+    """Track public chat reliability without retaining chat text or private activity."""
+    if is_owner or incognito:
+        return
+    monitoring_store.record_event(
+        event_type,
+        visitor_id=guest_id,
+        route="/chat",
+        outcome=outcome,
+        metadata={"provider": provider} if provider else None,
+    )
 
 
 def _guest_usage(guest_id: str) -> dict[str, int]:
@@ -518,6 +571,43 @@ class OwnerAuthResponse(BaseModel):
     expires_in_seconds: int
 
 
+class BrowserTelemetryRequest(BaseModel):
+    event_type: Literal["page_view", "client_error"]
+    route: str = Field(default="/", max_length=120)
+    outcome: Literal["", "first_load", "script_error", "unhandled_rejection", "render_boundary"] = ""
+    surface: Literal["", "root", "chat", "monitoring"] = ""
+
+
+def _require_monitoring_owner(owner_session: str) -> None:
+    if not validate_owner_session(owner_session):
+        raise HTTPException(status_code=401, detail="Monitoring requires owner access.")
+
+
+@app.post("/monitoring/events", status_code=204)
+async def record_browser_telemetry(
+    telemetry: BrowserTelemetryRequest,
+    x_guest_id: str = Header(default=""),
+):
+    guest_id = _validate_guest_id(x_guest_id)
+    if _telemetry_rate_allowed(guest_id):
+        monitoring_store.record_event(
+            telemetry.event_type,
+            visitor_id=guest_id,
+            route=_safe_monitoring_route(telemetry.route),
+            outcome=telemetry.outcome,
+            metadata={"surface": telemetry.surface} if telemetry.surface else None,
+        )
+    return Response(status_code=204)
+
+
+@app.get("/monitoring/overview")
+async def monitoring_overview(
+    days: int = 7, x_mavis_session: str = Header(default="")
+):
+    _require_monitoring_owner(x_mavis_session)
+    return monitoring_store.overview(days)
+
+
 def _owner_auth_allowed(client_key: str) -> bool:
     now = time.time()
     attempts = [stamp for stamp in _owner_auth_failures.get(client_key, []) if now - stamp < OWNER_AUTH_WINDOW_SECONDS]
@@ -655,7 +745,9 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="")):
     guest_id = _validate_guest_id(x_guest_id)
     conv_id, is_owner = _conversation_identity(request, guest_id)
     _enforce_public_rate_limit(guest_id, is_owner)
+    _record_chat_event("chat_request", guest_id, is_owner, incognito=request.incognito)
     if not is_owner and check_guest_limit(guest_id):
+        _record_chat_event("demo_limit_reached", guest_id, is_owner, incognito=request.incognito)
         return {
             "response": "You have reached the 10-message Mavis demo limit. Thanks for trying her.",
             "title": None,
@@ -692,6 +784,9 @@ async def chat(request: ChatRequest, x_guest_id: str = Header(default="")):
     if not is_owner:
         increment_guest_count(guest_id)
         usage_data = _guest_usage(guest_id)
+    _record_chat_event(
+        "chat_completed", guest_id, is_owner, incognito=request.incognito, provider=provider
+    )
     return {
         "response": assistant_message,
         "title": title,
@@ -710,9 +805,11 @@ async def chat_stream(request: ChatRequest, x_guest_id: str = Header(default="")
     guest_id = _validate_guest_id(x_guest_id)
     conv_id, is_owner = _conversation_identity(request, guest_id)
     _enforce_public_rate_limit(guest_id, is_owner)
+    _record_chat_event("chat_request", guest_id, is_owner, incognito=request.incognito)
 
     async def event_stream():
         if not is_owner and check_guest_limit(guest_id):
+            _record_chat_event("demo_limit_reached", guest_id, is_owner, incognito=request.incognito)
             yield "data: " + json.dumps({"type": "text", "content": "You have reached the 10-message Mavis demo limit. Thanks for trying her."}) + "\n\n"
             yield "data: " + json.dumps({"type": "done", "limit_reached": True, "usage": _guest_usage(guest_id)}) + "\n\n"
             return
@@ -730,6 +827,9 @@ async def chat_stream(request: ChatRequest, x_guest_id: str = Header(default="")
             response = _clean_assistant_response(response)
         except Exception:
             traceback.print_exc()
+            _record_chat_event(
+                "request_failed", guest_id, is_owner, incognito=request.incognito, outcome="provider_unavailable"
+            )
             yield "data: " + json.dumps({"type": "error", "content": "Mavis is temporarily unavailable. Please try again shortly."}) + "\n\n"
             return
 
@@ -751,6 +851,9 @@ async def chat_stream(request: ChatRequest, x_guest_id: str = Header(default="")
         if not is_owner:
             increment_guest_count(guest_id)
             usage_data = _guest_usage(guest_id)
+        _record_chat_event(
+            "chat_completed", guest_id, is_owner, incognito=request.incognito, provider=provider
+        )
         yield "data: " + json.dumps({"type": "done", "title": title, "conv_id": conv_id, "provider": provider, "usage": usage_data}) + "\n\n"
 
     return StreamingResponse(
@@ -870,7 +973,9 @@ async def chat_with_file(
         raise HTTPException(status_code=400, detail="The attachment is invalid or too large to analyze.")
     conv_id, is_owner = _conversation_identity(request, guest_id)
     _enforce_public_rate_limit(guest_id, is_owner)
+    _record_chat_event("chat_request", guest_id, is_owner, incognito=request.incognito, outcome="file")
     if not is_owner and check_guest_limit(guest_id):
+        _record_chat_event("demo_limit_reached", guest_id, is_owner, incognito=request.incognito)
         return {"response": "You have reached the 10-message Mavis demo limit. Thanks for trying her.", "limit_reached": True, "usage": _guest_usage(guest_id)}
 
     if not request.incognito:
@@ -899,6 +1004,9 @@ async def chat_with_file(
     if not is_owner:
         increment_guest_count(guest_id)
         usage_data = _guest_usage(guest_id)
+    _record_chat_event(
+        "chat_completed", guest_id, is_owner, incognito=request.incognito, provider=provider
+    )
     return {"response": response, "title": title, "conv_id": conv_id, "provider": provider, "usage": usage_data}
 
 
@@ -957,7 +1065,9 @@ async def chat_with_image(
         raise HTTPException(status_code=400, detail="Unsupported image type.")
     conv_id, is_owner = _conversation_identity(request, guest_id)
     _enforce_public_rate_limit(guest_id, is_owner)
+    _record_chat_event("chat_request", guest_id, is_owner, incognito=request.incognito, outcome="image")
     if not is_owner and check_guest_limit(guest_id):
+        _record_chat_event("demo_limit_reached", guest_id, is_owner, incognito=request.incognito)
         return {"response": "You have reached the 10-message Mavis demo limit. Thanks for trying her.", "limit_reached": True, "usage": _guest_usage(guest_id)}
 
     if not request.incognito:
@@ -978,6 +1088,9 @@ async def chat_with_image(
     if not is_owner:
         increment_guest_count(guest_id)
         usage_data = _guest_usage(guest_id)
+    _record_chat_event(
+        "chat_completed", guest_id, is_owner, incognito=request.incognito, provider=provider
+    )
     return {"response": response, "title": title, "conv_id": conv_id, "provider": provider, "usage": usage_data}
 
 
@@ -1658,6 +1771,7 @@ async def health():
         "guest_message_limit": GUEST_MESSAGE_LIMIT,
         "public_requests_per_minute": PUBLIC_REQUESTS_PER_MINUTE,
         "quota_storage": usage_store.backend_name(),
+        "monitoring_storage": monitoring_store.backend_name(),
         "coding_mode_enabled": coding_workspace.workspace_enabled(),
         "temporary_project_mode_enabled": temporary_project_workspace.workspace_enabled(),
         "provider_metrics": dict(_provider_metrics),

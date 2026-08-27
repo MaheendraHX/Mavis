@@ -12,6 +12,7 @@ frontend/.wrangler/
 uploads/
 aria_memory.db
 mavis_usage.db
+mavis_monitoring.db
 frontend/.vercel
 frontend/.env.local
 temporary_projects/

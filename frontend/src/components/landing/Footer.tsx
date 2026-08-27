@@ -32,9 +32,15 @@ export function Footer() {
           </Link>
         </nav>
 
-        <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#72927a]">
-          © {new Date().getFullYear()} Mavis
-        </p>
+        <div className="space-y-1 text-left sm:text-right">
+          <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#72927a]">
+            © {new Date().getFullYear()} Mavis
+          </p>
+          <p className="text-[10px] leading-relaxed text-[#72927a]">
+            Anonymous usage and reliability signals only. Conversation content
+            stays private.
+          </p>
+        </div>
       </div>
     </footer>
   );

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import type { FileUIPart, UIMessage } from "ai";
 import { AnimatePresence, motion } from "motion/react";
 import {
+  BarChart3Icon,
   EyeOffIcon,
   KeyRoundIcon,
   PanelLeftOpenIcon,
@@ -381,6 +382,16 @@ function ChatPage() {
               </span>
               <span className="sm:hidden">Owner</span>
             </button>
+            {ownerSession && (
+              <a
+                href="/monitoring"
+                className="inline-flex items-center gap-1.5 rounded-full border border-sage/30 bg-sage/10 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-sage transition-colors hover:border-sage/60 hover:bg-sage/15"
+              >
+                <BarChart3Icon className="h-3 w-3" />
+                <span className="hidden md:inline">Monitoring</span>
+                <span className="md:hidden">Stats</span>
+              </a>
+            )}
             <button
               type="button"
               onClick={toggleIncognito}
