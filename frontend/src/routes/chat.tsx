@@ -13,8 +13,16 @@ import { toast } from "sonner";
 
 import mavisOrb from "@/assets/mavis-orb.jpg";
 import { ChatSidebar } from "@/components/chat/ChatSidebar";
+import { CodingWorkspace } from "@/components/chat/CodingWorkspace";
 import { Composer } from "@/components/chat/Composer";
 import { MessageItem } from "@/components/chat/MessageItem";
+import {
+  codingProposalFromApi,
+  codingVerificationFromApi,
+  emptyCodingState,
+  type CodingProposal,
+  type CodingState,
+} from "@/lib/mavis/coding";
 import type { PersonaId } from "@/lib/mavis/personas";
 import type { SearchResult } from "@/lib/mavis/search-types";
 import {
@@ -53,7 +61,9 @@ export const Route = createFileRoute("/chat")({
 const OWNER_SESSION_KEY = "mavis.owner.session";
 
 function cleanAssistantText(text: string): string {
-  const sourceMarker = text.search(/\n(?:---\s*\n)?\s*\*{0,2}sources?(?: used)?\s*:/i);
+  const sourceMarker = text.search(
+    /\n(?:---\s*\n)?\s*\*{0,2}sources?(?: used)?\s*:/i,
+  );
   return sourceMarker >= 0 ? text.slice(0, sourceMarker).trimEnd() : text;
 }
 
@@ -71,6 +81,13 @@ const prompts = [
   "What shipped in React this month?",
   "Refactor this component for accessibility",
   "Draft a warm follow-up email",
+];
+
+const codingPrompts = [
+  "Explain this component's state flow",
+  "Find the likely source of this bug",
+  "Refactor this selected file for accessibility",
+  "Reduce duplication without changing behavior",
 ];
 
 const renderApiUrl = (path: string) => {
@@ -130,14 +147,20 @@ function ChatPage() {
   const [serviceStatus, setServiceStatus] = useState<ServiceStatus>("checking");
 
   useEffect(() => {
+    const storedOwnerSession =
+      window.sessionStorage.getItem(OWNER_SESSION_KEY) ?? "";
     const stored = loadThreads().map((thread) => ({
       ...thread,
       title: normalizeStoredTitle(thread),
+      coding: storedOwnerSession
+        ? thread.coding
+        : { ...(thread.coding ?? emptyCodingState()), enabled: false },
     }));
     const initial = stored.length > 0 ? stored : [createThread()];
     setThreads(initial);
     setActiveId(initial[0].id);
-    setOwnerSession(window.sessionStorage.getItem(OWNER_SESSION_KEY) ?? "");
+    setOwnerSession(storedOwnerSession);
+    if (!storedOwnerSession) saveThreads(initial);
   }, []);
 
   const refreshUsage = async (session = ownerSession) => {
@@ -147,7 +170,24 @@ function ChatPage() {
       const response = await fetch(`${base}/usage`, {
         headers: { "X-Guest-ID": guestId(), "X-Mavis-Session": session },
       });
-      if (response.ok) setUsage((await response.json()) as Usage);
+      if (response.ok) {
+        const nextUsage = (await response.json()) as Usage;
+        setUsage(nextUsage);
+        if (session && nextUsage.mode !== "owner") {
+          window.sessionStorage.removeItem(OWNER_SESSION_KEY);
+          setOwnerSession("");
+          setThreads((previous) => {
+            const next = previous.map((thread) =>
+              thread.coding?.enabled
+                ? { ...thread, coding: { ...thread.coding, enabled: false } }
+                : thread,
+            );
+            if (!incognito) saveThreads(next);
+            return next;
+          });
+          toast("Your owner session expired. Please sign in again.");
+        }
+      }
     } catch {
       /* The composer provides the actionable connection error. */
     }
@@ -387,6 +427,18 @@ function ChatPage() {
             ownerSession={ownerSession}
             onUsage={setUsage}
             incognito={incognito}
+            coding={active.coding ?? emptyCodingState()}
+            onCodingChange={(coding) => {
+              setThreads((previous) => {
+                const next = previous.map((thread) =>
+                  thread.id === active.id
+                    ? { ...thread, coding, updatedAt: Date.now() }
+                    : thread,
+                );
+                if (!incognito) saveThreads(next);
+                return next;
+              });
+            }}
           />
         ) : (
           <div className="flex-1" />
@@ -411,6 +463,8 @@ type ChatSurfaceProps = {
   ownerSession: string;
   onUsage: (usage: Usage | null) => void;
   incognito: boolean;
+  coding: CodingState;
+  onCodingChange: (coding: CodingState) => void;
 };
 
 function ChatSurface({
@@ -423,16 +477,29 @@ function ChatSurface({
   ownerSession,
   onUsage,
   incognito,
+  coding,
+  onCodingChange,
 }: ChatSurfaceProps) {
   const [messages, setMessages] = useState(thread.messages);
   const [status, setStatus] = useState<"ready" | "submitted" | "streaming">(
     "ready",
   );
   const [error, setError] = useState<Error | null>(null);
-  const [sourcesByMessage, setSourcesByMessage] = useState<Record<string, SearchResult[]>>({});
+  const [sourcesByMessage, setSourcesByMessage] = useState<
+    Record<string, SearchResult[]>
+  >({});
+  const [codingState, setCodingState] = useState<CodingState>(coding);
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef(thread.messages);
   const isBusy = status !== "ready";
+
+  const updateCoding = (updater: (current: CodingState) => CodingState) => {
+    setCodingState((current) => {
+      const next = updater(current);
+      onCodingChange(next);
+      return next;
+    });
+  };
 
   const updateMessages = (updater: (current: UIMessage[]) => UIMessage[]) => {
     setMessages((current) => {
@@ -452,7 +519,10 @@ function ChatSurface({
     );
   };
 
-  const setAssistantSources = (assistantId: string, sources: SearchResult[]) => {
+  const setAssistantSources = (
+    assistantId: string,
+    sources: SearchResult[],
+  ) => {
     setSourcesByMessage((current) => ({ ...current, [assistantId]: sources }));
   };
 
@@ -555,7 +625,12 @@ function ChatSurface({
           } catch {
             /* keep the URL as a safe label */
           }
-          unique.set(source.url, { title: source.title, url: source.url, domain, snippet: "" });
+          unique.set(source.url, {
+            title: source.title,
+            url: source.url,
+            domain,
+            snippet: "",
+          });
         });
         onSources([...unique.values()]);
       }
@@ -585,6 +660,164 @@ function ChatSurface({
     return generatedTitle;
   };
 
+  const proposeCoding = async (
+    text: string,
+    history: { role: "user" | "assistant"; content: string }[],
+  ): Promise<CodingProposal> => {
+    if (!ownerSession) throw new Error("Coding Mode requires owner access.");
+    if (codingState.selectedFiles.length === 0) {
+      throw new Error(
+        "Choose at least one project file before asking Mavis to plan a code change.",
+      );
+    }
+    if (text.length > 12_000)
+      throw new Error("Coding tasks are limited to 12,000 characters.");
+    const response = await fetch(renderApiUrl("/coding/propose"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Guest-ID": guestId() },
+      body: JSON.stringify({
+        message: text,
+        session_id: thread.id,
+        owner_session: ownerSession,
+        files: codingState.selectedFiles,
+        history,
+      }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok)
+      throw new Error(
+        (body as { detail?: string }).detail ||
+          "Mavis could not prepare a coding proposal.",
+      );
+    const proposal = codingProposalFromApi(body);
+    if (!proposal.proposalId)
+      throw new Error(
+        "Mavis returned an incomplete coding proposal. Please try again.",
+      );
+    updateCoding((current) => ({ ...current, proposal }));
+    return proposal;
+  };
+
+  const applyCoding = async (proposalId: string) => {
+    try {
+      const response = await fetch(renderApiUrl("/coding/apply"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Mavis-Session": ownerSession,
+        },
+        body: JSON.stringify({ proposal_id: proposalId, confirm: true }),
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        detail?: string;
+        checkpoint_id?: string;
+        changed_files?: string[];
+      };
+      if (!response.ok)
+        throw new Error(body.detail || "Mavis could not apply that proposal.");
+      updateCoding((current) =>
+        current.proposal?.proposalId === proposalId
+          ? {
+              ...current,
+              proposal: {
+                ...current.proposal,
+                status: "applied",
+                checkpointId: body.checkpoint_id ?? null,
+                changedFiles: body.changed_files ?? [],
+              },
+            }
+          : current,
+      );
+      toast.success("Changes applied. Mavis created a checkpoint first.");
+    } catch (applyError) {
+      const message =
+        applyError instanceof Error
+          ? applyError.message
+          : "Mavis could not apply that proposal.";
+      toast.error(message);
+    }
+  };
+
+  const verifyCoding = async (proposalId: string, command: string) => {
+    try {
+      const response = await fetch(renderApiUrl("/coding/verify"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Mavis-Session": ownerSession,
+        },
+        body: JSON.stringify({ proposal_id: proposalId, command }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok)
+        throw new Error(
+          (body as { detail?: string }).detail ||
+            "Mavis could not run that check.",
+        );
+      const result = codingVerificationFromApi(body);
+      updateCoding((current) =>
+        current.proposal?.proposalId === proposalId
+          ? {
+              ...current,
+              proposal: {
+                ...current.proposal,
+                verificationResults: [
+                  ...current.proposal.verificationResults,
+                  result,
+                ],
+              },
+            }
+          : current,
+      );
+      if (result.success) {
+        toast.success(`${result.label} passed.`);
+      } else {
+        toast.error(`${result.label} failed — review the output.`);
+      }
+    } catch (verificationError) {
+      toast.error(
+        verificationError instanceof Error
+          ? verificationError.message
+          : "Mavis could not run that check.",
+      );
+    }
+  };
+
+  const rollbackCoding = async (proposalId: string) => {
+    try {
+      const response = await fetch(renderApiUrl("/coding/rollback"), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Mavis-Session": ownerSession,
+        },
+        body: JSON.stringify({ proposal_id: proposalId, confirm: true }),
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        detail?: string;
+      };
+      if (!response.ok)
+        throw new Error(
+          body.detail || "Mavis could not restore that checkpoint.",
+        );
+      updateCoding((current) =>
+        current.proposal?.proposalId === proposalId
+          ? {
+              ...current,
+              proposal: { ...current.proposal, status: "rolled_back" },
+            }
+          : current,
+      );
+      toast.success("Checkpoint restored.");
+    } catch (rollbackError) {
+      toast.error(
+        rollbackError instanceof Error
+          ? rollbackError.message
+          : "Mavis could not restore that checkpoint.",
+      );
+    }
+  };
+
   const send = async (text: string, files: FileUIPart[]) => {
     if (isBusy) return;
     setError(null);
@@ -605,7 +838,21 @@ function ChatSurface({
 
     let generatedTitle: string | undefined;
     try {
-      if (files[0]) {
+      if (codingState.enabled) {
+        if (files.length > 0)
+          throw new Error(
+            "Coding Mode uses selected workspace files, not chat attachments.",
+          );
+        const proposal = await proposeCoding(text, history);
+        const changeLabel =
+          proposal.proposedChanges.length === 1
+            ? "1 reviewable change"
+            : `${proposal.proposedChanges.length} reviewable changes`;
+        appendAssistantText(
+          assistantId,
+          `${proposal.summary}\n\n**Coding plan ready.** I prepared ${changeLabel}. Review the plan and diff in the Coding Mode panel, then approve it only if it looks right.`,
+        );
+      } else if (files[0]) {
         const result = await sendAttachment(text, files[0], history);
         generatedTitle = result.title?.trim() || undefined;
         appendAssistantText(
@@ -663,6 +910,23 @@ function ChatSurface({
         ref={scrollRef}
         className="scroll-slim flex-1 overflow-y-auto px-4 py-8 sm:px-8"
       >
+        {codingState.enabled && (
+          <div className="mx-auto max-w-3xl pb-5">
+            <CodingWorkspace
+              apiUrl={renderApiUrl}
+              ownerSession={ownerSession}
+              selectedFiles={codingState.selectedFiles}
+              onSelectedFilesChange={(selectedFiles) =>
+                updateCoding((current) => ({ ...current, selectedFiles }))
+              }
+              proposal={codingState.proposal}
+              disabled={isBusy}
+              onApply={applyCoding}
+              onVerify={verifyCoding}
+              onRollback={rollbackCoding}
+            />
+          </div>
+        )}
         {messages.length === 0 && !isBusy ? (
           <div className="mx-auto flex h-full max-w-2xl flex-col items-center justify-center text-center">
             <div
@@ -680,19 +944,23 @@ function ChatSurface({
               Personal intelligence, tuned to you
             </p>
             <h2 className="mt-3 font-display text-4xl tracking-[-0.025em] text-ink sm:text-5xl">
-              Where should we begin?
+              {codingState.enabled
+                ? "What should we improve?"
+                : "Where should we begin?"}
             </h2>
             <p className="mt-4 max-w-md text-sm leading-relaxed text-muted-ink">
-              Mavis can reason through an idea, explore the web, or make sense
-              of a file — all in one focused space.
+              {codingState.enabled
+                ? "Choose the smallest relevant set of source files above, then describe the change. Mavis will plan it before anything is edited."
+                : "Mavis can reason through an idea, explore the web, or make sense of a file — all in one focused space."}
             </p>
             <p className="mt-4 inline-flex max-w-md items-center rounded-full border border-line bg-panel/60 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.13em] text-muted-ink">
-              Free demo note · first connection after quiet time can take about
-              a minute
+              {codingState.enabled
+                ? "Owner coding mode · nothing changes without approval"
+                : "Free demo note · first connection after quiet time can take about a minute"}
             </p>
 
             <ul className="mt-8 grid w-full gap-2 sm:grid-cols-2">
-              {prompts.map((prompt) => (
+              {(codingState.enabled ? codingPrompts : prompts).map((prompt) => (
                 <li key={prompt}>
                   <button
                     type="button"
@@ -753,6 +1021,12 @@ function ChatSurface({
         onPersonaChange={onPersonaChange}
         webSearch={webSearch}
         onWebSearchChange={onWebSearchChange}
+        codingMode={codingState.enabled}
+        codingAvailable={Boolean(ownerSession)}
+        onCodingModeChange={(enabled) => {
+          if (enabled) onWebSearchChange(false);
+          updateCoding((current) => ({ ...current, enabled }));
+        }}
       />
     </>
   );

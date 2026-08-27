@@ -1,10 +1,13 @@
 import type { UIMessage } from "ai";
 
+import { emptyCodingState, type CodingState } from "@/lib/mavis/coding";
+
 export type Thread = {
   id: string;
   title: string;
   updatedAt: number;
   messages: UIMessage[];
+  coding?: CodingState;
 };
 
 const KEY = "mavis.threads.v2";
@@ -19,7 +22,13 @@ export function newId() {
 }
 
 export function createThread(): Thread {
-  return { id: newId(), title: "New chat", updatedAt: Date.now(), messages: [] };
+  return {
+    id: newId(),
+    title: "New chat",
+    updatedAt: Date.now(),
+    messages: [],
+    coding: emptyCodingState(),
+  };
 }
 
 export function loadThreads(): Thread[] {
@@ -33,10 +42,22 @@ export function loadThreads(): Thread[] {
       .filter((t) => t && typeof t.id === "string" && Array.isArray(t.messages))
       .map((thread) => ({
         ...thread,
+        coding: {
+          ...emptyCodingState(),
+          enabled: Boolean(thread.coding?.enabled),
+          selectedFiles: Array.isArray(thread.coding?.selectedFiles)
+            ? thread.coding.selectedFiles
+                .filter((path): path is string => typeof path === "string")
+                .slice(0, 6)
+            : [],
+          proposal: thread.coding?.proposal,
+        },
         messages: thread.messages.map((message) => {
           if (message.role !== "assistant") return message;
           const text = messageText(message);
-          const sourceMarker = text.search(/\n(?:---\s*\n)?\s*\*{0,2}sources?(?: used)?\s*:/i);
+          const sourceMarker = text.search(
+            /\n(?:---\s*\n)?\s*\*{0,2}sources?(?: used)?\s*:/i,
+          );
           if (sourceMarker < 0) return message;
           return {
             ...message,
@@ -69,7 +90,10 @@ export function messageText(message: UIMessage): string {
     .trim();
 }
 
-export function deriveTitle(messages: UIMessage[], fallback = "New chat"): string {
+export function deriveTitle(
+  messages: UIMessage[],
+  fallback = "New chat",
+): string {
   const first = messages.find((m) => m.role === "user");
   if (!first) return fallback;
   const text = messageText(first);
@@ -77,32 +101,89 @@ export function deriveTitle(messages: UIMessage[], fallback = "New chat"): strin
 }
 
 const TITLE_STOP_WORDS = new Set([
-  "a", "an", "the", "how", "can", "i", "to", "build", "better", "my", "what",
-  "is", "are", "do", "for", "with", "and", "of", "this", "that", "please", "me", "you", "explain",
+  "a",
+  "an",
+  "the",
+  "how",
+  "can",
+  "i",
+  "to",
+  "build",
+  "better",
+  "my",
+  "what",
+  "is",
+  "are",
+  "do",
+  "for",
+  "with",
+  "and",
+  "of",
+  "this",
+  "that",
+  "please",
+  "me",
+  "you",
+  "explain",
 ]);
 
 export function fallbackTitleFromMessage(message: string): string {
-  const normalized = message.replace(/[^a-zA-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+  const normalized = message
+    .replace(/[^a-zA-Z0-9 ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   const lowered = normalized.toLowerCase();
-  if (["hi", "hello", "hey", "good morning", "good afternoon", "good evening", "thanks", "thank you"].includes(lowered)) {
+  if (
+    [
+      "hi",
+      "hello",
+      "hey",
+      "good morning",
+      "good afternoon",
+      "good evening",
+      "thanks",
+      "thank you",
+    ].includes(lowered)
+  ) {
     return "Getting Started";
   }
-  const words = normalized.split(" ").filter((word) => !TITLE_STOP_WORDS.has(word.toLowerCase()));
+  const words = normalized
+    .split(" ")
+    .filter((word) => !TITLE_STOP_WORDS.has(word.toLowerCase()));
   const selected = (words.length ? words : normalized.split(" ")).slice(0, 4);
-  return selected.map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(" ") || "New chat";
+  return (
+    selected
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(" ") || "New chat"
+  );
 }
 
 export function normalizeStoredTitle(thread: Thread): string {
   const firstUser = thread.messages.find((m) => m.role === "user");
   const firstText = firstUser ? messageText(firstUser) : "";
   const title = thread.title.trim();
-  const normalized = title.toLowerCase().replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
-  const firstNormalized = firstText.toLowerCase().replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+  const normalized = title
+    .toLowerCase()
+    .replace(/[^a-z ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const firstNormalized = firstText
+    .toLowerCase()
+    .replace(/[^a-z ]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   const isRawTitle = normalized === firstNormalized;
-  const isGreetingTitle = /^(hi|hello|hey) (there )?(how can i (help|assist)|how may i help)/.test(normalized);
-  const isAnswerTitle = /^(sure|here|of course|absolutely|hello there)[,! ]/i.test(title) || title.split(/\s+/).length > 7;
-  const isCodeResponseTitle = title.startsWith("```") || /assistant:/i.test(title) || /</.test(title);
-  if (isRawTitle || isGreetingTitle || isAnswerTitle || isCodeResponseTitle) return fallbackTitleFromMessage(firstText);
+  const isGreetingTitle =
+    /^(hi|hello|hey) (there )?(how can i (help|assist)|how may i help)/.test(
+      normalized,
+    );
+  const isAnswerTitle =
+    /^(sure|here|of course|absolutely|hello there)[,! ]/i.test(title) ||
+    title.split(/\s+/).length > 7;
+  const isCodeResponseTitle =
+    title.startsWith("```") || /assistant:/i.test(title) || /</.test(title);
+  if (isRawTitle || isGreetingTitle || isAnswerTitle || isCodeResponseTitle)
+    return fallbackTitleFromMessage(firstText);
   return title || "New chat";
 }
 
@@ -110,7 +191,9 @@ export function toModelHistory(
   messages: UIMessage[],
 ): { role: "user" | "assistant"; content: string }[] {
   return messages
-    .filter((message) => message.role === "user" || message.role === "assistant")
+    .filter(
+      (message) => message.role === "user" || message.role === "assistant",
+    )
     .map((message) => ({
       role: message.role as "user" | "assistant",
       content: messageText(message),
@@ -121,7 +204,8 @@ export function toModelHistory(
 export function relativeDay(timestamp: number): string {
   const now = new Date();
   const then = new Date(timestamp);
-  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const startOf = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const days = Math.round((startOf(now) - startOf(then)) / 86_400_000);
   if (days <= 0) return "Today";
   if (days === 1) return "Yesterday";

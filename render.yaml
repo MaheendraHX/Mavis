@@ -34,6 +34,11 @@ services:
         value: "12"
       - key: PC_CONTROL_ENABLED
         value: "false"
+      # Private owner-only source workspace. Keep disabled until you explicitly opt in.
+      - key: CODE_WORKSPACE_ENABLED
+        value: "false"
+      - key: CODE_PROPOSAL_TTL_SECONDS
+        value: "1800"
       - key: SERPER_API_KEY
         sync: false
       - key: OWNER_PASSKEY

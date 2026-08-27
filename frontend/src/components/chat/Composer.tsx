@@ -1,5 +1,11 @@
 import type { FileUIPart } from "ai";
-import { ArrowUpIcon, GlobeIcon, PaperclipIcon, XIcon } from "lucide-react";
+import {
+  ArrowUpIcon,
+  Code2Icon,
+  GlobeIcon,
+  PaperclipIcon,
+  XIcon,
+} from "lucide-react";
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -12,6 +18,9 @@ type ComposerProps = {
   onWebSearchChange: (value: boolean) => void;
   persona: PersonaId;
   onPersonaChange: (value: PersonaId) => void;
+  codingMode?: boolean;
+  codingAvailable?: boolean;
+  onCodingModeChange?: (value: boolean) => void;
 };
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -32,6 +41,9 @@ export function Composer({
   onWebSearchChange,
   persona,
   onPersonaChange,
+  codingMode = false,
+  codingAvailable = false,
+  onCodingModeChange,
 }: ComposerProps) {
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<FileUIPart[]>([]);
@@ -115,7 +127,11 @@ export function Composer({
               submit();
             }
           }}
-          placeholder="Ask anything, paste a link, or attach a file…"
+          placeholder={
+            codingMode
+              ? "Describe the change Mavis should plan for the selected project files…"
+              : "Ask anything, paste a link, or attach a file…"
+          }
           className="scroll-slim w-full resize-none bg-transparent px-3 py-2.5 text-[15px] leading-relaxed text-ink outline-none placeholder:text-muted-ink/70"
         />
 
@@ -148,6 +164,29 @@ export function Composer({
               }`}
             >
               <GlobeIcon className="h-3 w-3" /> Web
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!codingAvailable) {
+                  toast("Coding Mode is available with owner access.");
+                  return;
+                }
+                onCodingModeChange?.(!codingMode);
+              }}
+              aria-pressed={codingMode}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors ${
+                codingMode
+                  ? "border-violet bg-violet/15 text-violet"
+                  : "border-line bg-night/30 text-muted-ink hover:border-violet/60 hover:text-ink"
+              }`}
+              title={
+                codingAvailable
+                  ? "Owner-only Coding Mode"
+                  : "Owner access required for Coding Mode"
+              }
+            >
+              <Code2Icon className="h-3 w-3" /> Code
             </button>
             <label htmlFor="persona" className="sr-only">
               Persona

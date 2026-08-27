@@ -10,6 +10,8 @@ import io
 import hmac
 import hashlib
 import time
+import difflib
+from typing import Any
 
 import requests
 from bs4 import BeautifulSoup
@@ -23,6 +25,7 @@ from dotenv import load_dotenv
 
 import memory
 import usage_store
+import coding_workspace
 from url_reader import is_safe_url
 from file_reader import process_file, get_file_type
 from web_search import web_search
@@ -47,6 +50,8 @@ PUBLIC_REQUESTS_PER_MINUTE = max(1, int(os.environ.get("PUBLIC_REQUESTS_PER_MINU
 _owner_auth_failures: dict[str, list[float]] = {}
 _public_request_windows: dict[str, deque[float]] = defaultdict(deque)
 _provider_metrics: dict[str, int] = defaultdict(int)
+CODE_PROPOSAL_TTL_SECONDS = max(300, int(os.environ.get("CODE_PROPOSAL_TTL_SECONDS", "1800")))
+_coding_proposals: dict[str, dict[str, Any]] = {}
 
 PC_CONTROL_ENABLED = os.environ.get("PC_CONTROL_ENABLED", "false").lower() == "true"
 OWNER_PASSKEY = os.environ.get("OWNER_PASSKEY")
@@ -984,6 +989,290 @@ async def delete_conv(conv_id: str, x_guest_id: str = Header(default=""), x_mavi
     return {"status": "deleted"}
 
 
+CODING_SYSTEM_PROMPT = """
+You are Mavis in Coding Mode: a careful senior software engineer working inside one
+owner-approved project workspace. You do not have shell access and must never claim to
+have applied, tested, or deployed a change. Analyze only the source files provided.
+
+Return valid JSON only—no Markdown fence or prose before/after it—with this exact shape:
+{
+  "summary": "one concise sentence",
+  "plan": ["short ordered step"],
+  "questions": ["only questions that block a safe change"],
+  "changes": [
+    {
+      "path": "selected/project/file.ext",
+      "operation": "replace",
+      "find": "an exact unique excerpt copied from the supplied file",
+      "replace": "the replacement text",
+      "explanation": "why this focused edit is needed"
+    }
+  ],
+  "verification": ["frontend_build"]
+}
+
+Rules:
+- Make no more than six focused changes. Use only the supplied selected paths.
+- Initial Coding Mode supports only operation "replace" in existing selected files.
+  A replace change must contain exact text that occurs once in the source file.
+- If requirements are unclear or the requested change is unsafe, return no changes and
+  use questions to ask for clarification.
+- Never include secrets, environment variable values, dependency lockfiles, node_modules,
+  or generated build files.
+- Available verification IDs: frontend_build, backend_tests, deployment_tests.
+- Prefer minimal, maintainable edits that preserve the existing design and behavior.
+"""
+
+
+class CodingTaskRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARACTERS)
+    session_id: str = Field(min_length=8, max_length=128)
+    owner_session: str = Field(min_length=1, max_length=256)
+    files: list[str] = Field(min_length=1, max_length=coding_workspace.MAX_SELECTED_FILES)
+    history: list[dict[str, str]] = Field(default_factory=list)
+
+
+class CodingProposalAction(BaseModel):
+    proposal_id: str = Field(min_length=8, max_length=64)
+    confirm: bool = False
+
+
+class CodingVerificationRequest(BaseModel):
+    proposal_id: str = Field(min_length=8, max_length=64)
+    command: str = Field(min_length=1, max_length=64)
+
+
+def _coding_owner_key(owner_session: str) -> str:
+    return hashlib.sha256(owner_session.encode("utf-8")).hexdigest()
+
+
+def _require_coding_owner(owner_session: str) -> str:
+    if not validate_owner_session(owner_session):
+        raise HTTPException(status_code=401, detail="Coding Mode requires owner access.")
+    if not coding_workspace.workspace_enabled():
+        raise HTTPException(
+            status_code=503,
+            detail="Coding Mode is not enabled on this deployment yet. Set CODE_WORKSPACE_ENABLED=true only on the private owner backend.",
+        )
+    return _coding_owner_key(owner_session)
+
+
+def _prune_coding_proposals() -> None:
+    cutoff = time.time() - CODE_PROPOSAL_TTL_SECONDS
+    expired = [proposal_id for proposal_id, proposal in _coding_proposals.items() if proposal["created_at"] < cutoff]
+    for proposal_id in expired:
+        proposal = _coding_proposals.pop(proposal_id)
+        checkpoint_id = proposal.get("checkpoint_id")
+        if checkpoint_id:
+            coding_workspace.cleanup_checkpoint(str(checkpoint_id))
+
+
+def _proposal_or_404(proposal_id: str, owner_key: str) -> dict[str, Any]:
+    _prune_coding_proposals()
+    proposal = _coding_proposals.get(proposal_id)
+    if not proposal or proposal["owner_key"] != owner_key:
+        raise HTTPException(status_code=404, detail="That coding proposal is unavailable or has expired.")
+    return proposal
+
+
+def _clean_json_response(response: str) -> dict[str, Any]:
+    raw = response.strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\\s*|\\s*```$", "", raw, flags=re.IGNORECASE)
+    try:
+        parsed = json.loads(raw)
+    except (TypeError, ValueError) as error:
+        raise ValueError("Mavis returned an invalid coding proposal. Please try again.") from error
+    if not isinstance(parsed, dict):
+        raise ValueError("Mavis returned an invalid coding proposal. Please try again.")
+    return parsed
+
+
+def _normalize_coding_proposal(raw: dict[str, Any], context: list[dict[str, str]]) -> dict[str, Any]:
+    selected = {item["path"]: item["content"] for item in context}
+    summary = str(raw.get("summary") or "Mavis reviewed the selected project files.").strip()[:600]
+    plan = [str(item).strip()[:300] for item in raw.get("plan", []) if str(item).strip()][:8]
+    questions = [str(item).strip()[:400] for item in raw.get("questions", []) if str(item).strip()][:5]
+    verification = [str(item).strip() for item in raw.get("verification", []) if str(item).strip()]
+    allowed_verification = {"frontend_build", "backend_tests", "deployment_tests"}
+    verification = [item for item in verification if item in allowed_verification][:3]
+
+    changes: list[dict[str, str]] = []
+    diffs: list[dict[str, str]] = []
+    for candidate in raw.get("changes", [])[:6]:
+        if not isinstance(candidate, dict):
+            continue
+        path = str(candidate.get("path") or "").strip()
+        operation = str(candidate.get("operation") or "replace").strip()
+        find = str(candidate.get("find") or "")
+        replace = str(candidate.get("replace") or "")
+        explanation = str(candidate.get("explanation") or "Focused code update.").strip()[:500]
+        if path not in selected or operation != "replace" or not find:
+            continue
+        if len(find.encode("utf-8")) > coding_workspace.MAX_FILE_BYTES or len(replace.encode("utf-8")) > coding_workspace.MAX_FILE_BYTES:
+            continue
+        before = selected[path]
+        if before.count(find) != 1:
+            continue
+        after = before.replace(find, replace, 1)
+        diff = "".join(
+            difflib.unified_diff(
+                before.splitlines(keepends=True),
+                after.splitlines(keepends=True),
+                fromfile=f"a/{path}",
+                tofile=f"b/{path}",
+            )
+        )[:12_000]
+        changes.append({"path": path, "operation": operation, "find": find, "replace": replace, "explanation": explanation})
+        diffs.append({"path": path, "diff": diff})
+
+    if not plan:
+        plan = ["Review the selected project context", "Propose only the smallest safe edits", "Run the recommended verification after approval"]
+    if not changes and not questions:
+        questions = ["I could not produce a safe exact-match patch from the selected files. Please refresh the workspace and try again."]
+    return {
+        "summary": summary,
+        "plan": plan,
+        "questions": questions,
+        "changes": changes,
+        "verification": verification,
+        "diffs": diffs,
+    }
+
+
+def _coding_history(history: list[dict[str, str]]) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    for item in history[-8:]:
+        if not isinstance(item, dict):
+            continue
+        role = item.get("role")
+        content = item.get("content")
+        if role in {"user", "assistant"} and isinstance(content, str) and content.strip():
+            normalized.append({"role": role, "content": content.strip()[:4_000]})
+    return normalized
+
+
+@app.get("/coding/workspace")
+async def coding_workspace_status(x_mavis_session: str = Header(default="")):
+    _require_coding_owner(x_mavis_session)
+    try:
+        return {"enabled": True, "files": coding_workspace.list_workspace_files()}
+    except coding_workspace.WorkspaceError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.get("/coding/workspace/file")
+async def coding_workspace_file(path: str, x_mavis_session: str = Header(default="")):
+    _require_coding_owner(x_mavis_session)
+    try:
+        return coding_workspace.read_workspace_file(path)
+    except coding_workspace.WorkspaceError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/coding/propose")
+async def propose_coding_change(request: CodingTaskRequest):
+    owner_key = _require_coding_owner(request.owner_session)
+    if not re.fullmatch(r"[A-Za-z0-9-]{8,128}", request.session_id):
+        raise HTTPException(status_code=400, detail="Invalid conversation identifier.")
+    task = request.message.strip()
+    if not task:
+        raise HTTPException(status_code=400, detail="Describe the coding task first.")
+    try:
+        context = coding_workspace.read_workspace_context(request.files)
+    except coding_workspace.WorkspaceError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    file_context = "\n\n".join(
+        f"--- FILE: {item['path']} ---\n{item['content']}\n--- END FILE ---" for item in context
+    )
+    prompt = f"User's coding task:\n{task}\n\nSelected workspace files:\n{file_context}"
+    try:
+        model_response, provider = _call_text_with_fallback(
+            [{"role": "system", "content": CODING_SYSTEM_PROMPT}]
+            + _coding_history(request.history)
+            + [{"role": "user", "content": prompt}],
+            CODING_SYSTEM_PROMPT,
+            temperature=0.2,
+            max_tokens=7_000,
+        )
+        proposal = _normalize_coding_proposal(_clean_json_response(model_response), context)
+    except ValueError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    except Exception as error:
+        traceback.print_exc()
+        raise HTTPException(status_code=503, detail="Mavis could not prepare a coding proposal right now.") from error
+
+    proposal_id = uuid.uuid4().hex
+    record = {
+        **proposal,
+        "proposal_id": proposal_id,
+        "owner_key": owner_key,
+        "created_at": time.time(),
+        "status": "pending",
+        "checkpoint_id": None,
+        "changed_files": [],
+        "provider": provider,
+    }
+    _coding_proposals[proposal_id] = record
+    public_record = {key: value for key, value in record.items() if key not in {"owner_key", "created_at", "changes"}}
+    public_record["proposed_changes"] = [
+        {"path": change["path"], "operation": change["operation"], "explanation": change["explanation"]}
+        for change in record["changes"]
+    ]
+    return public_record
+
+
+@app.post("/coding/apply")
+async def apply_coding_change(request: CodingProposalAction, x_mavis_session: str = Header(default="")):
+    owner_key = _require_coding_owner(x_mavis_session)
+    if not request.confirm:
+        raise HTTPException(status_code=400, detail="Confirm the proposal before Mavis can apply it.")
+    proposal = _proposal_or_404(request.proposal_id, owner_key)
+    if proposal["status"] != "pending":
+        raise HTTPException(status_code=409, detail="This coding proposal was already handled. Create a new proposal to continue.")
+    try:
+        result = coding_workspace.apply_changes(proposal["changes"])
+    except coding_workspace.WorkspaceError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    proposal["status"] = "applied"
+    proposal["checkpoint_id"] = result["checkpoint_id"]
+    proposal["changed_files"] = result["changed_files"]
+    return {"status": "applied", **result}
+
+
+@app.post("/coding/verify")
+async def verify_coding_change(request: CodingVerificationRequest, x_mavis_session: str = Header(default="")):
+    owner_key = _require_coding_owner(x_mavis_session)
+    proposal = _proposal_or_404(request.proposal_id, owner_key)
+    if proposal["status"] != "applied":
+        raise HTTPException(status_code=409, detail="Apply the proposal before running its verification checks.")
+    if request.command not in proposal["verification"]:
+        raise HTTPException(status_code=400, detail="That check was not recommended for this proposal.")
+    try:
+        result = coding_workspace.run_verification(request.command)
+    except coding_workspace.WorkspaceError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    proposal.setdefault("verification_results", []).append(result)
+    return result
+
+
+@app.post("/coding/rollback")
+async def rollback_coding_change(request: CodingProposalAction, x_mavis_session: str = Header(default="")):
+    owner_key = _require_coding_owner(x_mavis_session)
+    if not request.confirm:
+        raise HTTPException(status_code=400, detail="Confirm the rollback before restoring the previous files.")
+    proposal = _proposal_or_404(request.proposal_id, owner_key)
+    if proposal["status"] != "applied" or not proposal.get("checkpoint_id"):
+        raise HTTPException(status_code=409, detail="There is no applied coding proposal to undo.")
+    try:
+        restored = coding_workspace.rollback_checkpoint(str(proposal["checkpoint_id"]), proposal["changed_files"])
+    except coding_workspace.WorkspaceError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    proposal["status"] = "rolled_back"
+    return {"status": "rolled_back", "restored_files": restored}
+
+
 @app.get("/health")
 async def health():
     return {
@@ -994,5 +1283,6 @@ async def health():
         "guest_message_limit": GUEST_MESSAGE_LIMIT,
         "public_requests_per_minute": PUBLIC_REQUESTS_PER_MINUTE,
         "quota_storage": usage_store.backend_name(),
+        "coding_mode_enabled": coding_workspace.workspace_enabled(),
         "provider_metrics": dict(_provider_metrics),
     }

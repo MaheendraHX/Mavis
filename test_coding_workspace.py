@@ -1,0 +1,127 @@
+import json
+import os
+import tempfile
+from pathlib import Path
+
+os.environ["OWNER_PASSKEY"] = "test-owner-passkey"
+os.environ["GEMINI_API_KEY"] = "test-gemini-key"
+os.environ["CODE_WORKSPACE_ENABLED"] = "true"
+
+from fastapi.testclient import TestClient
+
+import api
+import coding_workspace
+
+
+class FakeResponse:
+    status_code = 200
+
+    def __init__(self, text: str):
+        self.text = text
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def json(self):
+        return {"candidates": [{"content": {"parts": [{"text": self.text}]}}]}
+
+
+def run() -> None:
+    with tempfile.TemporaryDirectory() as directory:
+        workspace = Path(directory)
+        source = workspace / "frontend" / "src" / "App.tsx"
+        source.parent.mkdir(parents=True)
+        source.write_text("export const greeting = 'hello';\n", encoding="utf-8")
+        (workspace / ".env").write_text("SECRET=value\n", encoding="utf-8")
+
+        original_root = coding_workspace.WORKSPACE_ROOT
+        original_post = api.requests.post
+        try:
+            coding_workspace.WORKSPACE_ROOT = workspace
+            api._coding_proposals.clear()
+            api.requests.post = lambda *_args, **_kwargs: FakeResponse(
+                json.dumps(
+                    {
+                        "summary": "Rename the greeting value.",
+                        "plan": ["Update the selected constant.", "Build the frontend after approval."],
+                        "questions": [],
+                        "changes": [
+                            {
+                                "path": "frontend/src/App.tsx",
+                                "operation": "replace",
+                                "find": "'hello'",
+                                "replace": "'hello from Mavis'",
+                                "explanation": "Use the requested greeting text.",
+                            }
+                        ],
+                        "verification": ["frontend_build", "not_allowed"],
+                    }
+                )
+            )
+
+            files = coding_workspace.list_workspace_files()
+            assert {item["path"] for item in files} == {"frontend/src/App.tsx"}
+            try:
+                coding_workspace.read_workspace_file(".env")
+                raise AssertionError("Secret files must be blocked")
+            except coding_workspace.WorkspaceError:
+                pass
+            try:
+                coding_workspace.read_workspace_file("../outside.py")
+                raise AssertionError("Paths must not escape the workspace")
+            except coding_workspace.WorkspaceError:
+                pass
+
+            client = TestClient(api.app)
+            auth = client.post("/auth/owner", json={"passkey": "test-owner-passkey"})
+            assert auth.status_code == 200
+            owner_session = auth.json()["session_id"]
+            headers = {"X-Mavis-Session": owner_session}
+
+            workspace_response = client.get("/coding/workspace", headers=headers)
+            assert workspace_response.status_code == 200
+            assert workspace_response.json()["files"][0]["path"] == "frontend/src/App.tsx"
+
+            proposal_response = client.post(
+                "/coding/propose",
+                json={
+                    "message": "Change the greeting.",
+                    "session_id": "11111111-2222-3333-4444-555555555555",
+                    "owner_session": owner_session,
+                    "files": ["frontend/src/App.tsx"],
+                    "history": [],
+                },
+            )
+            assert proposal_response.status_code == 200
+            proposal = proposal_response.json()
+            assert len(proposal["proposed_changes"]) == 1
+            assert proposal["proposed_changes"][0]["path"] == "frontend/src/App.tsx"
+            assert "hello from Mavis" in proposal["diffs"][0]["diff"]
+            assert proposal["verification"] == ["frontend_build"]
+
+            rejected_apply = client.post("/coding/apply", json={"proposal_id": proposal["proposal_id"], "confirm": False}, headers=headers)
+            assert rejected_apply.status_code == 400
+            applied = client.post("/coding/apply", json={"proposal_id": proposal["proposal_id"], "confirm": True}, headers=headers)
+            assert applied.status_code == 200
+            assert "hello from Mavis" in source.read_text(encoding="utf-8")
+
+            blocked_verify = client.post(
+                "/coding/verify",
+                json={"proposal_id": proposal["proposal_id"], "command": "backend_tests"},
+                headers=headers,
+            )
+            assert blocked_verify.status_code == 400
+
+            rolled_back = client.post("/coding/rollback", json={"proposal_id": proposal["proposal_id"], "confirm": True}, headers=headers)
+            assert rolled_back.status_code == 200
+            assert source.read_text(encoding="utf-8") == "export const greeting = 'hello';\n"
+        finally:
+            coding_workspace.WORKSPACE_ROOT = original_root
+            api.requests.post = original_post
+            api._coding_proposals.clear()
+
+    print("Coding workspace tests passed")
+
+
+if __name__ == "__main__":
+    run()
