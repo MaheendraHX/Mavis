@@ -28,6 +28,7 @@ import usage_store
 import coding_workspace
 import temporary_project_workspace
 import monitoring_store
+import telegram_alerts
 from url_reader import is_safe_url
 from file_reader import process_file, get_file_type
 from web_search import web_search
@@ -149,7 +150,7 @@ def _generate_title(message: str, assistant_message: str) -> str:
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
     if exc.status_code >= 500:
-        monitoring_store.record_event(
+        _record_monitoring_event(
             "request_failed",
             route=_safe_monitoring_route(request.url.path),
             outcome=f"http_{exc.status_code}",
@@ -160,7 +161,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     traceback.print_exc()
-    monitoring_store.record_event(
+    _record_monitoring_event(
         "server_error", route=_safe_monitoring_route(request.url.path), outcome="unhandled_exception"
     )
     return JSONResponse(status_code=500, content={"detail": "Internal server error."})
@@ -298,7 +299,7 @@ def _call_text_with_fallback(messages, system_prompt, temperature=0.7, max_token
             # the configured Groq fallback instead of failing the visitor's conversation.
             if provider == "gemini":
                 _provider_metrics["gemini_fallbacks"] += 1
-                monitoring_store.record_event(
+                _record_monitoring_event(
                     "provider_fallback", outcome="gemini_to_groq"
                 )
                 continue
@@ -332,6 +333,12 @@ def _telemetry_rate_allowed(guest_id: str) -> bool:
 
 def _safe_monitoring_route(route: str) -> str:
     return route if route in {"/", "/chat", "/monitoring"} else "/other"
+
+
+def _record_monitoring_event(event_type: str, *, route: str = "/other", outcome: str = "") -> None:
+    monitoring_store.record_event(event_type, route=route, outcome=outcome)
+    if event_type in {"server_error", "request_failed", "provider_fallback"}:
+        telegram_alerts.notify_error(event_type, route, outcome)
 
 
 def _record_chat_event(
@@ -590,13 +597,16 @@ async def record_browser_telemetry(
 ):
     guest_id = _validate_guest_id(x_guest_id)
     if _telemetry_rate_allowed(guest_id):
+        safe_route = _safe_monitoring_route(telemetry.route)
         monitoring_store.record_event(
             telemetry.event_type,
             visitor_id=guest_id,
-            route=_safe_monitoring_route(telemetry.route),
+            route=safe_route,
             outcome=telemetry.outcome,
             metadata={"surface": telemetry.surface} if telemetry.surface else None,
         )
+        if telemetry.event_type == "client_error":
+            telegram_alerts.notify_error("client_error", safe_route, telemetry.outcome)
     return Response(status_code=204)
 
 
@@ -1772,6 +1782,7 @@ async def health():
         "public_requests_per_minute": PUBLIC_REQUESTS_PER_MINUTE,
         "quota_storage": usage_store.backend_name(),
         "monitoring_storage": monitoring_store.backend_name(),
+        "telegram_alerts_configured": telegram_alerts.configured(),
         "coding_mode_enabled": coding_workspace.workspace_enabled(),
         "temporary_project_mode_enabled": temporary_project_workspace.workspace_enabled(),
         "provider_metrics": dict(_provider_metrics),
