@@ -20,7 +20,7 @@ from typing import Iterable
 BASE_DIR = Path(__file__).resolve().parent
 WORKSPACE_ROOT = Path(os.environ.get("CODE_WORKSPACE_ROOT", BASE_DIR)).expanduser().resolve()
 MAX_FILE_BYTES = 80_000
-MAX_CONTEXT_BYTES = 120_000
+MAX_CONTEXT_BYTES = 24_000
 MAX_SELECTED_FILES = 6
 MAX_OUTPUT_CHARS = 12_000
 
@@ -158,7 +158,7 @@ def read_workspace_context(paths: Iterable[str]) -> list[dict[str, str]]:
         text = str(item["content"])
         total += len(text.encode("utf-8"))
         if total > MAX_CONTEXT_BYTES:
-            raise WorkspaceError("The selected files are too large together. Choose a smaller focused set.")
+            raise WorkspaceError("The selected files contain too much code for one plan. Choose one to three smaller, focused files.")
         context.append({"path": str(item["path"]), "content": text})
     return context
 

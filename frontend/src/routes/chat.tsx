@@ -928,14 +928,18 @@ function ChatSurface({
             "Coding Mode uses selected workspace files, not chat attachments.",
           );
         const proposal = await proposeCoding(text, history);
-        const changeLabel =
-          proposal.proposedChanges.length === 1
-            ? "1 reviewable change"
-            : `${proposal.proposedChanges.length} reviewable changes`;
-        appendAssistantText(
-          assistantId,
-          `${proposal.summary}\n\n**Coding plan ready.** I prepared ${changeLabel}. Review the plan and diff in the Coding Mode panel, then approve it only if it looks right.`,
-        );
+        if (proposal.answer && proposal.proposedChanges.length === 0) {
+          appendAssistantText(assistantId, proposal.answer);
+        } else {
+          const changeLabel =
+            proposal.proposedChanges.length === 1
+              ? "1 reviewable change"
+              : `${proposal.proposedChanges.length} reviewable changes`;
+          appendAssistantText(
+            assistantId,
+            `${proposal.summary}\n\n**Coding plan ready.** I prepared ${changeLabel}. Review the plan and diff in the Coding Mode panel, then approve it only if it looks right.`,
+          );
+        }
       } else if (files[0]) {
         const result = await sendAttachment(text, files[0], history);
         generatedTitle = result.title?.trim() || undefined;

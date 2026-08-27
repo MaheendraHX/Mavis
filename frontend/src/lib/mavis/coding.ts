@@ -20,6 +20,7 @@ export type CodingVerificationResult = {
 export type CodingProposal = {
   proposalId: string;
   summary: string;
+  answer: string;
   plan: string[];
   questions: string[];
   proposedChanges: CodingChange[];
@@ -99,6 +100,7 @@ export function codingProposalFromApi(value: unknown): CodingProposal {
       typeof data.summary === "string"
         ? data.summary
         : "Mavis reviewed the selected files.",
+    answer: typeof data.answer === "string" ? data.answer : "",
     plan: stringList(data.plan, 8),
     questions: stringList(data.questions, 5),
     proposedChanges,

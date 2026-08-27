@@ -44,6 +44,7 @@ def run() -> None:
                 json.dumps(
                     {
                         "summary": "Rename the greeting value.",
+                        "answer": "",
                         "plan": [
                             "Update the selected constant.",
                             "Build the frontend after approval.",
@@ -78,6 +79,22 @@ def run() -> None:
             assert "fewer selected files" in api._coding_failure_detail(
                 RuntimeError("request timeout")
             )
+            provider_413 = RuntimeError("Mavis could not contact its fallback model provider.")
+            provider_413.__cause__ = RuntimeError("413 Request Entity Too Large")
+            assert "too much code" in api._coding_failure_detail(provider_413)
+            review = api._normalize_coding_proposal(
+                {
+                    "summary": "This is a simple component.",
+                    "answer": "The component exports a greeting constant and has no runtime logic.",
+                    "plan": [],
+                    "questions": [],
+                    "changes": [],
+                    "verification": [],
+                },
+                [{"path": "frontend/src/App.tsx", "content": source.read_text(encoding="utf-8")}],
+            )
+            assert review["answer"].startswith("The component exports")
+            assert review["questions"] == []
 
             files = coding_workspace.list_workspace_files()
             assert {item["path"] for item in files} == {"frontend/src/App.tsx"}
@@ -91,6 +108,14 @@ def run() -> None:
                 raise AssertionError("Paths must not escape the workspace")
             except coding_workspace.WorkspaceError:
                 pass
+
+            large_source = workspace / "frontend" / "src" / "large.ts"
+            large_source.write_text("x" * (coding_workspace.MAX_CONTEXT_BYTES + 1), encoding="utf-8")
+            try:
+                coding_workspace.read_workspace_context(["frontend/src/large.ts"])
+                raise AssertionError("Oversized model context must be rejected before a provider call")
+            except coding_workspace.WorkspaceError as error:
+                assert "too much code" in str(error)
 
             client = TestClient(api.app)
             auth = client.post("/auth/owner", json={"passkey": "test-owner-passkey"})

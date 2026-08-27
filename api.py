@@ -1007,6 +1007,7 @@ have applied, tested, or deployed a change. Analyze only the source files provid
 Return valid JSON only—no Markdown fence or prose before/after it—with this exact shape:
 {
   "summary": "one concise sentence",
+  "answer": "a concise helpful answer when the user asks to understand or review code; otherwise an empty string",
   "plan": ["short ordered step"],
   "questions": ["only questions that block a safe change"],
   "changes": [
@@ -1025,6 +1026,7 @@ Rules:
 - Make no more than six focused changes. Use only the supplied selected paths.
 - Initial Coding Mode supports only operation "replace" in existing selected files.
   A replace change must contain exact text that occurs once in the source file.
+- If the user asks only to understand, review, or explain the selected files, return no changes and provide the explanation in answer.
 - If requirements are unclear or the requested change is unsafe, return no changes and
   use questions to ask for clarification.
 - Never include secrets, environment variable values, dependency lockfiles, node_modules,
@@ -1042,6 +1044,7 @@ only the supplied uploaded source files.
 Return valid JSON only—no Markdown fence or prose before/after it—with this exact shape:
 {
   "summary": "one concise sentence",
+  "answer": "a concise helpful answer when the user asks to understand or review code; otherwise an empty string",
   "plan": ["short ordered step"],
   "questions": ["only questions that block a safe change"],
   "changes": [
@@ -1163,7 +1166,14 @@ def _proposal_or_404(proposal_id: str, owner_key: str) -> dict[str, Any]:
 
 
 def _coding_failure_detail(error: Exception) -> str:
-    detail = str(error).lower()
+    details: list[str] = []
+    current: BaseException | None = error
+    while current is not None and len(details) < 4:
+        details.append(str(current).lower())
+        current = current.__cause__ or current.__context__
+    detail = " ".join(details)
+    if any(token in detail for token in ("413", "request_too_large", "request entity too large")):
+        return "The selected files contain too much code for one plan. Choose one to three smaller, focused files."
     if any(token in detail for token in ("429", "rate limit", "quota", "resource_exhausted")):
         return "The coding provider is temporarily rate-limited. Wait a minute, then retry with fewer selected files."
     if any(token in detail for token in ("timeout", "timed out", "504")):
@@ -1197,6 +1207,7 @@ def _normalize_coding_proposal(
 ) -> dict[str, Any]:
     selected = {item["path"]: item["content"] for item in context}
     summary = str(raw.get("summary") or "Mavis reviewed the selected project files.").strip()[:600]
+    answer = str(raw.get("answer") or "").strip()[:6_000]
     plan = [str(item).strip()[:300] for item in raw.get("plan", []) if str(item).strip()][:8]
     questions = [str(item).strip()[:400] for item in raw.get("questions", []) if str(item).strip()][:5]
     verification = [str(item).strip() for item in raw.get("verification", []) if str(item).strip()]
@@ -1234,10 +1245,11 @@ def _normalize_coding_proposal(
 
     if not plan:
         plan = ["Review the selected project context", "Propose only the smallest safe edits", "Run the recommended verification after approval"]
-    if not changes and not questions:
+    if not changes and not questions and not answer:
         questions = ["I could not produce a safe exact-match patch from the selected files. Please refresh the workspace and try again."]
     return {
         "summary": summary,
+        "answer": answer,
         "plan": plan,
         "questions": questions,
         "changes": changes,

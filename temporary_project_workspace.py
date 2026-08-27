@@ -26,7 +26,7 @@ MAX_FILE_BYTES = 120_000
 MAX_PROJECT_BYTES = 1_200_000
 MAX_PROJECT_FILES = 60
 MAX_SELECTED_FILES = 6
-MAX_CONTEXT_BYTES = 180_000
+MAX_CONTEXT_BYTES = 24_000
 MAX_OUTPUT_CHARS = 12_000
 
 IGNORED_DIRS = {
@@ -238,7 +238,7 @@ def read_project_context(project_id: str, paths: Iterable[str]) -> list[dict[str
         text = str(item["content"])
         total += len(text.encode("utf-8"))
         if total > MAX_CONTEXT_BYTES:
-            raise TemporaryProjectError("The selected files are too large together. Choose a smaller focused set.")
+            raise TemporaryProjectError("The selected files contain too much code for one plan. Choose one to three smaller, focused files.")
         context.append({"path": str(item["path"]), "content": text})
     return context
 
