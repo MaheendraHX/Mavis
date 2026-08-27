@@ -13,7 +13,8 @@ export type CodingDiff = {
 export type CodingVerificationResult = {
   command: string;
   label: string;
-  success: boolean;
+  success: boolean | null;
+  status?: "passed" | "failed" | "unavailable";
   exit_code: number | null;
   output: string;
 };
@@ -130,7 +131,14 @@ export function codingVerificationFromApi(
   return {
     command: typeof data.command === "string" ? data.command : "verification",
     label: typeof data.label === "string" ? data.label : "Verification",
-    success: data.success === true,
+    success:
+      data.success === true ? true : data.success === false ? false : null,
+    status:
+      data.status === "passed" ||
+      data.status === "failed" ||
+      data.status === "unavailable"
+        ? data.status
+        : undefined,
     exit_code: typeof data.exit_code === "number" ? data.exit_code : null,
     output:
       typeof data.output === "string"

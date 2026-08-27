@@ -181,6 +181,16 @@ def run() -> None:
             assert applied.status_code == 200
             assert "hello from Mavis" in source.read_text(encoding="utf-8")
 
+            unavailable_verify = client.post(
+                "/coding/verify",
+                json={"proposal_id": proposal["proposal_id"], "command": "frontend_build"},
+                headers=headers,
+            )
+            assert unavailable_verify.status_code == 200
+            assert unavailable_verify.json()["success"] is None
+            assert unavailable_verify.json()["status"] == "unavailable"
+            assert "does not mean the generated code failed" in unavailable_verify.json()["output"]
+
             blocked_verify = client.post(
                 "/coding/verify",
                 json={"proposal_id": proposal["proposal_id"], "command": "backend_tests"},

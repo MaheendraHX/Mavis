@@ -445,10 +445,14 @@ export function CodingWorkspace({
                 (result: CodingVerificationResult, index) => (
                   <pre
                     key={`${result.command}-${index}`}
-                    className={`scroll-slim mt-3 max-h-52 overflow-auto rounded-lg border p-3 text-left font-mono text-[11px] leading-relaxed ${result.success ? "border-sage/30 bg-sage/8 text-ink" : "border-peach/35 bg-peach/10 text-[#8f3f38]"}`}
+                    className={`scroll-slim mt-3 max-h-52 overflow-auto rounded-lg border p-3 text-left font-mono text-[11px] leading-relaxed ${result.success === true ? "border-sage/30 bg-sage/8 text-ink" : result.success === false ? "border-peach/35 bg-peach/10 text-[#8f3f38]" : "border-violet/30 bg-violet/8 text-ink"}`}
                   >
-                    {result.success ? "PASS" : "FAILED"} ·{" "}
-                    {verificationLabels[result.command] ?? result.command}
+                    {result.success === true
+                      ? "PASS"
+                      : result.success === false
+                        ? "FAILED"
+                        : "NOT RUN"}{" "}
+                    · {verificationLabels[result.command] ?? result.command}
                     {"\n\n"}
                     {result.output}
                   </pre>

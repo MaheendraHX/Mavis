@@ -826,10 +826,14 @@ function ChatSurface({
             }
           : current,
       );
-      if (result.success) {
+      if (result.success === true) {
         toast.success(`${result.label} passed.`);
-      } else {
+      } else if (result.success === false) {
         toast.error(`${result.label} failed — review the output.`);
+      } else {
+        toast(
+          `${result.label} was not run in this backend workspace — review the note.`,
+        );
       }
     } catch (verificationError) {
       toast.error(

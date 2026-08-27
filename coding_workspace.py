@@ -293,6 +293,16 @@ def rollback_checkpoint(checkpoint_id: str, changed_files: Iterable[str]) -> lis
 
 
 def run_verification(command_id: str) -> dict[str, object]:
+    frontend_directory = WORKSPACE_ROOT / "frontend"
+    if command_id == "frontend_build" and not (frontend_directory / "node_modules" / ".bin" / "vite").is_file():
+        return {
+            "command": "frontend_build",
+            "label": "Build the React frontend",
+            "success": None,
+            "status": "unavailable",
+            "exit_code": None,
+            "output": "The frontend build was not run here because this backend workspace has no installed Vite dependencies. This does not mean the generated code failed. Use Preview for a self-contained file or rely on the Vercel deployment build for the full app.",
+        }
     commands: dict[str, tuple[list[str], Path, int, str]] = {
         "frontend_build": (["npm", "run", "build"], WORKSPACE_ROOT / "frontend", 90, "Build the React frontend"),
         "backend_tests": ([sys.executable, "test_mavis_core.py"], WORKSPACE_ROOT, 60, "Run the backend smoke tests"),
@@ -318,6 +328,7 @@ def run_verification(command_id: str) -> dict[str, object]:
             "command": command_id,
             "label": label,
             "success": result.returncode == 0,
+            "status": "passed" if result.returncode == 0 else "failed",
             "exit_code": result.returncode,
             "output": output[-MAX_OUTPUT_CHARS:] or "Command completed without output.",
         }
@@ -326,6 +337,7 @@ def run_verification(command_id: str) -> dict[str, object]:
             "command": command_id,
             "label": label,
             "success": False,
+            "status": "failed",
             "exit_code": None,
             "output": f"Verification timed out after {timeout} seconds.",
         }
