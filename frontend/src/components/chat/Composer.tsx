@@ -50,6 +50,13 @@ export function Composer({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFiles = async (event: ChangeEvent<HTMLInputElement>) => {
+    if (codingMode) {
+      event.target.value = "";
+      toast(
+        "Coding Mode uses the project files selected above. Turn off Code to attach external files.",
+      );
+      return;
+    }
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
     const accepted: FileUIPart[] = [];
@@ -78,7 +85,7 @@ export function Composer({
     event?.preventDefault();
     const text = value.trim();
     if ((!text && attachments.length === 0) || disabled) return;
-    onSend(text, attachments);
+    onSend(text, codingMode ? [] : attachments);
     setValue("");
     setAttachments([]);
   };
@@ -145,14 +152,23 @@ export function Composer({
               onChange={handleFiles}
               className="hidden"
             />
-            <button
-              type="button"
-              aria-label="Attach a file"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex h-9 w-9 items-center justify-center rounded-full text-muted-ink transition-colors hover:bg-panel-raised hover:text-sage"
-            >
-              <PaperclipIcon className="h-4 w-4" />
-            </button>
+            {codingMode ? (
+              <span
+                title="Coding Mode reads the project files selected in the workspace panel above."
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-violet/25 bg-violet/8 px-3 font-mono text-[9px] uppercase tracking-[0.12em] text-violet"
+              >
+                <Code2Icon className="h-3.5 w-3.5" /> Workspace files
+              </span>
+            ) : (
+              <button
+                type="button"
+                aria-label="Attach a file"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex h-9 w-9 items-center justify-center rounded-full text-muted-ink transition-colors hover:bg-panel-raised hover:text-sage"
+              >
+                <PaperclipIcon className="h-4 w-4" />
+              </button>
+            )}
             <button
               type="button"
               onClick={() => onWebSearchChange(!webSearch)}
@@ -172,7 +188,14 @@ export function Composer({
                   toast("Coding Mode is available with owner access.");
                   return;
                 }
-                onCodingModeChange?.(!codingMode);
+                const enabling = !codingMode;
+                if (enabling && attachments.length > 0) {
+                  setAttachments([]);
+                  toast(
+                    "Attachments cleared. Coding Mode uses the project files selected above.",
+                  );
+                }
+                onCodingModeChange?.(enabling);
               }}
               aria-pressed={codingMode}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors ${
@@ -218,7 +241,9 @@ export function Composer({
         </div>
       </form>
       <p className="mx-auto mt-3 max-w-3xl text-center font-mono text-[9px] uppercase tracking-[0.18em] text-muted-ink">
-        Mavis can make mistakes · Enter to send · Shift + Enter for a new line
+        {codingMode
+          ? "Coding Mode reads selected workspace files · review every diff before applying"
+          : "Mavis can make mistakes · Enter to send · Shift + Enter for a new line"}
       </p>
     </div>
   );
