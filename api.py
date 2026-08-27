@@ -200,16 +200,19 @@ def _is_groq_model_unavailable_error(error: Exception) -> bool:
     return "model_not_found" in message or "model" in message and "does not exist" in message
 
 
-def _call_groq_model(messages, temperature=0.7, max_tokens=1024, model_name=GROQ_MODEL):
+def _call_groq_model(messages, temperature=0.7, max_tokens=1024, model_name=GROQ_MODEL, json_mode=False):
     candidate_models = list(dict.fromkeys(model for model in (model_name, GROQ_BACKUP_MODEL) if model))
     for index, candidate_model in enumerate(candidate_models):
         try:
-            response = get_groq_client().chat.completions.create(
-                model=candidate_model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
+            request_kwargs = {
+                "model": candidate_model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            }
+            if json_mode:
+                request_kwargs["response_format"] = {"type": "json_object"}
+            response = get_groq_client().chat.completions.create(**request_kwargs)
             return response.choices[0].message.content or ""
         except Exception as error:
             if index < len(candidate_models) - 1 and _is_groq_model_unavailable_error(error):
@@ -218,7 +221,7 @@ def _call_groq_model(messages, temperature=0.7, max_tokens=1024, model_name=GROQ
     raise RuntimeError("No Groq text model is configured.")
 
 
-def _call_gemini_model(messages, system_prompt, temperature=0.7, max_tokens=1024):
+def _call_gemini_model(messages, system_prompt, temperature=0.7, max_tokens=1024, json_mode=False):
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not configured")
 
@@ -241,7 +244,11 @@ def _call_gemini_model(messages, system_prompt, temperature=0.7, max_tokens=1024
         json={
             "system_instruction": {"parts": [{"text": system_prompt}]},
             "contents": contents,
-            "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens},
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": max_tokens,
+                **({"responseMimeType": "application/json"} if json_mode else {}),
+            },
         },
         timeout=60,
     )
@@ -255,7 +262,7 @@ def _call_gemini_model(messages, system_prompt, temperature=0.7, max_tokens=1024
     return text
 
 
-def _call_text_with_fallback(messages, system_prompt, temperature=0.7, max_tokens=1024):
+def _call_text_with_fallback(messages, system_prompt, temperature=0.7, max_tokens=1024, json_mode=False):
     """Prefer Gemini, falling back to Groq only for configuration or transient provider failures."""
     failures = []
     for provider in ("gemini", "groq"):
@@ -264,9 +271,9 @@ def _call_text_with_fallback(messages, system_prompt, temperature=0.7, max_token
             continue
         try:
             if provider == "gemini":
-                answer = _call_gemini_model(messages, system_prompt, temperature, max_tokens)
+                answer = _call_gemini_model(messages, system_prompt, temperature, max_tokens, json_mode)
             else:
-                answer = _call_groq_model(messages, temperature, max_tokens)
+                answer = _call_groq_model(messages, temperature, max_tokens, json_mode=json_mode)
             _provider_metrics[f"responses_{provider}"] += 1
             return answer, provider
         except Exception as error:
@@ -1155,14 +1162,29 @@ def _proposal_or_404(proposal_id: str, owner_key: str) -> dict[str, Any]:
     return proposal
 
 
+def _coding_failure_detail(error: Exception) -> str:
+    detail = str(error).lower()
+    if any(token in detail for token in ("429", "rate limit", "quota", "resource_exhausted")):
+        return "The coding provider is temporarily rate-limited. Wait a minute, then retry with fewer selected files."
+    if any(token in detail for token in ("timeout", "timed out", "504")):
+        return "The coding provider took too long to prepare a plan. Retry with fewer selected files."
+    return "Mavis could not prepare a coding plan right now. Retry once; if it persists, choose fewer files and try again."
+
+
 def _clean_json_response(response: str) -> dict[str, Any]:
     raw = response.strip()
     if raw.startswith("```"):
         raw = re.sub(r"^```(?:json)?\\s*|\\s*```$", "", raw, flags=re.IGNORECASE)
     try:
         parsed = json.loads(raw)
-    except (TypeError, ValueError) as error:
-        raise ValueError("Mavis returned an invalid coding proposal. Please try again.") from error
+    except (TypeError, ValueError):
+        start, end = raw.find("{"), raw.rfind("}")
+        if start < 0 or end <= start:
+            raise ValueError("Mavis returned an invalid coding proposal. Please try again.")
+        try:
+            parsed = json.loads(raw[start : end + 1])
+        except (TypeError, ValueError) as error:
+            raise ValueError("Mavis returned an invalid coding proposal. Please try again.") from error
     if not isinstance(parsed, dict):
         raise ValueError("Mavis returned an invalid coding proposal. Please try again.")
     return parsed
@@ -1324,7 +1346,8 @@ async def propose_temporary_project_change(project_id: str, request: TemporaryPr
             + [{"role": "user", "content": prompt}],
             TEMPORARY_PROJECT_SYSTEM_PROMPT,
             temperature=0.2,
-            max_tokens=7_000,
+            max_tokens=3_500,
+            json_mode=True,
         )
         proposal = _normalize_coding_proposal(
             _clean_json_response(model_response),
@@ -1335,7 +1358,7 @@ async def propose_temporary_project_change(project_id: str, request: TemporaryPr
         raise HTTPException(status_code=502, detail=str(error)) from error
     except Exception as error:
         traceback.print_exc()
-        raise HTTPException(status_code=503, detail="Mavis could not prepare a temporary-project proposal right now.") from error
+        raise HTTPException(status_code=503, detail=_coding_failure_detail(error)) from error
 
     proposal_id = uuid.uuid4().hex
     record = {
@@ -1512,7 +1535,7 @@ async def propose_coding_change(request: CodingTaskRequest):
         raise HTTPException(status_code=502, detail=str(error)) from error
     except Exception as error:
         traceback.print_exc()
-        raise HTTPException(status_code=503, detail="Mavis could not prepare a coding proposal right now.") from error
+        raise HTTPException(status_code=503, detail=_coding_failure_detail(error)) from error
 
     proposal_id = uuid.uuid4().hex
     record = {

@@ -59,6 +59,11 @@ def run() -> None:
                 )
             )
 
+            recovered = api._clean_json_response("Here is the proposal: {\"summary\": \"Recovered\"}")
+            assert recovered["summary"] == "Recovered"
+            assert "rate-limited" in api._coding_failure_detail(RuntimeError("429 quota exceeded"))
+            assert "fewer selected files" in api._coding_failure_detail(RuntimeError("request timeout"))
+
             files = coding_workspace.list_workspace_files()
             assert {item["path"] for item in files} == {"frontend/src/App.tsx"}
             try:

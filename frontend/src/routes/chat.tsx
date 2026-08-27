@@ -490,6 +490,7 @@ function ChatSurface({
     Record<string, SearchResult[]>
   >({});
   const [codingState, setCodingState] = useState<CodingState>(coding);
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef(thread.messages);
   const isBusy = status !== "ready";
@@ -993,100 +994,6 @@ function ChatSurface({
         ref={scrollRef}
         className="scroll-slim flex-1 overflow-y-auto px-4 py-8 sm:px-8"
       >
-        {codingState.enabled && (
-          <div className="mx-auto max-w-3xl pb-5">
-            <div
-              className="mb-3 flex flex-wrap gap-2"
-              role="tablist"
-              aria-label="Coding workspace type"
-            >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={codingState.workspace === "mavis"}
-                onClick={() =>
-                  updateCoding((current) => ({
-                    ...current,
-                    workspace: "mavis",
-                    selectedFiles: [],
-                    proposal: undefined,
-                  }))
-                }
-                className={`rounded-full border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.13em] transition-colors ${
-                  codingState.workspace === "mavis"
-                    ? "border-violet/55 bg-violet/12 text-ink"
-                    : "border-line bg-panel/70 text-muted-ink hover:border-violet/35 hover:text-ink"
-                }`}
-              >
-                Mavis repository
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={codingState.workspace === "temporary"}
-                onClick={() =>
-                  updateCoding((current) => ({
-                    ...current,
-                    workspace: "temporary",
-                    selectedFiles: [],
-                    proposal: undefined,
-                  }))
-                }
-                className={`rounded-full border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.13em] transition-colors ${
-                  codingState.workspace === "temporary"
-                    ? "border-sage/55 bg-sage/12 text-ink"
-                    : "border-line bg-panel/70 text-muted-ink hover:border-sage/35 hover:text-ink"
-                }`}
-              >
-                Temporary project
-              </button>
-            </div>
-
-            {codingState.workspace === "temporary" && (
-              <TemporaryProjectWorkspace
-                apiUrl={renderApiUrl}
-                ownerSession={ownerSession}
-                project={codingState.temporaryProject}
-                disabled={isBusy}
-                onSelectedFilesChange={(selectedFiles) =>
-                  updateCoding((current) => ({ ...current, selectedFiles }))
-                }
-                onProjectChange={(temporaryProject) =>
-                  updateCoding((current) => ({
-                    ...current,
-                    temporaryProject,
-                    selectedFiles: [],
-                    proposal: undefined,
-                  }))
-                }
-              />
-            )}
-
-            {(codingState.workspace === "mavis" ||
-              codingState.temporaryProject) && (
-              <CodingWorkspace
-                apiUrl={renderApiUrl}
-                workspaceKind={codingState.workspace}
-                workspacePath={
-                  codingState.workspace === "temporary" &&
-                  codingState.temporaryProject
-                    ? `/temporary-projects/${codingState.temporaryProject.projectId}`
-                    : "/coding/workspace"
-                }
-                ownerSession={ownerSession}
-                selectedFiles={codingState.selectedFiles}
-                onSelectedFilesChange={(selectedFiles) =>
-                  updateCoding((current) => ({ ...current, selectedFiles }))
-                }
-                proposal={codingState.proposal}
-                disabled={isBusy}
-                onApply={applyCoding}
-                onVerify={verifyCoding}
-                onRollback={rollbackCoding}
-              />
-            )}
-          </div>
-        )}
         {messages.length === 0 && !isBusy ? (
           <div className="mx-auto flex h-full max-w-2xl flex-col items-center justify-center text-center">
             <div
@@ -1180,6 +1087,126 @@ function ChatSurface({
         )}
       </div>
 
+      {codingState.enabled && workspaceOpen && (
+        <section
+          className="border-t border-line/80 bg-cream/92 px-4 py-3 shadow-[0_-12px_28px_rgba(43,45,42,0.07)] backdrop-blur-xl sm:px-8"
+          aria-label="Coding workspace dock"
+        >
+          <div className="mx-auto max-w-3xl">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-2">
+              <div>
+                <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-violet">
+                  Coding workspace
+                </p>
+                <p className="mt-0.5 text-xs text-muted-ink">
+                  Select project files here before sending your coding request.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWorkspaceOpen(false)}
+                className="rounded-full border border-line bg-panel/80 px-3 py-1.5 font-mono text-[9px] uppercase tracking-[0.13em] text-muted-ink transition-colors hover:border-violet/45 hover:text-ink"
+              >
+                Hide workspace
+              </button>
+            </div>
+
+            <div className="scroll-slim max-h-[min(58vh,32rem)] overflow-y-auto pr-1">
+              <div
+                className="mb-3 flex flex-wrap gap-2"
+                role="tablist"
+                aria-label="Coding workspace type"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={codingState.workspace === "mavis"}
+                  onClick={() =>
+                    updateCoding((current) => ({
+                      ...current,
+                      workspace: "mavis",
+                      selectedFiles: [],
+                      proposal: undefined,
+                    }))
+                  }
+                  className={`rounded-full border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.13em] transition-colors ${
+                    codingState.workspace === "mavis"
+                      ? "border-violet/55 bg-violet/12 text-ink"
+                      : "border-line bg-panel/70 text-muted-ink hover:border-violet/35 hover:text-ink"
+                  }`}
+                >
+                  Mavis repository
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={codingState.workspace === "temporary"}
+                  onClick={() =>
+                    updateCoding((current) => ({
+                      ...current,
+                      workspace: "temporary",
+                      selectedFiles: [],
+                      proposal: undefined,
+                    }))
+                  }
+                  className={`rounded-full border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.13em] transition-colors ${
+                    codingState.workspace === "temporary"
+                      ? "border-sage/55 bg-sage/12 text-ink"
+                      : "border-line bg-panel/70 text-muted-ink hover:border-sage/35 hover:text-ink"
+                  }`}
+                >
+                  Temporary project
+                </button>
+              </div>
+
+              {codingState.workspace === "temporary" && (
+                <TemporaryProjectWorkspace
+                  apiUrl={renderApiUrl}
+                  ownerSession={ownerSession}
+                  project={codingState.temporaryProject}
+                  disabled={isBusy}
+                  onSelectedFilesChange={(selectedFiles) =>
+                    updateCoding((current) => ({ ...current, selectedFiles }))
+                  }
+                  onProjectChange={(temporaryProject) =>
+                    updateCoding((current) => ({
+                      ...current,
+                      temporaryProject,
+                      selectedFiles: [],
+                      proposal: undefined,
+                    }))
+                  }
+                />
+              )}
+
+              {(codingState.workspace === "mavis" ||
+                codingState.temporaryProject) && (
+                <CodingWorkspace
+                  apiUrl={renderApiUrl}
+                  workspaceKind={codingState.workspace}
+                  workspacePath={
+                    codingState.workspace === "temporary" &&
+                    codingState.temporaryProject
+                      ? `/temporary-projects/${codingState.temporaryProject.projectId}`
+                      : "/coding/workspace"
+                  }
+                  ownerSession={ownerSession}
+                  selectedFiles={codingState.selectedFiles}
+                  onSelectedFilesChange={(selectedFiles) =>
+                    updateCoding((current) => ({ ...current, selectedFiles }))
+                  }
+                  proposal={codingState.proposal}
+                  disabled={isBusy}
+                  onApply={applyCoding}
+                  onVerify={verifyCoding}
+                  onRollback={rollbackCoding}
+                />
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
       <Composer
         onSend={send}
         disabled={isBusy}
@@ -1189,9 +1216,12 @@ function ChatSurface({
         onWebSearchChange={onWebSearchChange}
         codingMode={codingState.enabled}
         codingWorkspace={codingState.workspace}
+        codingWorkspaceOpen={workspaceOpen}
+        onCodingWorkspaceToggle={() => setWorkspaceOpen((open) => !open)}
         codingAvailable={Boolean(ownerSession)}
         onCodingModeChange={(enabled) => {
           if (enabled) onWebSearchChange(false);
+          setWorkspaceOpen(enabled);
           updateCoding((current) => ({
             ...current,
             enabled,

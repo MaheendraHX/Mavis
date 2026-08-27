@@ -20,6 +20,8 @@ type ComposerProps = {
   onPersonaChange: (value: PersonaId) => void;
   codingMode?: boolean;
   codingWorkspace?: "mavis" | "temporary";
+  codingWorkspaceOpen?: boolean;
+  onCodingWorkspaceToggle?: () => void;
   codingAvailable?: boolean;
   onCodingModeChange?: (value: boolean) => void;
 };
@@ -44,6 +46,8 @@ export function Composer({
   onPersonaChange,
   codingMode = false,
   codingWorkspace = "mavis",
+  codingWorkspaceOpen = false,
+  onCodingWorkspaceToggle,
   codingAvailable = false,
   onCodingModeChange,
 }: ComposerProps) {
@@ -159,19 +163,20 @@ export function Composer({
               className="hidden"
             />
             {codingMode ? (
-              <span
-                title={
-                  codingWorkspace === "temporary"
-                    ? "Temporary Project Mode reads the uploaded files selected above."
-                    : "Coding Mode reads the project files selected in the workspace panel above."
-                }
-                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-violet/25 bg-violet/8 px-3 font-mono text-[9px] uppercase tracking-[0.12em] text-violet"
+              <button
+                type="button"
+                onClick={onCodingWorkspaceToggle}
+                aria-expanded={codingWorkspaceOpen}
+                title="Open the file picker and coding plan workspace."
+                className="inline-flex h-9 items-center gap-1.5 rounded-full border border-violet/35 bg-violet/8 px-3 font-mono text-[9px] uppercase tracking-[0.12em] text-violet transition-colors hover:border-violet hover:bg-violet/15"
               >
                 <Code2Icon className="h-3.5 w-3.5" />
-                {codingWorkspace === "temporary"
-                  ? "Uploaded files"
-                  : "Workspace files"}
-              </span>
+                {codingWorkspaceOpen
+                  ? "Hide workspace"
+                  : codingWorkspace === "temporary"
+                    ? "Open uploaded files"
+                    : "Open workspace"}
+              </button>
             ) : (
               <button
                 type="button"
@@ -255,9 +260,9 @@ export function Composer({
       </form>
       <p className="mx-auto mt-3 max-w-3xl text-center font-mono text-[9px] uppercase tracking-[0.18em] text-muted-ink">
         {codingMode
-          ? codingWorkspace === "temporary"
-            ? "Temporary Project Mode uses uploaded files · download the edited copy when ready"
-            : "Coding Mode reads selected workspace files · review every diff before applying"
+          ? codingWorkspaceOpen
+            ? "Select files in the workspace above, then send your request"
+            : "Open the workspace to choose files before asking Mavis to make a coding plan"
           : "Mavis can make mistakes · Enter to send · Shift + Enter for a new line"}
       </p>
     </div>
