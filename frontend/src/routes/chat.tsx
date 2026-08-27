@@ -415,7 +415,7 @@ function ChatPage() {
             <p className="mt-1 text-xs leading-relaxed text-muted-ink">
               {serviceStatus === "unconfigured"
                 ? "This deployment is missing its API address. Please try again after the site owner completes setup."
-                : "This free portfolio demo pauses after quiet periods. Your first message retries automatically while she wakes; you can keep writing."}
+                : "This free portfolio demo pauses after quiet periods. Your first message retries automatically while she wakes; this can take up to about a minute."}
             </p>
           </div>
         )}
@@ -543,7 +543,7 @@ function ChatSurface({
       return response;
 
     onServiceStatusChange("waking");
-    for (const delay of [2_500, 5_000]) {
+    for (const delay of [3_000, 7_000, 14_000, 20_000]) {
       await new Promise((resolve) => window.setTimeout(resolve, delay));
       response = await fetch(url, init);
       if (response.ok) {
