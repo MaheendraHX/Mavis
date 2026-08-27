@@ -1528,7 +1528,8 @@ async def propose_coding_change(request: CodingTaskRequest):
             + [{"role": "user", "content": prompt}],
             CODING_SYSTEM_PROMPT,
             temperature=0.2,
-            max_tokens=7_000,
+            max_tokens=3_500,
+            json_mode=True,
         )
         proposal = _normalize_coding_proposal(_clean_json_response(model_response), context)
     except ValueError as error:

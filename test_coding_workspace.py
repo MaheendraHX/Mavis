@@ -36,14 +36,18 @@ def run() -> None:
 
         original_root = coding_workspace.WORKSPACE_ROOT
         original_post = api.requests.post
-        try:
-            coding_workspace.WORKSPACE_ROOT = workspace
-            api._coding_proposals.clear()
-            api.requests.post = lambda *_args, **_kwargs: FakeResponse(
+        gemini_requests: list[dict] = []
+
+        def fake_post(*_args, **kwargs):
+            gemini_requests.append(kwargs.get("json", {}))
+            return FakeResponse(
                 json.dumps(
                     {
                         "summary": "Rename the greeting value.",
-                        "plan": ["Update the selected constant.", "Build the frontend after approval."],
+                        "plan": [
+                            "Update the selected constant.",
+                            "Build the frontend after approval.",
+                        ],
                         "questions": [],
                         "changes": [
                             {
@@ -59,10 +63,21 @@ def run() -> None:
                 )
             )
 
-            recovered = api._clean_json_response("Here is the proposal: {\"summary\": \"Recovered\"}")
+        try:
+            coding_workspace.WORKSPACE_ROOT = workspace
+            api._coding_proposals.clear()
+            api.requests.post = fake_post
+
+            recovered = api._clean_json_response(
+                'Here is the proposal: {"summary": "Recovered"}'
+            )
             assert recovered["summary"] == "Recovered"
-            assert "rate-limited" in api._coding_failure_detail(RuntimeError("429 quota exceeded"))
-            assert "fewer selected files" in api._coding_failure_detail(RuntimeError("request timeout"))
+            assert "rate-limited" in api._coding_failure_detail(
+                RuntimeError("429 quota exceeded")
+            )
+            assert "fewer selected files" in api._coding_failure_detail(
+                RuntimeError("request timeout")
+            )
 
             files = coding_workspace.list_workspace_files()
             assert {item["path"] for item in files} == {"frontend/src/App.tsx"}
@@ -98,15 +113,24 @@ def run() -> None:
                 },
             )
             assert proposal_response.status_code == 200
+            assert gemini_requests[-1]["generationConfig"]["responseMimeType"] == "application/json"
             proposal = proposal_response.json()
             assert len(proposal["proposed_changes"]) == 1
             assert proposal["proposed_changes"][0]["path"] == "frontend/src/App.tsx"
             assert "hello from Mavis" in proposal["diffs"][0]["diff"]
             assert proposal["verification"] == ["frontend_build"]
 
-            rejected_apply = client.post("/coding/apply", json={"proposal_id": proposal["proposal_id"], "confirm": False}, headers=headers)
+            rejected_apply = client.post(
+                "/coding/apply",
+                json={"proposal_id": proposal["proposal_id"], "confirm": False},
+                headers=headers,
+            )
             assert rejected_apply.status_code == 400
-            applied = client.post("/coding/apply", json={"proposal_id": proposal["proposal_id"], "confirm": True}, headers=headers)
+            applied = client.post(
+                "/coding/apply",
+                json={"proposal_id": proposal["proposal_id"], "confirm": True},
+                headers=headers,
+            )
             assert applied.status_code == 200
             assert "hello from Mavis" in source.read_text(encoding="utf-8")
 
@@ -117,7 +141,11 @@ def run() -> None:
             )
             assert blocked_verify.status_code == 400
 
-            rolled_back = client.post("/coding/rollback", json={"proposal_id": proposal["proposal_id"], "confirm": True}, headers=headers)
+            rolled_back = client.post(
+                "/coding/rollback",
+                json={"proposal_id": proposal["proposal_id"], "confirm": True},
+                headers=headers,
+            )
             assert rolled_back.status_code == 200
             assert source.read_text(encoding="utf-8") == "export const greeting = 'hello';\n"
         finally:

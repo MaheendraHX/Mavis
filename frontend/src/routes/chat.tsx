@@ -958,7 +958,13 @@ function ChatSurface({
           ? requestError
           : new Error("Mavis could not complete that response.");
       setError(nextError);
-      appendAssistantText(assistantId, nextError.message);
+      if (codingState.enabled) {
+        updateMessages((current) =>
+          current.filter((message) => message.id !== assistantId),
+        );
+      } else {
+        appendAssistantText(assistantId, nextError.message);
+      }
       toast.error(nextError.message);
     } finally {
       setStatus("ready");
