@@ -109,7 +109,7 @@ export function Composer({
             {attachments.map((file, index) => (
               <li
                 key={`${file.filename}-${index}`}
-                className="inline-flex items-center gap-2 rounded-full border border-line bg-night/70 px-3 py-1.5 text-xs text-ink"
+                className="inline-flex items-center gap-2 rounded-full border border-line bg-panel-raised px-3 py-1.5 text-xs text-ink"
               >
                 <PaperclipIcon className="h-3 w-3 text-muted-ink" />
                 <span className="max-w-[12rem] truncate">{file.filename}</span>
@@ -193,8 +193,8 @@ export function Composer({
               aria-pressed={webSearch}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors ${
                 webSearch
-                  ? "border-sage/50 bg-sage/15 text-sage"
-                  : "border-line bg-night/30 text-muted-ink hover:border-violet/60 hover:text-ink"
+                  ? "border-sage/45 bg-sage/14 text-[#177557]"
+                  : "border-line bg-panel/80 text-muted-ink hover:border-violet/60 hover:text-ink"
               }`}
             >
               <GlobeIcon className="h-3 w-3" /> Web
@@ -219,7 +219,7 @@ export function Composer({
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors ${
                 codingMode
                   ? "border-violet bg-violet/15 text-violet"
-                  : "border-line bg-night/30 text-muted-ink hover:border-violet/60 hover:text-ink"
+                  : "border-line bg-panel/80 text-muted-ink hover:border-violet/60 hover:text-ink"
               }`}
               title={
                 codingAvailable
@@ -252,7 +252,7 @@ export function Composer({
             type="submit"
             disabled={disabled || (!value.trim() && attachments.length === 0)}
             aria-label="Send message"
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-violet to-tan text-night shadow-soft transition-all hover:scale-105 hover:brightness-110 disabled:cursor-not-allowed disabled:bg-line disabled:text-muted-ink disabled:shadow-none"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#7765d5] to-[#087b66] text-[#f9fffa] shadow-soft transition-all hover:scale-105 hover:brightness-110 disabled:cursor-not-allowed disabled:bg-line disabled:text-muted-ink disabled:shadow-none"
           >
             <ArrowUpIcon className="h-4 w-4" />
           </button>

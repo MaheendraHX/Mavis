@@ -11,13 +11,16 @@ import { TechStack } from "@/components/landing/TechStack";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Mavis — Your AI, amplified" },
+      { title: "Mavis — The AI that stays in the loop" },
       {
         name: "description",
         content:
           "Mavis is a multimodal AI assistant that searches the live web, reads your files, writes code and keeps every thread organized.",
       },
-      { property: "og:title", content: "Mavis — Your AI, amplified" },
+      {
+        property: "og:title",
+        content: "Mavis — The AI that stays in the loop",
+      },
       {
         property: "og:description",
         content:
@@ -32,9 +35,9 @@ export const Route = createFileRoute("/")({
 
 function LandingPage() {
   return (
-    <div className="min-h-screen w-full bg-cream">
+    <div className="landing-shell landing-noise min-h-screen w-full">
       <Nav />
-      <main>
+      <main className="relative z-10">
         <Hero />
         <Features />
         <HowItWorks />

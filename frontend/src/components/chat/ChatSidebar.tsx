@@ -49,7 +49,7 @@ export function ChatSidebar({
   );
 
   return (
-    <div className="mavis-glass flex h-full w-[296px] flex-col border-y-0 border-l-0 bg-sand/75">
+    <div className="mavis-glass flex h-full w-[296px] flex-col border-y-0 border-l-0 bg-[#e7eee6]/78">
       <div className="flex items-center justify-between px-5 py-5">
         <Link
           to="/"
@@ -82,12 +82,12 @@ export function ChatSidebar({
         <button
           type="button"
           onClick={onNew}
-          className="flex w-full items-center gap-2 rounded-2xl bg-gradient-to-r from-violet to-tan px-4 py-3 text-sm font-semibold text-night shadow-soft transition-all hover:-translate-y-0.5 hover:brightness-110"
+          className="flex w-full items-center gap-2 rounded-2xl bg-gradient-to-r from-[#7765d5] to-[#087b66] px-4 py-3 text-sm font-semibold text-[#f7fff8] shadow-soft transition-all hover:-translate-y-0.5 hover:brightness-110"
         >
           <PlusIcon className="h-4 w-4" />
           New chat
         </button>
-        <div className="flex items-center gap-2 rounded-2xl border border-line bg-night/55 px-3 py-2.5 focus-within:border-violet/70">
+        <div className="flex items-center gap-2 rounded-2xl border border-[#c8d8cb] bg-[#f8fbf7]/90 px-3 py-2.5 shadow-[inset_0_1px_rgba(255,255,255,0.8)] focus-within:border-violet/70">
           <SearchIcon className="h-3.5 w-3.5 shrink-0 text-muted-ink" />
           <input
             type="search"
@@ -140,7 +140,7 @@ export function ChatSidebar({
                     type="button"
                     onClick={() => onDelete(thread.id)}
                     aria-label={`Delete ${thread.title}`}
-                    className="absolute right-2 top-3 flex h-6 w-6 items-center justify-center rounded-lg text-muted-ink opacity-0 transition-all hover:bg-night hover:text-peach focus:opacity-100 group-hover:opacity-100"
+                    className="absolute right-2 top-3 flex h-6 w-6 items-center justify-center rounded-lg text-muted-ink opacity-0 transition-all hover:bg-[#173b2c] hover:text-[#ffb4b4] focus:opacity-100 group-hover:opacity-100"
                   >
                     <Trash2Icon className="h-3.5 w-3.5" />
                   </button>

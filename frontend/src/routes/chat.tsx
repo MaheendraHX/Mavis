@@ -1089,7 +1089,7 @@ function ChatSurface({
 
       {codingState.enabled && workspaceOpen && (
         <section
-          className="border-t border-line/80 bg-cream/92 px-4 py-3 shadow-[0_-12px_28px_rgba(43,45,42,0.07)] backdrop-blur-xl sm:px-8"
+          className="border-t border-line/80 bg-[#eff4ed]/94 px-4 py-3 shadow-[0_-12px_28px_rgba(20,49,32,0.08)] backdrop-blur-xl sm:px-8"
           aria-label="Coding workspace dock"
         >
           <div className="mx-auto max-w-3xl">
@@ -1310,7 +1310,7 @@ function OwnerAccessDialog({
           autoComplete="current-password"
           value={passkey}
           onChange={(event) => setPasskey(event.target.value)}
-          className="mt-2 w-full rounded-xl border border-line bg-night/70 px-3 py-2.5 text-sm text-ink outline-none transition-colors focus:border-violet"
+          className="mt-2 w-full rounded-xl border border-line bg-panel px-3 py-2.5 text-sm text-ink outline-none transition-colors focus:border-violet"
           disabled={submitting}
           autoFocus
         />
@@ -1318,7 +1318,7 @@ function OwnerAccessDialog({
         <button
           type="submit"
           disabled={submitting || !passkey}
-          className="mt-5 w-full rounded-xl bg-gradient-to-r from-violet to-tan px-4 py-3 text-sm font-semibold text-night transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-5 w-full rounded-xl bg-gradient-to-r from-[#7765d5] to-[#087b66] px-4 py-3 text-sm font-semibold text-[#f8fff8] transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? "Verifying…" : "Unlock Mavis"}
         </button>

@@ -5,28 +5,34 @@ import { navLinks } from "@/data/landing";
 
 export function Footer() {
   return (
-    <footer className="border-t border-line bg-cream">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10 sm:flex-row sm:items-center sm:justify-between">
-        <Link to="/" className="text-sm" aria-label="Mavis home">
-          <Wordmark />
+    <footer className="relative z-10 border-t border-white/10 px-5 sm:px-8 lg:px-12">
+      <div className="mx-auto flex max-w-7xl flex-col gap-8 py-10 sm:flex-row sm:items-center sm:justify-between">
+        <Link to="/" className="text-base" aria-label="Mavis home">
+          <Wordmark className="!text-[#eff7ef]" />
         </Link>
 
-        <nav aria-label="Footer" className="flex flex-wrap items-center gap-6">
+        <nav
+          aria-label="Footer"
+          className="flex flex-wrap items-center gap-x-6 gap-y-3"
+        >
           {navLinks.map((link) => (
             <a
               key={link.href}
               href={link.href}
-              className="text-xs text-muted-ink transition-colors hover:text-ink"
+              className="text-xs text-[#a9bdac] transition-colors hover:text-[#f4fbf3]"
             >
               {link.label}
             </a>
           ))}
-          <Link to="/chat" className="text-xs text-muted-ink transition-colors hover:text-ink">
-            Demo
+          <Link
+            to="/chat"
+            className="text-xs text-[#a9bdac] transition-colors hover:text-[#f4fbf3]"
+          >
+            Open Mavis
           </Link>
         </nav>
 
-        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-muted-ink">
+        <p className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#72927a]">
           © {new Date().getFullYear()} Mavis
         </p>
       </div>
