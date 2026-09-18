@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Mavis // Signal Lost</title>
+
+  <style>
+    :root {
+      --bg: #070b12;
+      --panel: rgba(13, 21, 32, 0.86);
+      --panel-light: rgba(23, 35, 49, 0.72);
+      --cyan: #70e7ff;
+      --cyan-soft: rgba(112, 231, 255, 0.2);
+      --purple: #9b8cff;
+      --text: #e8f7ff;
+      --muted: #8195a6;
+      --danger: #ff829d;
+      --border: rgba(112, 231, 255, 0.2);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-height: 100%;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      padding: 24px;
+      color: var(--text);
+      font-family: "Courier New", Courier, monospace;
+      background:
+        radial-gradient(circle at 50% 40%, rgba(76, 104, 255, 0.18), transparent 22rem),
+        radial-gradient(circle at 15% 90%, rgba(112, 231, 255, 0.1), transparent 25rem),
+        var(--bg);
+    }
+
+    body::before {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      pointer-events: none;
+      content: "";
+      opacity: 0.13;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent 3px,
+        rgba(255, 255, 255, 0.08) 4px
+      );
+      mix-blend-mode: screen;
+    }
+
+    body::after {
+      position: fixed;
+      inset: 0;
+      z-index: 11;
+      pointer-events: none;
+      content: "";
+      background: radial-gradient(
+        ellipse at center,
+        transparent 40%,
+        rgba(0, 0, 0, 0.55) 100%
+      );
+    }
+
+    .stars,
+    .stars::before,
+    .stars::after {
+      position: fixed;
+      width: 2px;
+      height: 2px;
+      content: "";
+      background: var(--cyan);
+      box-shadow:
+        8vw 12vh var(--cyan),
+        19vw 76vh var(--purple),
+        30vw 24vh var(--cyan),
+        42vw 89vh var(--cyan),
+        57vw 15vh var(--purple),
+        68vw 72vh var(--cyan),
+        81vw 32vh var(--cyan),
+        91vw 84vh var(--purple),
+        74vw 8vh var(--cyan),
+        11vw 45vh var(--purple);
+      opacity: 0.45;
+    }
+
+    .stars {
+      top: 0;
+      left: 0;
+    }
+
+    .stars::before {
+      transform: translate(37px, 51px) scale(0.7);
+      opacity: 0.3;
+    }
+
+    .stars::after {
+      transform: translate(-26px, 91px) scale(1.3);
+      opacity: 0.25;
+    }
+
+    .shell {
+      position: relative;
+      z-index: 2;
+      width: min(100%, 720px);
+      padding: 1px;
+      overflow: hidden;
+      border: 1px solid rgba(112, 231, 255, 0.35);
+      border-radius: 28px;
+      background: linear-gradient(
+        135deg,
+        rgba(112, 231, 255, 0.7),
+        rgba(155, 140, 255, 0.35),
+        transparent 55%
+      );
+      box-shadow:
+        0 0 80px rgba(112, 231, 255, 0.1),
+        0 30px 100px rgba(0, 0, 0, 0.55);
+      animation: appear 700ms ease-out both;
+    }
+
+    .panel {
+      position: relative;
+      padding: clamp(28px, 7vw, 64px);
+      overflow: hidden;
+      border-radius: 27px;
+      background:
+        linear-gradient(145deg, rgba(21, 34, 48, 0.95), rgba(5, 10, 18, 0.95)),
+        var(--panel);
+    }
+
+    .panel::before {
+      position: absolute;
+      top: -160px;
+      right: -120px;
+      width: 360px;
+      height: 360px;
+      content: "";
+      border: 1px solid rgba(112, 231, 255, 0.12);
+      border-radius: 50%;
+      box-shadow:
+        0 0 0 28px rgba(112, 231, 255, 0.025),
+        0 0 0 58px rgba(112, 231, 255, 0.018);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 46px;
+      color: var(--muted);
+      font-size: 0.68rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--cyan);
+    }
+
+    .brand-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--danger);
+      box-shadow: 0 0 14px var(--danger);
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+
+    .status {
+      color: var(--danger);
+    }
+
+    .signal {
+      position: relative;
+      width: 112px;
+      height: 112px;
+      margin-bottom: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(112, 231, 255, 0.4);
+      border-radius: 50%;
+      color: var(--cyan);
+      background: radial-gradient(
+        circle,
+        rgba(112, 231, 255, 0.16),
+        rgba(112, 231, 255, 0.02) 58%,
+        transparent 60%
+      );
+      box-shadow:
+        0 0 30px rgba(112, 231, 255, 0.18),
+        inset 0 0 28px rgba(112, 231, 255, 0.12);
+      animation: float 4s ease-in-out infinite;
+    }
+
+    .signal::before,
+    .signal::after {
+      position: absolute;
+      inset: -14px;
+      content: "";
+      border: 1px solid rgba(112, 231, 255, 0.18);
+      border-radius: 50%;
+      animation: orbit 5s linear infinite;
+    }
+
+    .signal::after {
+      inset: -28px;
+      border-color: rgba(155, 140, 255, 0.12);
+      animation-direction: reverse;
+      animation-duration: 8s;
+    }
+
+    .signal-icon {
+      font-size: 2.6rem;
+      line-height: 1;
+      text-shadow: 0 0 24px var(--cyan);
+    }
+
+    .eyebrow {
+      margin: 0 0 16px;
+      color: var(--cyan);
+      font-size: 0.75rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 600px;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      font-size: clamp(2.7rem, 9vw, 6.2rem);
+      font-weight: 800;
+      letter-spacing: -0.07em;
+      line-height: 0.92;
+    }
+
+    h1 span {
+      color: transparent;
+      background: linear-gradient(100deg, var(--cyan), var(--purple));
+      background-clip: text;
+      -webkit-background-clip: text;
+    }
+
+    .message {
+      max-width: 540px;
+      margin: 28px 0 30px;
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.8;
+    }
+
+    .terminal {
+      margin: 28px 0 34px;
+      padding: 18px 20px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      color: #a9eaff;
+      background: rgba(2, 8, 15, 0.62);
+      font-size: 0.78rem;
+      line-height: 1.8;
+    }
+
+    .terminal-line {
+      display: flex;
+      gap: 10px;
+    }
+
+    .prompt {
+      color: var(--purple);
+    }
+
+    .warning {
+      color: var(--danger);
+    }
+
+    .cursor {
+      display: inline-block;
+      width: 7px;
+      height: 15px;
+      margin-left: 4px;
+      vertical-align: -2px;
+      background: var(--cyan);
+      animation: blink 1s steps(1) infinite;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 16px;
+      border: 1px solid rgba(112, 231, 255, 0.3);
+      border-radius: 10px;
+      color: var(--cyan);
+      font-size: 0.78rem;
+      font-weight: bold;
+      text-decoration: none;
+      transition: 180ms ease;
+    }
+
+    .back-link:hover {
+      color: var(--bg);
+      background: var(--cyan);
+      box-shadow: 0 0 25px rgba(112, 231, 255, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .footnote {
+      color: #536878;
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+    }
+
+    @keyframes appear {
+      from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.35; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.15); }
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-7px); }
+    }
+
+    @keyframes orbit {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+
+    @media (max-width: 560px) {
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 38px;
+      }
+
+      .panel {
+        padding: 32px 24px;
+      }
+
+      .signal {
+        width: 88px;
+        height: 88px;
+      }
+
+      .signal-icon {
+        font-size: 2rem;
+      }
+
+      .terminal {
+        font-size: 0.7rem;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="stars" aria-hidden="true"></div>
+
+  <main class="shell">
+    <section class="panel">
+      <div class="topbar">
+        <div class="brand">
+          <span class="brand-dot"></span>
+          MAVIS CORE SYSTEM
+        </div>
+        <div class="status">● Signal unavailable</div>
+      </div>
+
+      <div class="signal" aria-hidden="true">
+        <div class="signal-icon">✦</div>
+      </div>
+
+      <p class="eyebrow">Error 404 // Assistant not found</p>
+
+      <h1>
+        Mavis is  
+
+        <span>offline.</span>
+      </h1>
+
+      <p class="message">
+        The assistant you were looking for has temporarily left the network.
+        Her systems are being rebuilt, refined, and quietly prepared for a
+        better return.
+      </p>
+
+      <div class="terminal" aria-label="Mavis system status">
+        <div class="terminal-line">
+          <span class="prompt">&gt;</span>
+          <span>locating_mavis<span class="cursor"></span></span>
+        </div>
+        <div class="terminal-line">
+          <span class="prompt">&gt;</span>
+          <span class="warning">connection refused — reconstruction in progress</span>
+        </div>
+        <div class="terminal-line">
+          <span class="prompt">&gt;</span>
+          <span>status: being rebuilt</span>
+        </div>
+      </div>
+
+      <div class="actions">
+        <a class="back-link" href="https://github.com/MaheendraHX">
+          ← Return to GitHub
+        </a>
+
+        <span class="footnote">Please check back later.</span>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
